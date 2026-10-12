@@ -2869,16 +2869,21 @@ function cmdSpawn(args) {
   if (alsoChannel && (!toGroupRaw || !String(toGroupRaw).trim())) fail("--also-channel needs --to-group <g,...> (it mirrors the brief into each group's channel)");
   const groupNames = String(toGroupRaw || "").split(",").map((s) => String(s).trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "-").slice(0, 40)).filter(Boolean);
   // Crew roster for the prompt block (see buildCrewContext in lib/spawn.js):
-  // every group on the board with its members, so each worker learns the
-  // map — its own group, the other groups, and the peer-DM norms — at
-  // boot instead of discovering (or never discovering) the board alone.
+  // TASK-scoped, not board-scoped. Only the groups named in THIS spawn
+  // appear in the brief — their lanes are what a worker may need to
+  // contact. Groups from unrelated concurrent briefs collapse to a count
+  // (discoverable via `crewbus group list`, never advertised cross-task:
+  // ambient cross-task rosters are prompt noise and a misleading
+  // invitation to DM crews working on unrelated tasks).
   const rosterGroups = [];
   for (const e of listJson(d.groups)) {
     const g = e && e.data;
     if (g && g.name && Array.isArray(g.members)) rosterGroups.push({ name: g.name, members: g.members.slice() });
   }
   rosterGroups.sort((a, b) => String(a.name).localeCompare(String(b.name)));
-  const crewFor = (to) => buildCrewContext({ name: to, from, subject, groups: rosterGroups, myGroups: rosterGroups.filter((g) => g.members.includes(to)).map((g) => g.name) });
+  const taskGroups = rosterGroups.filter((g) => groupNames.includes(g.name));
+  const offTask = rosterGroups.length - taskGroups.length;
+  const crewFor = (to) => buildCrewContext({ name: to, from, subject, groups: taskGroups, myGroups: taskGroups.filter((g) => g.members.includes(to)).map((g) => g.name), offTask });
   const model = getFlag(args, "--model");
   const auto = args.includes("--auto");
   requireAutoConfirm(args);

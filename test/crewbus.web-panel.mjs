@@ -74,9 +74,40 @@ check("panel: launch token is a password input", /id="launch-token"[^>]*type="pa
 check("panel: Preview renders commands, boots nothing (dry-run note)", page.text.includes("dry-run") && page.text.includes("booted nothing"));
 check("panel: no token material rendered into HTML", !/abt-[0-9a-f]{4,}/.test(page.text) && !page.text.includes('value="abt-'));
 check("panel: existing kill/ack wiring untouched", page.text.includes("/api/kill") && page.text.includes("/api/ack"));
-check("panel: harness table live-refreshes on poll (selection-preserving)", page.text.includes("refreshLaunchMeta()") && page.text.includes("never the <select>"));
+  check("panel: harness table live-refreshes on poll (selection-preserving)", page.text.includes("refreshLaunchMeta()") && page.text.includes("never the <select>"));
+  check("panel: Briefs section + thread detail div", page.text.includes('id="sec-briefs"') && page.text.includes('id="briefs"') && page.text.includes('id="brief-thread"'));
+  check("panel: feed filter inputs", page.text.includes('id="feed-q"') && page.text.includes('id="feed-type"'));
+  check("panel: crews brief column", page.text.includes("brief / groups"));
+  check("panel: gather client wiring", page.text.includes("/api/gather?batch=") && page.text.includes("showBrief("));
 
-web.kill();
+  // Briefs view end to end: one fan-out -> batch row -> gathered thread.
+  const wleadTok = run(["register", "--from", "wlead"]).match(/token (abt-[0-9a-f]+)/)[1];
+  run(["group", "create", "wg", "--from", "wlead", "--token", wleadTok, "--add", "w1,w2"]);
+  const briefOut = run(["send", "--from", "wlead", "--token", wleadTok, "--to-group", "wg", "--subject", "brief: widgets", "--body", "build widgets"]);
+  const batchId = briefOut.match(/batch (\S+):/)[1];
+  const w1Tok = run(["register", "--from", "w1"]).match(/token (abt-[0-9a-f]+)/)[1];
+  const w2Tok = run(["register", "--from", "w2"]).match(/token (abt-[0-9a-f]+)/)[1];
+  const w1Msg = briefOut.match(/(\S+) -> w1/)[1];
+  const w2Msg = briefOut.match(/(\S+) -> w2/)[1];
+  run(["send", "--from", "w1", "--token", w1Tok, "--to", "wlead", "--reply", w1Msg, "--checkpoint", "--body", "half done"]);
+  run(["send", "--from", "w2", "--token", w2Tok, "--to", "wlead", "--reply", w2Msg, "--body", "widgets done"]);
+  const boardJson = JSON.parse((await httpGet(webBase, "/api/board")).text);
+  check("panel: /api/board carries briefs", Array.isArray(boardJson.briefs) && boardJson.briefs.length === 1);
+  const row = boardJson.briefs[0];
+  check("panel: brief row stats", row.batch === batchId && row.subject === "brief: widgets" && row.briefCount === 2 && row.checkpointCount === 1 && row.finalCount === 1 && row.workers.slice().sort().join(",") === "w1,w2");
+  const gather = JSON.parse((await httpGet(webBase, `/api/gather?batch=${batchId}`)).text);
+  check("panel: /api/gather transcript", gather.briefs === 2 && gather.replies === 2 && gather.items.length === 4 && gather.items.some((m) => m.checkpoint === true && m.body.includes("half done")) && gather.items.some((m) => m.checkpoint !== true && m.body.includes("widgets done")));
+  check("panel: /api/gather telemetry", gather.telemetry && gather.telemetry.messages === 4 && typeof gather.telemetry.tokensEst === "number");
+  check("panel: /api/gather needs batch", (await httpGet(webBase, "/api/gather")).status === 400);
+  check("panel: /api/gather 404 unknown", (await httpGet(webBase, "/api/gather?batch=nope-missing")).status === 404);
+  // Crews batch join: a bookkept (pid-less ok) worker resolves its batch.
+  const swDoc = { name: "sw", firstSeen: new Date().toISOString(), lastSeen: new Date().toISOString(), spawnedPid: 999999997, spawnedBy: "wlead", briefId: w1Msg };
+  fs.writeFileSync(path.join(board, "agents", "sw.json"), JSON.stringify(swDoc));
+  const board2 = JSON.parse((await httpGet(webBase, "/api/board")).text);
+  const swRow = board2.workers.find((w) => w.name === "sw");
+  check("panel: crews worker carries batch", !!swRow && swRow.batch === batchId);
+
+  web.kill();
 
 fs.rmSync(board, { recursive: true, force: true });
 

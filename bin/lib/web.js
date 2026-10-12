@@ -17,9 +17,9 @@ import path from "node:path";
 import http from "node:http";
 import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS } from "./store.js";
 import { readAgent, agentTokenMatches, authorizeCheck, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
-import { readDMs, readVisible, ackedIds, findMessageById, deliverDMs, parseRecipients } from "./mail.js";
+import { readDMs, readVisible, ackedIds, ackedIdSet, findMessageById, deliverDMs, parseRecipients } from "./mail.js";
 import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim } from "./spawn.js";
-import { groupTelemetryData } from "./groups.js";
+import { groupTelemetryData, collectBatch, gatherTelemetry, listBatches } from "./groups.js";
 import { httpJson } from "./sync.js";
 import { readChainRecords, verifyChainRecords, appendChainRecord, readHold, readBoardQuotas } from "./export.js";
 import { launchDrivers, detectHarnessBinaries, validateLaunchPlan, advertiseEnv, HARNESS_MODELS, getDiscoveredModels, refreshDiscoveredModels } from "./launch.js";
@@ -112,7 +112,18 @@ export function boardSnapshot(d, activeWindowSec) {
     .filter((x) => x && x.peer && typeof x.lastOk === "number")
     .sort((a, b) => String(a.peer).localeCompare(String(b.peer)))
     .map((p) => ({ peer: p.peer, lastOk: new Date(p.lastOk).toISOString() }));
-  return { board: d.root, at: new Date().toISOString(), agents, workers, broadcasts, recent: recent.slice(0, 30), ackedBy, groups, peers };
+  // Brief batch per worker (for the Crews brief/group column): the batch
+  // stamp on the worker's brief DM, else the brief id itself. Built from
+  // the full pre-slice message scan so capped feeds never lose the join.
+  const batchByBriefId = new Map();
+  for (const m of recent) {
+    if (m && m.id && !batchByBriefId.has(m.id)) batchByBriefId.set(m.id, m.batch || m.id);
+  }
+  const workersWithBatch = workers.map((w) => ({
+    ...w,
+    batch: w.briefId ? (batchByBriefId.get(w.briefId) || w.briefId) : undefined,
+  }));
+  return { board: d.root, at: new Date().toISOString(), agents, workers: workersWithBatch, broadcasts, recent: recent.slice(0, 30), ackedBy, groups, peers, briefs: listBatches(d) };
 }
 
 // Fleet console snapshots (served by `web`, all open reads like /api/board;
@@ -622,9 +633,10 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
 
     <div class="sidebar-heading">VIEWS</div>
     <nav id="approot-nav" aria-label="sections">
-      <button data-nav="sec-launch" class="active">Launch</button>
-      <button data-nav="sec-boards">Boards</button>
-      <button data-nav="sec-crews">Crews</button>
+        <button data-nav="sec-launch" class="active">Launch</button>
+        <button data-nav="sec-boards">Boards</button>
+        <button data-nav="sec-briefs">Briefs</button>
+        <button data-nav="sec-crews">Crews</button>
       <button data-nav="sec-fleet">Fleet</button>
       <button data-nav="sec-channels">Channels</button>
       <button data-nav="sec-triage">Triage</button>
@@ -770,15 +782,23 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
           <div class="card"><b id="c-peers">–</b><br>peers</div>
         </div>
         <h2>Recent activity</h2>
+        <div style="display:flex;gap:8px;margin-bottom:8px"><input id="feed-q" placeholder="filter route / message…" style="flex:1"><select id="feed-type"><option value="">all</option><option value="checkpoint">checkpoints</option><option value="final">final reports</option></select></div>
         <table><tr><th>id</th><th>route</th><th>message</th></tr><tbody id="recent"></tbody></table>
         <h2>Broadcasts</h2>
         <table><tr><th>id</th><th>from</th><th>to</th><th>subject</th><th>body</th></tr><tbody id="bcast"></tbody></table>
       </section>
 
+      <!-- SECTION: BRIEFS (ONE ROW PER FAN-OUT) -->
+      <section id="sec-briefs" data-section="Briefs" class="approot-hidden">
+        <h2>Briefs <span class="dim">one row per fan-out — click a row for its gathered thread</span></h2>
+        <table><tr><th>brief</th><th>workers</th><th>checkpoints</th><th>finals</th><th>acked</th><th>last activity</th></tr><tbody id="briefs"></tbody></table>
+        <div id="brief-thread"></div>
+      </section>
+
       <!-- SECTION: CREWS (WORKERS & TEAMS) -->
       <section id="sec-crews" data-section="Crews" class="approot-hidden">
         <h2>Workers <button id="killall" class="danger">kill all</button></h2>
-        <table><tr><th>worker</th><th>state</th><th>pid</th><th>reply</th><th>log tail</th><th></th></tr><tbody id="workers"></tbody></table>
+        <table><tr><th>worker</th><th>state</th><th>pid</th><th>brief / groups</th><th>reply</th><th>log tail</th><th></th></tr><tbody id="workers"></tbody></table>
         <h2>Agents</h2>
         <table><tr><th>name</th><th>presence</th><th>last seen</th><th>session</th><th>DMs</th><th>unacked</th></tr><tbody id="agents"></tbody></table>
         <h2>Groups</h2>
@@ -919,6 +939,10 @@ var _lt=document.getElementById('launch-token');
 if(_lt){_lt.oninput=function(){try{localStorage.setItem('ab-tok',this.value.trim());}catch(_){}var t=document.getElementById('tok');if(t)t.value=this.value.trim();markIdent();};}
 autoLoadOperatorCreds();
 function stateOf(w){if(!w.known)return 'unknown';if(w.reply)return w.acked?'done · acked':'done · reply waiting';if(w.alive===true)return 'running';if(w.alive===false)return 'exited · no reply';return 'no pid';}
+var _fq=document.getElementById('feed-q');
+if(_fq){_fq.oninput=function(){renderRecent();};}
+var _ft=document.getElementById('feed-type');
+if(_ft){_ft.onchange=function(){renderRecent()};}
 async function kill(names){
   var c=creds();
   if(!c.from||!c.token){say('set identity + token first');return;}
@@ -938,8 +962,7 @@ document.getElementById('killall').onclick=async function(){
     if(!names.length){say('no live workers (kill needs a running pid)');return;}
   kill(names);
 };
-document.getElementById('ackall').onclick=async function(){
-  var c=creds();
+document.getElementById('ackall').onclick=async function(){  var c=creds();
   if(!c.from||!c.token){say('set identity + token first');return;}
   if(!confirm('ack everything unacked for '+c.from+'?'))return;
   say('acking all for '+c.from+' …');
@@ -950,6 +973,37 @@ document.getElementById('ackall').onclick=async function(){
   }catch(e){say('ack failed: '+e.message);}
   refresh();
 };
+function renderRecent(){
+  var q=((document.getElementById('feed-q')||{}).value||'').toLowerCase();
+  var t=((document.getElementById('feed-type')||{}).value||'');
+  var known=window.__ackedBy||{};
+  var rows=(window.__recent||[]).filter(function(m){
+    if(t==='checkpoint'&&m.checkpoint!==true)return false;
+    if(t==='final'&&!(m.replyTo&&m.checkpoint!==true))return false;
+    if(!q)return true;
+    var to=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
+    return (m.id+' '+(m.from||'')+' '+to+' '+(m.subject||'')+' '+(m.body||'')).toLowerCase().indexOf(q)!==-1;
+  });
+  document.getElementById('recent').innerHTML=rows.map(function(m){
+    var to=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
+    var acks=(known[m.id]||[]).map(function(x){return '✓'+x;}).join(' ');
+    return '<tr><td>'+esc(m.id)+'</td><td>'+esc(m.from)+' → '+esc(short(to,40))+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(short(m.body,200))+'<div class="dim">'+(m.replyTo?('re: '+esc(m.replyTo)+' '):'')+(m.batch?('batch '+esc(m.batch)+' '):'')+esc(acks)+'</div></td></tr>';
+  }).join('')||'<tr><td colspan="3" class="dim">no messages yet</td></tr>';
+}
+async function showBrief(batch){
+  var box=document.getElementById('brief-thread');
+  box.innerHTML='<div class="dim">loading thread '+esc(batch)+'…</div>';
+  try{
+    var r=await fetch('/api/gather?batch='+encodeURIComponent(batch),{cache:'no-store'});
+    var g=await r.json();
+    if(!r.ok){box.innerHTML='<div class="dim">gather failed: '+esc(g.error||r.status)+'</div>';return;}
+    box.innerHTML='<h3>'+esc(short(batch,32))+' <span class="dim">'+g.briefs+' briefs · '+g.replies+' replies · ~'+g.telemetry.tokensEst+' tok</span></h3>'+g.items.map(function(m){
+      var kind=!m.replyTo?'<b>brief</b>':(m.checkpoint?'<span class="dim">checkpoint</span>':'<b>final'+(m.acked?' ✓':'')+'</b>');
+      var to=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
+      return '<div class="card" style="margin:.5em 0"><div>'+kind+' <b>'+esc(m.from)+'</b> → '+esc(short(to,60))+' <span class="dim">'+esc(ago(m.at))+'</span></div>'+(m.subject?'<div><b>'+esc(m.subject)+'</b></div>':'')+'<div class="log" style="white-space:pre-wrap">'+esc(m.body)+'</div></div>';
+    }).join('');
+  }catch(e){box.innerHTML='<div class="dim">gather failed: '+esc(e.message)+'</div>';}
+}
 async function refresh(){
   try{
     var r=await fetch('/api/board',{cache:'no-store'});
@@ -977,8 +1031,11 @@ async function refresh(){
       var tail=(w.tail||[]).slice(-3).map(function(l){return '<div class="log">'+esc(l)+'</div>';}).join('')||'<span class="dim">no log</span>';
       var rep=w.reply?esc(w.reply.id)+'<div class="dim">'+esc(w.reply.head)+'</div>':'—';
       var btn=(w.known&&w.alive===true)?'<button class="danger" data-kill="'+esc(w.name)+'">kill</button>':'';
-      return '<tr data-worker="'+esc(w.name)+'" class="worker-row"><td><b>'+esc(w.name)+'</b><div class="dim">by '+esc(w.spawnedBy||'?')+'</div></td><td>'+esc(stateOf(w))+'</td><td>'+(w.pid===null||w.pid===undefined?'—':esc(String(w.pid)))+'</td><td>'+rep+'</td><td>'+tail+'</td><td>'+btn+'</td></tr>';
-    }).join('')||'<tr><td colspan="6" class="dim">no spawned workers</td></tr>';
+      var wgroups=(s.groups||[]).filter(function(g){return (g.members||[]).indexOf(w.name)!==-1;}).map(function(g){return g.name;}).join(',');
+      var batch=w.batch||w.briefId||'—';
+      var bcell='<div class="dim">'+esc(short(batch,20))+'</div>'+(wgroups?esc(wgroups):'<span class="dim">solo</span>');
+      return '<tr data-worker="'+esc(w.name)+'" class="worker-row"><td><b>'+esc(w.name)+'</b><div class="dim">by '+esc(w.spawnedBy||'?')+'</div></td><td>'+esc(stateOf(w))+'</td><td>'+(w.pid===null||w.pid===undefined?'—':esc(String(w.pid)))+'</td><td>'+bcell+'</td><td>'+rep+'</td><td>'+tail+'</td><td>'+btn+'</td></tr>';
+    }).join('')||'<tr><td colspan="7" class="dim">no spawned workers</td></tr>';
     Array.prototype.forEach.call(document.querySelectorAll('[data-kill]'),function(b){b.onclick=function(){kill([b.getAttribute('data-kill')]);};});
     document.getElementById('agents').innerHTML=s.agents.map(function(a){
       return '<tr><td><b>'+esc(a.name)+'</b></td><td>'+(a.active?'● active':'○ stale')+'</td><td title="'+esc(a.lastSeen||'?')+'">'+esc(ago(a.lastSeen))+'</td><td>'+esc(a.sessionId||'—')+'</td><td>'+a.dmCount+'</td><td>'+a.unacked+'</td></tr>';
@@ -987,11 +1044,14 @@ async function refresh(){
       var to=Array.isArray(b.to)?b.to.join(','):String(b.to||'');
       return '<tr><td>'+esc(b.id)+'</td><td>'+esc(b.from)+'</td><td>'+esc(short(to,80))+'</td><td>'+esc(b.subject||'')+'</td><td>'+esc(short(b.body,140))+'</td></tr>';
     }).join('')||'<tr><td colspan="5" class="dim">no broadcasts</td></tr>';
-    document.getElementById('recent').innerHTML=s.recent.map(function(m){
-      var to=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
-      var acks=(s.ackedBy[m.id]||[]).map(function(x){return '✓'+x;}).join(' ');
-      return '<tr><td>'+esc(m.id)+'</td><td>'+esc(m.from)+' → '+esc(short(to,40))+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(short(m.body,200))+'<div class="dim">'+(m.replyTo?('re: '+esc(m.replyTo)+' '):'')+(m.batch?('batch '+esc(m.batch)+' '):'')+esc(acks)+'</div></td></tr>';
-    }).join('')||'<tr><td colspan="3" class="dim">no messages yet</td></tr>';
+    window.__recent=s.recent||[];
+    window.__ackedBy=s.ackedBy||{};
+    renderRecent();
+    document.getElementById('briefs').innerHTML=(s.briefs||[]).map(function(b){
+      var ws=(b.workers||[]).join(',');
+      return '<tr data-batch="'+esc(b.batch)+'" class="brief-row"><td>'+(b.subject?'<b>'+esc(b.subject)+'</b><br>':'')+'<span class="dim">'+esc(short(b.batch,24))+' · from '+esc(b.from)+'</span></td><td>'+esc(ws.length>60?ws.slice(0,60)+'…':ws)+'<div class="dim">'+b.briefCount+' brief'+(b.briefCount===1?'':'s')+'</div></td><td>'+b.checkpointCount+'</td><td>'+b.finalCount+'</td><td>'+b.ackedFinals+'/'+b.finalCount+'</td><td>'+esc(ago(b.lastAt))+'</td></tr>';
+    }).join('')||'<tr><td colspan="6" class="dim">no briefs yet</td></tr>';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-batch]'),function(r){r.onclick=function(){showBrief(r.getAttribute('data-batch'));};});
     try{
       var fr=await fetch('/api/fleet',{cache:'no-store'});
       var fl=await fr.json();
@@ -1870,10 +1930,38 @@ export async function handleWebDashboardRoute(req, res, url, d) {
         id: m.id, from: m.from, at: m.at, subject: m.subject || "",
         head: String(m.body || "").slice(0, 160),
         replyTo: m.replyTo || "", batch: m.batch || "",
+        checkpoint: m.checkpoint === true,
         artifact: m.artifact || "", acked: known.has(m.id),
       }));
     res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
     res.end(JSON.stringify({ board: d.root, agent, items }));
+    return true;
+  }
+  if (req.method === "GET" && url.pathname === "/api/gather") {
+    // Open read like /api/board (the transcript is already visible piece
+    // by piece there); the dashboard twin of `gather --batch`: one brief
+    // thread — briefs, checkpoint timeline, final reports — oldest first.
+    const batch = String(url.searchParams.get("batch") || "").trim().slice(0, 200);
+    if (!batch) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "pass ?batch=<batch-id>" }));
+      return true;
+    }
+    const got = collectBatch(d, batch);
+    if (!got) {
+      res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: `unknown batch "${batch}"` }));
+      return true;
+    }
+    const known = ackedIdSet(d);
+    const tele = gatherTelemetry(got.items);
+    const items = got.items.map((m) => ({
+      id: m.id, from: m.from, to: m.to, at: m.at, subject: m.subject || "",
+      body: String(m.body || ""), replyTo: m.replyTo || "", batch: m.batch || "",
+      checkpoint: m.checkpoint === true, acked: known.has(m.id),
+    }));
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    res.end(JSON.stringify({ board: d.root, batch, briefs: got.briefs, replies: got.replies, telemetry: tele, items }));
     return true;
   }
   if (req.method === "POST" && url.pathname === "/api/ack") {

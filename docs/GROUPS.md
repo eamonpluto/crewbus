@@ -81,8 +81,13 @@ Groups share one board, so any member can already read anything. The
 thing that decides whether groups actually collaborate is whether the
 brief tells them the map. Since v10.0.x every `spawn` brief carries a
 **Crew:** block (see `buildCrewContext` in `bin/lib/spawn.js`): your
-group(s) + members + lane, the other groups + members, their group
-channels, and the peer-DM norm. Conventions that block assumes:
+group(s) + members + lane, the sibling groups of the same spawn +
+members, their group channels, and the peer-DM norm. Groups from
+unrelated concurrent briefs are deliberately NOT enumerated — they
+collapse to a count (`N other groups exist on this board`), so
+cross-task rosters stay discoverable (`crewbus group list`) without
+becoming prompt noise or a misleading invitation. Conventions that
+block assumes:
 
 - **Peer-direct for questions.** `crewbus send --from you --to-group
   <group> --subject "..." --body "..."` reaches every member of

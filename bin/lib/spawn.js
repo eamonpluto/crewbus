@@ -185,14 +185,19 @@ export function buildSpawnPrompt({ name, from, subject, body, replyId, rev, cwd,
 
 // Crew context block for the spawn prompt: the roster a worker needs to
 // talk peer-direct instead of star-topologizing every question through
-// the lead. `groups` is the board's full group list [{ name, members }],
-// `myGroups` the group names this recipient belongs to, `subject` the lane
-// line for my groups (the spawn call's --subject). Workers may send to
-// each other (and to-group) and tail any channel, but channel-post is
-// lead|admin-only (see identity.js LEAD_PLUS) — so the block points reads
-// at channels and writes at DMs. Returns bullet lines (no header); the
-// caller renders them under a Crew: header. Pure: unit-tested, no board IO.
-export function buildCrewContext({ name, from, subject, groups, myGroups }) {
+// the lead. `groups` is the TASK roster — the groups named in this spawn
+// only — [{ name, members }]; `myGroups` the group names this recipient
+// belongs to; `subject` the lane line for my groups (the spawn call's
+// --subject); `offTask` how many board groups from unrelated concurrent
+// briefs exist (collapsed to a count, never enumerated: cross-task
+// rosters are prompt noise and a misleading invitation — "ask the group
+// that owns a thing" only makes sense for sibling lanes of the same
+// task). Workers may send to each other (and to-group) and tail any
+// channel, but channel-post is lead|admin-only (see identity.js
+// LEAD_PLUS) — so the block points reads at channels and writes at DMs.
+// Returns bullet lines (no header); the caller renders them under a
+// Crew: header. Pure: unit-tested, no board IO.
+export function buildCrewContext({ name, from, subject, groups, myGroups, offTask }) {
   const all = (groups || []).filter((g) => g && g.name);
   const mineSet = new Set(myGroups || []);
   const mine = all.filter((g) => mineSet.has(g.name));
@@ -200,6 +205,8 @@ export function buildCrewContext({ name, from, subject, groups, myGroups }) {
   const lane = subject && String(subject).trim() ? String(subject).trim() : "the brief above";
   const me = String(name || "you");
   const lead = String(from || "lead");
+  const off = Math.max(0, Number(offTask) || 0);
+  const offNoun = (n) => `${n} other group${n === 1 ? "" : "s"}`;
   const showMembers = (members) => {
     const ms = (members || []).filter(Boolean).map(String);
     return ms.slice(0, 8).join(",") + (ms.length > 8 ? "…" : "");
@@ -212,11 +219,11 @@ export function buildCrewContext({ name, from, subject, groups, myGroups }) {
   }
   if (others.length > 0) {
     // Same one-liner as channels.js groupChannelName (grp-<group>, max 60).
-    out.push(`other groups on this board: ${others.map((g) => `${g.name} (${showMembers(g.members)})`).join("; ")} — their channels: ${others.map((g) => `grp-${g.name}`.slice(0, 60)).join(", ")}.`);
+    out.push(`other groups on this task: ${others.map((g) => `${g.name} (${showMembers(g.members)})`).join("; ")} — their channels: ${others.map((g) => `grp-${g.name}`.slice(0, 60)).join(", ")}.` + (off > 0 ? ` ${offNoun(off)} exist on this board: crewbus group list to discover.` : ""));
   } else if (mine.length > 0) {
-    out.push(`no other groups on this board right now — discover live agents with: crewbus agents.`);
+    out.push(off > 0 ? `no other groups on this task. ${offNoun(off)} exist on this board: crewbus group list to discover.` : `no other groups on this board right now — discover live agents with: crewbus agents.`);
   } else {
-    out.push(`discover who else is on this board with: crewbus agents (plus crewbus group list once groups exist).`);
+    out.push(off > 0 ? `${offNoun(off)} exist on this board (crewbus group list to discover).` : `discover who else is on this board with: crewbus agents (plus crewbus group list once groups exist).`);
   }
   out.push(`ask the group that owns a thing before asking ${lead}: crewbus send --from ${me} --to-group <group> --subject "..." --body "..." (reaches every member; ${lead} is for approvals and scope disputes only).`);
   out.push(`read context freely: crewbus channel tail grp-<group> (a group's briefs + progress, reads need no token). Posting to channels needs lead rights — write everything via DMs.`);

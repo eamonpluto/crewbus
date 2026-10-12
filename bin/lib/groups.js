@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readJson, writeJson, listJson, fail, parseGroupList, cleanGroupName } from "./store.js";
-import { readDMs, findMessageById, isVerified, scanAllMessages } from "./mail.js";
+import { readDMs, findMessageById, isVerified, scanAllMessages, ackedIdSet } from "./mail.js";
 import { readChannelPosts } from "./channels.js";
 
 // parseGroupList + cleanGroupName live in store.js (canonical home).
@@ -195,6 +195,99 @@ export function gatherTelemetry(items) {
   let chars = 0;
   for (const m of items) chars += String(m.body || "").length + String(m.subject || "").length;
   return { messages: items.length, tokensEst: Math.floor(chars / 4) };
+}
+
+// Batch (brief) enumeration for the dashboard Briefs view: one row per
+// fan-out/thread on the board — briefs, checkpoints, finals, ack state,
+// last activity. Keys come from message batch stamps plus spawned
+// workers' briefIds (single-recipient briefs carry no batch until
+// replied to); a batch-less root with no replies and no worker pointing
+// at it is a stray DM, not a brief, and is skipped. Stats mirror
+// collectBatch + gatherTelemetry; pure read, no board IO.
+export function listBatches(d) {
+  const all = [];
+  let subs = [];
+  try {
+    subs = fs.readdirSync(d.dm);
+  } catch {
+    subs = [];
+  }
+  for (const sub of subs) {
+    try {
+      if (!fs.statSync(path.join(d.dm, sub)).isDirectory()) continue;
+    } catch {
+      continue;
+    }
+    for (const m of readDMs(d, sub)) all.push(m);
+  }
+  for (const e of listJson(d.broadcast || path.join(d.root, "broadcast"))) {
+    const b = e.data;
+    if (b && b.id && b.from) {
+      if (!b.batch) b.batch = b.id;
+      all.push(b);
+    }
+  }
+  const childCount = new Map();
+  for (const m of all) {
+    if (!m.replyTo) continue;
+    childCount.set(m.replyTo, (childCount.get(m.replyTo) || 0) + 1);
+  }
+  const keys = [];
+  const seen = new Set();
+  const addKey = (k) => {
+    if (k && !seen.has(k)) {
+      seen.add(k);
+      keys.push(k);
+    }
+  };
+  for (const m of all) {
+    if (m.batch) addKey(m.batch);
+    else if (!m.replyTo && (childCount.get(m.id) || 0) > 0) addKey(m.id);
+  }
+  try {
+    for (const e of listJson(path.join(d.root, "agents"))) {
+      const a = e && e.data;
+      if (a && a.briefId) addKey(a.briefId);
+    }
+  } catch {}
+  const acked = ackedIdSet(d);
+  const rows = [];
+  for (const key of keys) {
+    const res = collectBatch(d, key);
+    if (!res) continue;
+    const briefs = res.items.filter((m) => !m.replyTo);
+    if (briefs.length === 0) continue;
+    briefs.sort((a, b) => String(a.at).localeCompare(String(b.at)) || String(a.id).localeCompare(String(b.id)));
+    const replies = res.items.filter((m) => !!m.replyTo);
+    const checkpoints = replies.filter((m) => m.checkpoint === true);
+    const finals = replies.filter((m) => m.checkpoint !== true);
+    const workers = [];
+    for (const b of briefs) {
+      const tos = Array.isArray(b.to) ? b.to : (b.to ? [b.to] : []);
+      for (const t of tos) {
+        if (t && !workers.includes(t)) workers.push(t);
+      }
+    }
+    let lastAt = briefs[0].at || "";
+    for (const m of res.items) {
+      if (String(m.at || "") > String(lastAt || "")) lastAt = m.at;
+    }
+    rows.push({
+      batch: key,
+      subject: briefs[0].subject || "",
+      from: briefs[0].from || "",
+      at: briefs[0].at || "",
+      workers,
+      briefCount: briefs.length,
+      replyCount: replies.length,
+      checkpointCount: checkpoints.length,
+      finalCount: finals.length,
+      ackedFinals: finals.filter((m) => acked.has(m.id)).length,
+      lastAt: lastAt || "",
+    });
+  }
+  rows.sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)) || String(a.batch).localeCompare(String(b.batch)));
+  return rows;
 }
 
 export function batchReplyIds(d, batch) {

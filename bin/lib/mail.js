@@ -388,6 +388,27 @@ export function ackedIds(d, agent) {
   return out;
 }
 
+// Ack markers across every agent: message ids with at least one ack, by
+// anyone. Powers batch-thread ack state (dashboard Briefs/gather) —
+// orthogonal to per-agent ackedIds(), which scopes triage to one inbox.
+export function ackedIdSet(d) {
+  const out = new Set();
+  let subs = [];
+  try {
+    subs = fs.readdirSync(path.join(d.root, "acked"));
+  } catch {
+    return out;
+  }
+  for (const sub of subs) {
+    try {
+      for (const f of fs.readdirSync(path.join(d.root, "acked", sub)).filter((f) => f.endsWith(".json"))) {
+        out.add(f.replace(/\.json$/, ""));
+      }
+    } catch {}
+  }
+  return out;
+}
+
 export function splitCommand(cmd) {
   const out = [];
   let cur = "";

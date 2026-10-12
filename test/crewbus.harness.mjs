@@ -681,6 +681,12 @@ const crewSolo = buildCrewContext({ name: "w", from: "lead", groups: [], myGroup
 check("crew: solo lane invites agents discovery", crewSolo.some((l) => l.includes("crewbus agents")));
 const crewBare = buildSpawnPrompt({ name: "w", from: "lead", body: "b", replyId: "msg-1", cwd: "/tmp", root: "/tmp/.crewbus" });
 check("crew: absent without crew (backward compatible)", !crewBare.includes("Crew:"));
+// task-scoped rosters: off-task groups collapse to a count, never enumerated
+const crewOff = buildCrewContext({ name: "cam-1", from: "lead", subject: "brief: camera lane", groups: [{ name: "camera", members: ["cam-1"] }], myGroups: ["camera"], offTask: 2 });
+check("crew: off-task groups collapse to a count", crewOff.some((l) => l.includes("2 other groups")) && !crewOff.some((l) => l.includes("gps")));
+const crewSoloOff = buildCrewContext({ name: "w", from: "lead", groups: [], myGroups: [], offTask: 3 });
+check("crew: solo lane sees off-task count, no names", crewSoloOff.some((l) => l.includes("3 other groups")));
+check("crew: sibling lanes still enumerated", crewA.some((l) => l.includes("gps (gps-1,gps-2,gps-3)")));
 // --- agent-doc merge: writers start from prev, never enumerate (review P0) ---
 const mgPrev = { name: "w", spawnedPid: 99, spawnedBy: "lead", briefId: "b", role: "worker", tokenHash: "h", salt: "s" };
 const mgOut = mergeAgentDoc(mgPrev, { name: "w", lastSeen: "now" });
