@@ -3,6 +3,7 @@
 export const ROUTES = Object.freeze({
   Pair: 'Pair',
   Boards: 'Boards',
+  Briefs: 'Briefs',
   Triage: 'Triage',
   Approvals: 'Approvals',
   Launch: 'Launch',
@@ -16,6 +17,7 @@ export const INITIAL_ROUTE = ROUTES.Pair;
 export const ROUTE_TITLES = Object.freeze({
   Pair: 'Pair a device',
   Boards: 'Boards',
+  Briefs: 'Briefs',
   Triage: 'Triage',
   Approvals: 'Approvals',
   Launch: 'Launch',

@@ -40,7 +40,7 @@ function parseJson(rel) {
 ['package.json', 'app.json', 'eas.json', 'src/vendor/contracts/pairing.json'].forEach(parseJson);
 
 // 2. Cross-referenced paths exist.
-const SCREENS = ['PairScreen', 'BoardsScreen', 'TriageScreen', 'ApprovalsScreen', 'LaunchScreen', 'FleetScreen', 'QueueScreen', 'SettingsScreen'];
+const SCREENS = ['PairScreen', 'BoardsScreen', 'BriefsScreen', 'TriageScreen', 'ApprovalsScreen', 'LaunchScreen', 'FleetScreen', 'QueueScreen', 'SettingsScreen'];
 [
   'App.js', 'babel.config.js', 'README.md', 'scripts/check.mjs', 'eas.json',
   'src/navigation/routes.js', 'src/navigation/RootNavigator.jsx',

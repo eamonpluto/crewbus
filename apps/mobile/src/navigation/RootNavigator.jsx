@@ -6,6 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ROUTES, INITIAL_ROUTE, ROUTE_TITLES } from './routes.js';
 import { PairScreen } from '../screens/PairScreen.jsx';
 import { BoardsScreen } from '../screens/BoardsScreen.jsx';
+import { BriefsScreen } from '../screens/BriefsScreen.jsx';
 import { TriageScreen } from '../screens/TriageScreen.jsx';
 import { ApprovalsScreen } from '../screens/ApprovalsScreen.jsx';
 import { LaunchScreen } from '../screens/LaunchScreen.jsx';
@@ -19,6 +20,7 @@ const Stack = createNativeStackNavigator();
 const SCREENS = {
   [ROUTES.Pair]: PairScreen,
   [ROUTES.Boards]: BoardsScreen,
+  [ROUTES.Briefs]: BriefsScreen,
   [ROUTES.Triage]: TriageScreen,
   [ROUTES.Approvals]: ApprovalsScreen,
   [ROUTES.Launch]: LaunchScreen,
@@ -30,6 +32,7 @@ const SCREENS = {
 const ORDER = [
   ROUTES.Pair,
   ROUTES.Boards,
+  ROUTES.Briefs,
   ROUTES.Triage,
   ROUTES.Approvals,
   ROUTES.Launch,

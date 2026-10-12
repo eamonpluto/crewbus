@@ -42,6 +42,10 @@ export function BoardsScreen({ ctx, navigation }) {
   };
 
   const preferred = ctx.connection.learned.preferred(routes);
+  // Liveness, not presence-by-count: board.workers lists every pid-bearing
+  // worker, live or dead — only w.alive === true counts as active.
+  const workerList = board && Array.isArray(board.workers) ? board.workers : [];
+  const liveCount = workerList.filter((w) => w && w.alive === true).length;
 
   return (
     <View style={STYLES.screen}>
@@ -75,7 +79,10 @@ export function BoardsScreen({ ctx, navigation }) {
         {board ? (
           <View style={STYLES.card}>
             <Text style={STYLES.cardTitle}>Board: {String(board.name || 'Local Board')}</Text>
-            <Text style={STYLES.cardSub}>{board.workers ? `${Object.keys(board.workers).length} workers active` : 'Online'}</Text>
+            <Text style={STYLES.cardSub}>{board.workers ? `${liveCount} of ${workerList.length || Object.keys(board.workers).length} workers live` : 'Online'}</Text>
+            <TouchableOpacity style={[STYLES.btnSecondary, styles.btnRow]} onPress={() => navigation.navigate(ROUTES.Briefs)}>
+              <Text style={STYLES.btnText}>View Briefs →</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
         <TouchableOpacity style={[STYLES.btnSecondary, styles.btnRow]} onPress={() => { ctx.connection.retryNow(); refreshConn(); }}>

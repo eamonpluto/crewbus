@@ -6,6 +6,7 @@ import { HeaderBar } from '../components/HeaderBar.jsx';
 import { BottomNav } from '../components/BottomNav.jsx';
 import { IconApprovals, IconCheck, IconClose } from '../components/Icons.jsx';
 import { ROUTES } from '../navigation/routes.js';
+import { startWatch, buzz } from '../lib/watch.js';
 
 function ApprovalCard({ item, onDecide }) {
   const [reason, setReason] = React.useState('');
@@ -40,6 +41,7 @@ export function ApprovalsScreen({ ctx, navigation }) {
   const [agent] = React.useState('mobile');
   const [agentToken] = React.useState('');
   const [items, setItems] = React.useState([]);
+  const [alert, setAlert] = React.useState(null);
   const [status, setStatus] = React.useState('Ready to sync approvals.');
 
   const currentApi = () => {
@@ -47,6 +49,12 @@ export function ApprovalsScreen({ ctx, navigation }) {
     if (!route) throw new Error('no route connected — connect in Hub');
     return ctx.apiFor(route);
   };
+  // Foreground watch while mounted (see TriageScreen): new approvals buzz
+  // even when the user isn't pulling-to-refresh inside the 300s window.
+  React.useEffect(() => {
+    const stop = startWatch({ getApi: () => currentApi(), agent: agent.trim() || 'mobile', onAlert: (a) => { buzz(); setAlert(a); } });
+    return stop;
+  }, [agent]);
 
   const load = async () => {
     const target = agent.trim() || 'mobile';
@@ -76,6 +84,13 @@ export function ApprovalsScreen({ ctx, navigation }) {
     <View style={STYLES.screen}>
       <HeaderBar title="Approvals" statusText={status} navigation={navigation} rightTitle="Check" onRightPress={load} />
       <View style={STYLES.body}>
+        {alert ? (
+          <View style={styles.alertBox}>
+            <Text style={styles.alertTitle}>{alert.title}</Text>
+            <Text style={STYLES.cardSub} numberOfLines={2}>{alert.body}</Text>
+            <TouchableOpacity onPress={() => setAlert(null)}><Text style={styles.dismiss}>Dismiss</Text></TouchableOpacity>
+          </View>
+        ) : null}
         <FlatList
           data={items}
           keyExtractor={(m, i) => String(m.id || m.replyId || i)}
@@ -90,7 +105,9 @@ export function ApprovalsScreen({ ctx, navigation }) {
 
 const styles = StyleSheet.create({
   cardGap: { padding: 14, gap: 10, marginVertical: 6 },
-  badgeWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: THEME.amberMuted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  alertBox: { borderWidth: 1, borderColor: THEME.amber, borderRadius: 8, padding: 10, marginBottom: 8, gap: 4 },
+  alertTitle: { color: THEME.amber, fontSize: 13, fontWeight: '700' },
+  dismiss: { color: THEME.textSubtle, fontSize: 12, textAlign: 'right' },  badgeWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: THEME.amberMuted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   badge: { color: THEME.amber, fontSize: 11, fontWeight: '700' },
   sender: { color: THEME.primaryLight, fontSize: 12, fontWeight: '600' },
   bodyBox: { backgroundColor: '#0d0f17', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: THEME.border },
