@@ -4,6 +4,22 @@
 
 - Package is now published as unscoped `crewbus` (v10.0.2): `npm i -g crewbus`.
 
+## 10.0.4 (2026-10-12)
+
+PATCH RELEASE: Briefs view + gather endpoint, task-scoped spawn rosters, and mobile brief/thread/watcher screens. No board-schema change (`board.json` stays v2); all additions backward-compatible.
+
+- **Dashboard Briefs view + `GET /api/gather?batch=`**:
+  - New Briefs section: one row per fan-out (subject, workers, checkpoint/final counts, acked fraction, relative last activity); click a row for its gathered thread (briefs, checkpoint timeline, finals with ack ticks, telemetry footer).
+  - Crews table gains a brief/groups column (batch short-id + group names, or "solo"); Recent activity gains a text filter + checkpoints/finals toggle.
+- **Task-scoped spawn rosters**:
+  - `buildCrewContext` takes the task's groups only; groups from unrelated concurrent briefs collapse to a count (`N other groups exist on this board`) instead of leaking names cross-task. Documented in `docs/GROUPS.md`.
+- **Mobile (M5)**:
+  - Boards card counts live workers (`alive === true`) instead of all pid-bearing workers.
+  - Triage groups inbox by brief thread with checkpoint/final/note chips.
+  - New Briefs screen (one row per batch, tap for thread via `/api/gather`).
+  - Foreground watcher (`src/lib/watch.js`): polls inbox approvals + board dead-man state, alerts once per new id with in-app banner + haptic. Foreground-only by scaffold rule (no notification plugins); killed-app push remains future work (needs the plugin rule lifted + EAS credentials + a relay sender).
+  - `/api/inbox` items now carry `checkpoint` (additive).
+
 ## 10.0.3 (2026-10-10)
 
 PATCH RELEASE: Worker-record integrity, truthful presence, and multi-group collaboration in spawn briefs. No board-schema change (`board.json` stays v2); all prompt additions are backward-compatible (absent unless the spawn carries group/compute context).
