@@ -1659,7 +1659,7 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   const updRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cb-update-"));
   fs.cpSync(path.join(path.dirname(CLI), "..", "bin"), path.join(updRoot, "pkg", "bin"), { recursive: true });
   const updPkg = path.join(updRoot, "pkg", "package.json");
-  fs.writeFileSync(updPkg, JSON.stringify({ name: "crewbus-test-pkg", version: "9.9.9" }));
+  fs.writeFileSync(updPkg, JSON.stringify({ name: "crewbus-test-pkg", version: "9.9.9", type: "module" }));
   const updCli = path.join(updRoot, "pkg", "bin", "crewbus.js");
   const stubDir = path.join(updRoot, "stubbin");
   fs.mkdirSync(stubDir, { recursive: true });
