@@ -4,6 +4,16 @@
 
 - Package is now published as unscoped `crewbus` (v10.0.2): `npm i -g crewbus`.
 
+## 10.0.5 (2026-10-12)
+
+PATCH RELEASE: Self-update command. No board-schema change (`board.json` stays v2); additive CLI surface only.
+
+- **`crewbus update [--check] [--yes] [--version x.y.z]`**:
+  - Version check via `npm view <own-name>@latest version`, install via `npm install -g` — registry, auth, and proxy come from the user's npm config, never hardcoded.
+  - Package name always read from our own `package.json` (never argv); `--version` accepts strict `x.y.z` only.
+  - `--check` reports only; bare `update` refuses off-TTY without `--yes` (install scripts execute from the network); source checkouts are refused with `git pull` guidance.
+  - Already-latest and newer-than-registry are no-ops; explicit pins allow downgrades; post-install note covers the old-code process restart + `init --force` for wiring.
+
 ## 10.0.4 (2026-10-12)
 
 PATCH RELEASE: Briefs view + gather endpoint, task-scoped spawn rosters, and mobile brief/thread/watcher screens. No board-schema change (`board.json` stays v2); all additions backward-compatible.
