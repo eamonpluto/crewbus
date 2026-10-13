@@ -4,6 +4,15 @@
 
 - Package is now published as unscoped `crewbus` (v10.0.2): `npm i -g crewbus`.
 
+## 10.0.6 (2026-10-13)
+
+PATCH RELEASE: Dashboard client hotfix. No board-schema change (`board.json` stays v2).
+
+- **Fixed a `SyntaxError` that killed the entire dashboard script block at load**:
+  - The command-palette entry `label:'Install 'crewbus' CLI in PATH'` used `\'` escapes inside the server's template literal, which Node evaluates before serving — browsers received unescaped quotes and refused to parse anything.
+  - Present since the palette landed; first shipped in v10.0.5, so every web/desktop user on 10.0.5 was affected.
+  - Regression test: the suite now fetches `/` and `node --check`s the rendered client script.
+
 ## 10.0.5 (2026-10-12)
 
 PATCH RELEASE: Self-update command. No board-schema change (`board.json` stays v2); additive CLI surface only.
