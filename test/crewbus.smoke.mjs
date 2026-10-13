@@ -1650,9 +1650,72 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   }
   fs.rmSync(envBoard, { recursive: true, force: true });
 }
-// ---- END env-features: spawn --allow-env / --keep-env ----
+  // ---- END env-features: spawn --allow-env / --keep-env ----
 
-if (failures > 0) {
+  // ---- update: self-update via the user's own npm (stubbed) ----
+  // A copied tree (no .git) stands in for a global install; a stub npm
+  // answers --version/view and records install calls. Nothing touches
+  // the network or the real global prefix.
+  const updRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cb-update-"));
+  fs.cpSync(path.join(path.dirname(CLI), "..", "bin"), path.join(updRoot, "pkg", "bin"), { recursive: true });
+  const updPkg = path.join(updRoot, "pkg", "package.json");
+  fs.writeFileSync(updPkg, JSON.stringify({ name: "crewbus-test-pkg", version: "9.9.9" }));
+  const updCli = path.join(updRoot, "pkg", "bin", "crewbus.js");
+  const stubDir = path.join(updRoot, "stubbin");
+  fs.mkdirSync(stubDir, { recursive: true });
+  const fakeNpm = path.join(stubDir, "fake-npm.mjs");
+  fs.writeFileSync(fakeNpm, [
+    'import fs from "node:fs";',
+    'const args = process.argv.slice(2);',
+    'if (args[0] === "--version") { console.log("10.0.0"); }',
+    'else if (args[0] === "view") { console.log("10.9.9"); }',
+    'else if (args[0] === "install") { fs.appendFileSync(process.env.FAKE_NPM_LOG, args.join(" ") + "\\n"); }',
+    'else { console.error("unexpected npm args: " + args.join(" ")); process.exit(9); }',
+    '',
+  ].join("\n"));
+  fs.writeFileSync(path.join(stubDir, "npm"), '#!/bin/sh\nexec node "' + fakeNpm.replace(/\\/g, "/") + '" "$@"\n');
+  fs.writeFileSync(path.join(stubDir, "npm.cmd"), '@"' + process.execPath + '" "' + fakeNpm + '" %*\r\n');
+  try { fs.chmodSync(path.join(stubDir, "npm"), 0o755); } catch {}
+  const npmLog = path.join(updRoot, "npm.log");
+  fs.writeFileSync(npmLog, "");
+  const updEnv = { ...process.env, PATH: stubDir + path.delimiter + process.env.PATH, FAKE_NPM_LOG: npmLog, CREWBUS_DIR: path.join(updRoot, "board") };
+  delete updEnv.CREWBUS_AGENT;
+  delete updEnv.CREWBUS_TOKEN;
+  const updRun = (args) => execFileSync("node", [updCli, ...args], { env: updEnv }).toString();
+  const loggedInstalls = () => fs.readFileSync(npmLog, "utf8");
+  const updFails = (label, args) => {
+    let bad = false;
+    try { updRun(args); } catch (e) {
+      bad = String((e.stdout || "") + (e.stderr || "") + (e.message || "")).length > 0;
+    }
+    check(label, bad);
+  };
+  const chk = updRun(["update", "--check"]);
+  check("update: --check reports installed vs latest", chk.includes("9.9.9") && chk.includes("10.9.9"));
+  check("update: --check installs nothing", !loggedInstalls().includes("install"));
+  const yes = updRun(["update", "--yes"]);
+  check("update: --yes installs latest globally", loggedInstalls().includes("install -g crewbus-test-pkg@10.9.9"));
+  check("update: post-install restart note", yes.includes("still the old code") && yes.includes("init --force"));
+  updFails("update: bare run refuses without --yes off-TTY", ["update"]);
+  const same = updRun(["update", "--version", "9.9.9"]);
+  check("update: pinned current version is a no-op", same.includes("already up to date") && !loggedInstalls().includes("@9.9.9"));
+  updFails("update: bad --version rejected", ["update", "--version", "abc"]);
+  const down = updRun(["update", "--version", "8.0.0", "--yes"]);
+  check("update: explicit downgrade honored", down.includes("Downgrading") && loggedInstalls().includes("install -g crewbus-test-pkg@8.0.0"));
+  fs.writeFileSync(updPkg, JSON.stringify({ name: "crewbus-test-pkg", version: "99.0.0" }));
+  const newer = updRun(["update", "--check"]);
+  check("update: newer-than-registry installs nothing", newer.includes("newer than registry") && !loggedInstalls().includes("@99.0.0"));
+  let checkoutRefused = false;
+  try {
+    execFileSync("node", [CLI, "update", "--check"], { env: updEnv });
+  } catch (e) {
+    checkoutRefused = String((e.stdout || "") + (e.stderr || "")).includes("source checkout");
+  }
+  check("update: source checkout refused with git-pull guidance", checkoutRefused);
+  fs.rmSync(updRoot, { recursive: true, force: true });
+  // ---- END update ----
+
+  if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
   process.exit(1);
 }

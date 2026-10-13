@@ -6326,6 +6326,10 @@ Setup:
     project-local surface (claude/opencode/cursor); codex/grok/antigravity
     are skipped (TOML or global-only surfaces — see docs/COMPATIBILITY.md).
     Nothing else is widened.
+  crewbus update [--check] [--yes] [--version x.y.z]
+    self-update the global npm install to the registry latest
+    (--check reports only; needs --yes off-TTY; runs the published
+    install scripts — same trust as npm i -g crewbus)
 
 Identity (first claim wins, token after that):
   crewbus register --from <you> [--session <opencode-session-id>] [--token <t>] [--expires-in <dur>] [--service]
@@ -7337,6 +7341,107 @@ function cmdInstallCli() {
   }
 }
 
+// Self-update support: which package did this process install as? Read
+// from our own package.json next to bin/crewbus.js — the name is never
+// taken from argv, so there is no `update <other-pkg>` confusion/abuse.
+function ownPackage() {
+  try {
+    const here = path.dirname(path.resolve(process.argv[1] || ""));
+    const pkg = JSON.parse(fs.readFileSync(path.join(here, "..", "package.json"), "utf8"));
+    if (pkg && typeof pkg.name === "string" && typeof pkg.version === "string") {
+      return { name: pkg.name, version: pkg.version, dir: path.resolve(path.join(here, "..")) };
+    }
+  } catch {}
+  return null;
+}
+
+// Zero-dep semver compare (release parts only; prerelease suffixes compare
+// equal — `npm view` reports the latest stable tag, so suffixes never meet
+// in the check path; --version pins accept them verbatim).
+function cmpSemver(a, b) {
+  const parts = (s) => String(s || "").trim().replace(/^[=v]/, "").split(".").map((x) => {
+    const n = Number(String(x).split("-")[0]);
+    return Number.isInteger(n) && n >= 0 ? n : 0;
+  });
+  const pa = parts(a);
+  const pb = parts(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function cmdUpdate(args) {
+  const checkOnly = args.includes("--check");
+  const yes = args.includes("--yes");
+  const wantRaw = getFlag(args, "--version");
+  if (wantRaw !== undefined && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(String(wantRaw).trim())) {
+    fail(`--version must be a plain x.y.z version (got "${wantRaw}") — no tags, URLs, or ranges`);
+  }
+  const own = ownPackage();
+  if (!own) fail("cannot determine the installed package (no package.json next to the CLI) — reinstall with: npm i -g crewbus");
+  try {
+    if (fs.existsSync(path.join(own.dir, ".git"))) {
+      fail(`running from a source checkout at ${own.dir} — update it with: git pull (npm would install the registry copy elsewhere; the global CLI is a separate install)`);
+    }
+  } catch (e) {
+    if (e && e.message && e.message.startsWith("running from a source checkout")) throw e;
+  }
+  // The user's own npm: registry, auth, proxy and cache all come from
+  // their npm config — never hardcoded here. shell:true on Windows so the
+  // npm.cmd shim resolves (same convention as probeBinary in lib/launch.js).
+  const npmShell = process.platform === "win32";
+  try {
+    execFileSync("npm", ["--version"], { stdio: ["ignore", "pipe", "pipe"], timeout: 15000, shell: npmShell });
+  } catch {
+    fail("npm was not found on PATH — install Node.js/npm first, or update manually: npm i -g crewbus@latest");
+  }
+  let latest = "";
+  try {
+    latest = String(execFileSync("npm", ["view", `${own.name}@latest`, "version"], { stdio: ["ignore", "pipe", "pipe"], timeout: 30000, shell: npmShell }) || "").trim();
+  } catch {
+    latest = "";
+  }
+  if (!latest) fail(`could not reach the npm registry (offline?) — latest ${own.name} version unknown; retry with network, or install explicitly: npm i -g ${own.name}@<x.y.z>`);
+  const want = wantRaw !== undefined ? String(wantRaw).trim() : latest;
+  const cmp = cmpSemver(own.version, want);
+  if (cmp === 0) {
+    console.log(`crewbus ${own.version} installed${wantRaw !== undefined ? ` (requested ${want})` : `, ${latest} latest`} — already up to date [board n/a]`);
+    return;
+  }
+  if (cmp > 0 && wantRaw === undefined) {
+    console.log(`crewbus ${own.version} installed is newer than registry latest ${latest} (dev install?) — nothing to do [board n/a]`);
+    return;
+  }
+  if (checkOnly) {
+    console.log(`crewbus ${own.version} installed, ${want} available — re-run without --check to update [board n/a]`);
+    return;
+  }
+  const direction = cmp < 0 ? "upgrade" : "downgrade";
+  if (!yes) {
+    if (process.stdin && process.stdin.isTTY) {
+      process.stderr.write(`This ${direction}s ${own.name} ${own.version} → ${want} via "npm install -g" (runs the published package's install scripts). Type "yes" to continue: `);
+      let answer = "";
+      try {
+        answer = String(fs.readFileSync(0, "utf8") || "").trim().toLowerCase();
+      } catch {}
+      if (answer !== "yes" && answer !== "y") fail("update refused (confirmation not given) — re-run with --yes to confirm");
+    } else {
+      fail(`refusing to self-update non-interactively without --yes (npm install -g executes the published package's install scripts) — re-run with --yes to confirm`);
+    }
+  }
+  console.log(`${direction === "upgrade" ? "Updating" : "Downgrading"} ${own.name} ${own.version} → ${want} (npm install -g ${own.name}@${want})…`);
+  try {
+    execFileSync("npm", ["install", "-g", `${own.name}@${want}`], { stdio: "inherit", timeout: 300000, shell: npmShell });
+  } catch (e) {
+    const detail = String((e && e.message) || e);
+    const busy = /EBUSY|EPERM/i.test(detail);
+    fail(`npm install failed: ${detail.slice(0, 300)}${busy ? " — close running crewbus processes (web/serve/listen/watchers holding the install open) and retry" : ""}`);
+  }
+  console.log(`updated to ${want} — this process is still the old code: restart your terminal (and any crewbus web/serve/listen processes), then re-run init --force in your projects to refresh harness wiring [board n/a]`);
+}
+
 async function main() {
   const [, , cmd, ...rest] = process.argv;
   if (REMOVED.has(cmd)) {
@@ -7345,6 +7450,7 @@ async function main() {
   switch (cmd) {
     case "init": return cmdInit(rest);
     case "install-cli": return cmdInstallCli();
+    case "update": return cmdUpdate(rest);
     case "register": return cmdRegister(rest);
     case "acl": return cmdAcl(rest);
     case "agents": return cmdAgents(rest);
