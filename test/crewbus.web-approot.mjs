@@ -79,6 +79,17 @@ check("approot: palette hint", page.text.includes("Ctrl+K"));
 check("approot: Ctrl+K handler + palette overlay",
   page.text.includes('id="palette"') && page.text.includes('id="palette-input"') &&
   page.text.includes('id="palette-list"') && page.text.includes("ctrlKey") && page.text.includes("window.__workers"));
+// Rendered client script must parse: a template-literal escape once
+// shipped `label:'Install 'crewbus' …` into the page — a SyntaxError
+// that killed the entire dashboard script block at load.
+const scrFile = path.join(board, "client-check.js");
+fs.writeFileSync(scrFile, [...page.text.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join("\n;\n"));
+let scrParses = false;
+try {
+  execFileSync("node", ["--check", scrFile], { stdio: "pipe" });
+  scrParses = true;
+} catch {}
+check("approot: rendered client script parses", scrParses);
 
 // 2. Center launch panel upgrade (M1 ids evolved, not replaced)
 check("approot: harness cards container", page.text.includes('id="harness-cards"') && page.text.includes("renderHarnessCards"));

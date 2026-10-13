@@ -1425,7 +1425,7 @@ function paletteSections(){
     {kind:'action',label:'Copy board path',action:'copyboard'},
     {kind:'action',label:'Open project folder…',action:'openfolder'},
     {kind:'action',label:'Pair mobile client (QR)…',action:'pairmobile'},
-    {kind:'action',label:'Install \'crewbus\' CLI in PATH',action:'installcli'},
+    {kind:'action',label:"Install 'crewbus' CLI in PATH",action:'installcli'},
     {kind:'action',label:'Refresh board state',action:'refresh'},
     {kind:'section',label:'Launch',id:'sec-launch'},
     {kind:'section',label:'Boards',id:'sec-boards'},
