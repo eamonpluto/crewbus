@@ -1,13 +1,19 @@
 // CrewBus M5 Settings screen — device identity, learned routes, sign-out. JSX: not `node --check`ed.
 import React from 'react';
 import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { THEME, STYLES } from '../theme.js';
+import { useStyles } from '../theme.js';
 import { HeaderBar } from '../components/HeaderBar.jsx';
 import { BottomNav } from '../components/BottomNav.jsx';
 import { IconDevice, IconPackage } from '../components/Icons.jsx';
 import { ROUTES } from '../navigation/routes.js';
 
 export function SettingsScreen({ ctx, navigation }) {
+  const { T, S } = useStyles();
+  const styles = React.useMemo(() => StyleSheet.create({
+  scopeTag: { color: T.primaryLight, fontSize: 11, marginTop: 4 },
+  head: { color: T.text, fontWeight: '700', fontSize: 13, marginTop: 4 },
+  routeItem: { color: T.textMuted, fontSize: 12, paddingVertical: 2 },
+  }), [T]);
   const [devices, setDevices] = React.useState(null);
   const [agent, setAgent] = React.useState('mobile');
   const [agentToken, setAgentToken] = React.useState('');
@@ -33,37 +39,37 @@ export function SettingsScreen({ ctx, navigation }) {
   };
 
   return (
-    <View style={STYLES.screen}>
+    <View style={S.screen}>
       <HeaderBar title="Device & Hub" statusText={status} navigation={navigation} rightTitle="Queue" onRightPress={() => navigation.navigate(ROUTES.Queue)} />
-      <View style={STYLES.body}>
-        <View style={STYLES.card}>
+      <View style={S.body}>
+        <View style={S.card}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <IconDevice size={16} color={THEME.primaryLight} />
-            <Text style={STYLES.cardTitle}>Device Identity</Text>
+            <IconDevice size={16} color={T.primaryLight} />
+            <Text style={S.cardTitle}>Device Identity</Text>
           </View>
-          <Text style={STYLES.textMuted}>{device ? `${device.deviceId} (env: ${device.envId || 'none'})` : 'No device paired'}</Text>
+          <Text style={S.textMuted}>{device ? `${device.deviceId} (env: ${device.envId || 'none'})` : 'No device paired'}</Text>
           {device && device.scopes ? <Text style={styles.scopeTag}>Scopes: {device.scopes.join(', ')}</Text> : null}
         </View>
-        <View style={STYLES.card}>
+        <View style={S.card}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <IconPackage size={16} color={THEME.primaryLight} />
-            <Text style={STYLES.cardTitle}>Offline Cache</Text>
+            <IconPackage size={16} color={T.primaryLight} />
+            <Text style={S.cardTitle}>Offline Cache</Text>
           </View>
-          <Text style={STYLES.textMuted}>{stats.inboxes} inboxes · {stats.drafts} drafts · {stats.queued} queued mutations</Text>
+          <Text style={S.textMuted}>{stats.inboxes} inboxes · {stats.drafts} drafts · {stats.queued} queued mutations</Text>
         </View>
         <Text style={styles.head}>Learned Relay Routes</Text>
         <FlatList
           data={learned}
           keyExtractor={(r) => r.route}
           renderItem={({ item }) => <Text style={styles.routeItem}>• {item.route}</Text>}
-          ListEmptyComponent={<Text style={STYLES.textMuted}>No learned routes recorded yet.</Text>}
+          ListEmptyComponent={<Text style={S.textMuted}>No learned routes recorded yet.</Text>}
         />
-        <View style={STYLES.row}>
-          <TextInput style={[STYLES.input, { flex: 1 }]} value={agent} onChangeText={setAgent} placeholder="admin agent" placeholderTextColor={THEME.textSubtle} />
-          <TouchableOpacity style={STYLES.btnSecondary} onPress={reviewDevices}><Text style={STYLES.btnText}>Audit</Text></TouchableOpacity>
+        <View style={S.row}>
+          <TextInput style={[S.input, { flex: 1 }]} value={agent} onChangeText={setAgent} placeholder="admin agent" placeholderTextColor={T.textSubtle} />
+          <TouchableOpacity style={S.btnSecondary} onPress={reviewDevices}><Text style={S.btnText}>Audit</Text></TouchableOpacity>
         </View>
-        <TouchableOpacity style={STYLES.btnDanger} onPress={signOut}>
-          <Text style={[STYLES.btnText, { color: THEME.rose }]}>Sign Out & Wipe Credentials</Text>
+        <TouchableOpacity style={S.btnDanger} onPress={signOut}>
+          <Text style={[S.btnText, { color: T.rose }]}>Sign Out & Wipe Credentials</Text>
         </TouchableOpacity>
       </View>
       <BottomNav currentRoute={ROUTES.Boards} navigation={navigation} badgeQueue={stats.queued} />
@@ -71,8 +77,3 @@ export function SettingsScreen({ ctx, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  scopeTag: { color: THEME.primaryLight, fontSize: 11, marginTop: 4 },
-  head: { color: THEME.text, fontWeight: '700', fontSize: 13, marginTop: 4 },
-  routeItem: { color: THEME.textMuted, fontSize: 12, paddingVertical: 2 },
-});

@@ -1,14 +1,24 @@
 // CrewBus M5 Triage screen — unacked inbox grouped by brief, 1-tap ack. JSX: not `node --check`ed.
 import React from 'react';
 import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { THEME, STYLES } from '../theme.js';
+import { useStyles } from '../theme.js';
 import { HeaderBar } from '../components/HeaderBar.jsx';
 import { BottomNav } from '../components/BottomNav.jsx';
 import { IconCheck } from '../components/Icons.jsx';
 import { ROUTES } from '../navigation/routes.js';
 import { startWatch, buzz } from '../lib/watch.js';
 const kindOf = (m) => (!m.replyTo ? 'note' : (m.checkpoint === true ? 'checkpoint' : 'final'));
+
 export function TriageScreen({ ctx, navigation }) {
+  const { T, S } = useStyles();
+  const styles = React.useMemo(() => StyleSheet.create({
+  msgCard: { padding: 12, gap: 6, marginVertical: 4 },
+  msgHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  senderPill: { backgroundColor: T.primaryMuted, color: T.primaryLight, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, fontSize: 11, fontWeight: '700' },
+  actionRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 4 },
+  ackBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  briefHead: { color: T.text, fontSize: 12, fontWeight: '700', marginTop: 10, marginBottom: 2 },
+  }), [T]);
   const [agent, setAgent] = React.useState('mobile');
   const [agentToken, setAgentToken] = React.useState('');
   const [items, setItems] = React.useState([]);
@@ -61,38 +71,38 @@ export function TriageScreen({ ctx, navigation }) {
   });
 
   return (
-    <View style={STYLES.screen}>
+    <View style={S.screen}>
       <HeaderBar title="Activity Feed" statusText={status} navigation={navigation} rightTitle="Sync" onRightPress={load} />
-      <View style={STYLES.body}>
-        <View style={STYLES.row}>
-          <TextInput style={[STYLES.input, { flex: 1 }]} value={agent} onChangeText={setAgent} placeholder="agent (default: mobile)" placeholderTextColor={THEME.textSubtle} />
-          <TouchableOpacity style={STYLES.btnPrimary} onPress={load}><Text style={STYLES.btnText}>Load</Text></TouchableOpacity>
+      <View style={S.body}>
+        <View style={S.row}>
+          <TextInput style={[S.input, { flex: 1 }]} value={agent} onChangeText={setAgent} placeholder="agent (default: mobile)" placeholderTextColor={T.textSubtle} />
+          <TouchableOpacity style={S.btnPrimary} onPress={load}><Text style={S.btnPrimaryText}>Load</Text></TouchableOpacity>
         </View>
         {alert ? (
-          <View style={styles.alertBox}>
-            <Text style={styles.alertTitle}>{alert.title}</Text>
-            <Text style={STYLES.cardSub} numberOfLines={2}>{alert.body}</Text>
-            <TouchableOpacity onPress={() => setAlert(null)}><Text style={styles.dismiss}>Dismiss</Text></TouchableOpacity>
+          <View style={S.alertBox}>
+            <Text style={S.alertTitle}>{alert.title}</Text>
+            <Text style={S.cardSub} numberOfLines={2}>{alert.body}</Text>
+            <TouchableOpacity onPress={() => setAlert(null)}><Text style={S.dismiss}>Dismiss</Text></TouchableOpacity>
           </View>
         ) : null}
         <FlatList
           data={rows}
           keyExtractor={(r) => r.t + ':' + String(r.k)}
-          ListEmptyComponent={<Text style={styles.empty}>All caught up! No unacked messages in inbox.</Text>}
+          ListEmptyComponent={<Text style={S.empty}>All caught up! No unacked messages in inbox.</Text>}
           renderItem={({ item }) => (item.t === 'h' ? (
             <Text style={styles.briefHead}>{item.m.subject || '(no subject)'} · {item.m.from || ''}</Text>
           ) : (
-            <View style={[STYLES.card, styles.msgCard]}>
+            <View style={[S.card, styles.msgCard]}>
               <View style={styles.msgHead}>
                 <Text style={styles.senderPill}>@{item.m.from || 'agent'}</Text>
-                <Text style={STYLES.textMuted}>{kindOf(item.m)}{item.m.at ? ' · ' + item.m.at.slice(11, 19) : ''}</Text>
+                <Text style={S.textMuted}>{kindOf(item.m)}{item.m.at ? ' · ' + item.m.at.slice(11, 19) : ''}</Text>
               </View>
-              <Text style={STYLES.cardTitle}>{item.m.subject || '(no subject)'}</Text>
-              <Text style={STYLES.cardSub} numberOfLines={3}>{item.m.body || item.m.digest || item.m.head || ''}</Text>
+              <Text style={S.cardTitle}>{item.m.subject || '(no subject)'}</Text>
+              <Text style={S.cardSub} numberOfLines={3}>{item.m.body || item.m.digest || item.m.head || ''}</Text>
               <View style={styles.actionRow}>
-                <TouchableOpacity style={[STYLES.btnSuccess, styles.ackBtn]} onPress={() => ack(item.m.id || item.m.replyId)}>
-                  <IconCheck size={14} color={THEME.emerald} />
-                  <Text style={[STYLES.btnText, { color: THEME.emerald }]}>Ack Message</Text>
+                <TouchableOpacity style={[S.btnSuccess, styles.ackBtn]} onPress={() => ack(item.m.id || item.m.replyId)}>
+                  <IconCheck size={14} color={T.emerald} />
+                  <Text style={[S.btnText, { color: T.emerald }]}>Ack Message</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -104,15 +114,3 @@ export function TriageScreen({ ctx, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  msgCard: { padding: 12, gap: 6, marginVertical: 4 },
-  msgHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  senderPill: { backgroundColor: 'rgba(99, 102, 241, 0.15)', color: THEME.primaryLight, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, fontSize: 11, fontWeight: '700' },
-  actionRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 4 },
-  ackBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  briefHead: { color: THEME.text, fontSize: 12, fontWeight: '700', marginTop: 10, marginBottom: 2 },
-  alertBox: { borderWidth: 1, borderColor: THEME.amber, borderRadius: 8, padding: 10, marginTop: 8, gap: 4 },
-  alertTitle: { color: THEME.amber, fontSize: 13, fontWeight: '700' },
-  dismiss: { color: THEME.textSubtle, fontSize: 12, textAlign: 'right' },
-  empty: { color: THEME.textSubtle, textAlign: 'center', marginTop: 40, fontSize: 13 },
-});

@@ -1,43 +1,54 @@
 // CrewBus M5 Approvals screen — interactive decision cards with reason gating. JSX: not `node --check`ed.
 import React from 'react';
 import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { THEME, STYLES } from '../theme.js';
+import { useStyles } from '../theme.js';
 import { HeaderBar } from '../components/HeaderBar.jsx';
 import { BottomNav } from '../components/BottomNav.jsx';
 import { IconApprovals, IconCheck, IconClose } from '../components/Icons.jsx';
 import { ROUTES } from '../navigation/routes.js';
 import { startWatch, buzz } from '../lib/watch.js';
 
-function ApprovalCard({ item, onDecide }) {
+function ApprovalCard({ T, S, styles, item, onDecide }) {
   const [reason, setReason] = React.useState('');
   const id = item.id || item.replyId;
   return (
-    <View style={[STYLES.card, styles.cardGap]}>
-      <View style={STYLES.row}>
+    <View style={[S.card, styles.cardGap]}>
+      <View style={S.row}>
         <View style={styles.badgeWrap}>
-          <IconApprovals size={12} color={THEME.amber} />
+          <IconApprovals size={12} color={T.amber} />
           <Text style={styles.badge}>APPROVAL</Text>
         </View>
         <Text style={styles.sender}>@{item.from || 'worker'}</Text>
       </View>
-      <Text style={STYLES.cardTitle}>{item.subject || '(no subject)'}</Text>
+      <Text style={S.cardTitle}>{item.subject || '(no subject)'}</Text>
       <View style={styles.bodyBox}><Text style={styles.bodyText} numberOfLines={4}>{item.body || item.detail || ''}</Text></View>
-      <TextInput style={STYLES.input} value={reason} onChangeText={setReason} placeholder="Reason (required to deny)" placeholderTextColor={THEME.textSubtle} />
-      <View style={STYLES.row}>
-        <TouchableOpacity style={[STYLES.btnSuccess, styles.btnInner, { flex: 1 }]} onPress={() => onDecide(id, 'approve', reason)}>
-          <IconCheck size={14} color={THEME.emerald} />
-          <Text style={[STYLES.btnText, { color: THEME.emerald }]}>Approve</Text>
+      <TextInput style={S.input} value={reason} onChangeText={setReason} placeholder="Reason (required to deny)" placeholderTextColor={T.textSubtle} />
+      <View style={S.row}>
+        <TouchableOpacity style={[S.btnSuccess, styles.btnInner, { flex: 1 }]} onPress={() => onDecide(id, 'approve', reason)}>
+          <IconCheck size={14} color={T.emerald} />
+          <Text style={[S.btnText, { color: T.emerald }]}>Approve</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[STYLES.btnDanger, styles.btnInner, { flex: 1 }]} onPress={() => onDecide(id, 'deny', reason)}>
-          <IconClose size={14} color={THEME.rose} />
-          <Text style={[STYLES.btnText, { color: THEME.rose }]}>Deny</Text>
+        <TouchableOpacity style={[S.btnDanger, styles.btnInner, { flex: 1 }]} onPress={() => onDecide(id, 'deny', reason)}>
+          <IconClose size={14} color={T.rose} />
+          <Text style={[S.btnText, { color: T.rose }]}>Deny</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
+
 export function ApprovalsScreen({ ctx, navigation }) {
+  const { T, S } = useStyles();
+  const styles = React.useMemo(() => StyleSheet.create({
+  cardGap: { padding: 14, gap: 10, marginVertical: 6 },
+  badgeWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: T.amberMuted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  badge: { color: T.amber, fontSize: 11, fontWeight: '700' },
+  sender: { color: T.primaryLight, fontSize: 12, fontWeight: '600' },
+  bodyBox: { backgroundColor: T.cardElevated, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: T.border },
+  bodyText: { color: T.text, fontSize: 12, fontFamily: 'monospace' },
+  btnInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  }), [T]);
   const [agent] = React.useState('mobile');
   const [agentToken] = React.useState('');
   const [items, setItems] = React.useState([]);
@@ -81,21 +92,21 @@ export function ApprovalsScreen({ ctx, navigation }) {
   };
 
   return (
-    <View style={STYLES.screen}>
+    <View style={S.screen}>
       <HeaderBar title="Approvals" statusText={status} navigation={navigation} rightTitle="Check" onRightPress={load} />
-      <View style={STYLES.body}>
+      <View style={S.body}>
         {alert ? (
-          <View style={styles.alertBox}>
-            <Text style={styles.alertTitle}>{alert.title}</Text>
-            <Text style={STYLES.cardSub} numberOfLines={2}>{alert.body}</Text>
-            <TouchableOpacity onPress={() => setAlert(null)}><Text style={styles.dismiss}>Dismiss</Text></TouchableOpacity>
+          <View style={S.alertBox}>
+            <Text style={S.alertTitle}>{alert.title}</Text>
+            <Text style={S.cardSub} numberOfLines={2}>{alert.body}</Text>
+            <TouchableOpacity onPress={() => setAlert(null)}><Text style={S.dismiss}>Dismiss</Text></TouchableOpacity>
           </View>
         ) : null}
         <FlatList
           data={items}
           keyExtractor={(m, i) => String(m.id || m.replyId || i)}
-          ListEmptyComponent={<Text style={styles.empty}>No pending approvals. All workers unblocked!</Text>}
-          renderItem={({ item }) => <ApprovalCard item={item} onDecide={decide} />}
+          ListEmptyComponent={<Text style={S.empty}>No pending approvals. All workers unblocked!</Text>}
+          renderItem={({ item }) => <ApprovalCard T={T} S={S} styles={styles} item={item} onDecide={decide} />}
         />
       </View>
       <BottomNav currentRoute={ROUTES.Approvals} navigation={navigation} badgeApprovals={items.length} />
@@ -103,15 +114,3 @@ export function ApprovalsScreen({ ctx, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  cardGap: { padding: 14, gap: 10, marginVertical: 6 },
-  alertBox: { borderWidth: 1, borderColor: THEME.amber, borderRadius: 8, padding: 10, marginBottom: 8, gap: 4 },
-  alertTitle: { color: THEME.amber, fontSize: 13, fontWeight: '700' },
-  dismiss: { color: THEME.textSubtle, fontSize: 12, textAlign: 'right' },  badgeWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: THEME.amberMuted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  badge: { color: THEME.amber, fontSize: 11, fontWeight: '700' },
-  sender: { color: THEME.primaryLight, fontSize: 12, fontWeight: '600' },
-  bodyBox: { backgroundColor: '#0d0f17', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: THEME.border },
-  bodyText: { color: THEME.text, fontSize: 12, fontFamily: 'monospace' },
-  btnInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  empty: { color: THEME.textSubtle, textAlign: 'center', marginTop: 40, fontSize: 13 },
-});

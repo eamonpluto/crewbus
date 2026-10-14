@@ -5,6 +5,7 @@ import React from 'react';
 import { AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createCache, createAuthStore } from './src/vendor/runtime/index.js';
+import { ThemeProvider } from './src/theme.js';
 import { KNOWN_SCOPES } from './src/auth/scopes.js';
 import { createSecureStoreAdapter, DEVICE_STORE_KEY } from './src/auth/secureStore.js';
 import { createConnection, attachForegroundRefresh } from './src/lib/connection.js';
@@ -41,7 +42,9 @@ export default function App() {
   }, []);
   return (
     <NavigationContainer>
-      <RootNavigator ctx={ctx} />
+      <ThemeProvider>
+        <RootNavigator ctx={ctx} />
+      </ThemeProvider>
     </NavigationContainer>
   );
 }

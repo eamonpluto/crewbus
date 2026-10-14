@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0B1020"
+      "backgroundColor": "#0f1419"
     },
     "description": "CrewBus remote-only mobile client: pair by QR, triage inbox, approve, launch, supervise the fleet.",
     "plugins": [
@@ -38,7 +38,7 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-foreground.png",
-        "backgroundColor": "#0B1020"
+        "backgroundColor": "#0f1419"
       }
     },
     "extra": {
@@ -48,6 +48,7 @@
         "projectId": "02b4ed75-d876-46df-bbce-3779fd608492"
       }
     },
-    "owner": "eamonpluto"
+    "owner": "eamonpluto",
+    "userInterfaceStyle": "automatic"
   }
 }

@@ -13,7 +13,7 @@ import { LaunchScreen } from '../screens/LaunchScreen.jsx';
 import { FleetScreen } from '../screens/FleetScreen.jsx';
 import { QueueScreen } from '../screens/QueueScreen.jsx';
 import { SettingsScreen } from '../screens/SettingsScreen.jsx';
-import { THEME } from '../theme.js';
+import { useTheme } from '../theme.js';
 
 const Stack = createNativeStackNavigator();
 
@@ -42,12 +42,13 @@ const ORDER = [
 ];
 
 export function RootNavigator({ ctx }) {
+  const T = useTheme();
   return (
     <Stack.Navigator
       initialRouteName={INITIAL_ROUTE}
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: THEME.bg },
+        contentStyle: { backgroundColor: T.bg },
         animation: 'fade',
       }}
     >

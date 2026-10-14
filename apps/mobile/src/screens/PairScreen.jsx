@@ -6,10 +6,14 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 import { DEFAULT_PAIR_SCOPES } from '../auth/scopes.js';
 import { parsePairInput, describePairUrl, walkPairRoutes, exchangeAndStore } from '../lib/pairing.js';
-import { THEME, STYLES } from '../theme.js';
+import { useStyles } from '../theme.js';
 import { ROUTES } from '../navigation/routes.js';
 
 export function PairScreen({ ctx, navigation }) {
+  const { T, S } = useStyles();
+  const styles = React.useMemo(() => StyleSheet.create({
+  cancelBtn: { position: 'absolute', bottom: 30, alignSelf: 'center', backgroundColor: T.cardElevated, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
+  }), [T]);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -52,41 +56,41 @@ export function PairScreen({ ctx, navigation }) {
 
   if (scanning) {
     return (
-      <View style={{ flex: 1, backgroundColor: THEME.bg }}>
+      <View style={{ flex: 1, backgroundColor: T.bg }}>
         <CameraView style={{ flex: 1 }} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={(ev) => handleCode(ev.data)} />
-        <TouchableOpacity style={styles.cancelBtn} onPress={() => setScanning(false)}><Text style={STYLES.btnText}>Cancel</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.cancelBtn} onPress={() => setScanning(false)}><Text style={S.btnText}>Cancel</Text></TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={[STYLES.screen, { justifyContent: 'center', padding: 20 }]}>
-      <View style={[STYLES.card, { padding: 20, alignItems: 'center', gap: 14 }]}>
-        <Text style={{ color: THEME.text, fontSize: 20, fontWeight: '800' }}>{pairedEnv ? 'Device Paired' : 'Link CrewBus'}</Text>
-        <Text style={STYLES.textMuted}>{status}</Text>
+    <View style={[S.screen, { justifyContent: 'center', padding: 20 }]}>
+      <View style={[S.card, { padding: 20, alignItems: 'center', gap: 14 }]}>
+        <Text style={{ color: T.text, fontSize: 20, fontWeight: '800' }}>{pairedEnv ? 'Device Paired' : 'Link CrewBus'}</Text>
+        <Text style={S.textMuted}>{status}</Text>
         {pairedEnv ? (
           <View style={{ alignItems: 'center', gap: 12, marginVertical: 8 }}>
-            <View style={{ padding: 12, backgroundColor: THEME.cardElevated, borderRadius: 12, borderWidth: 1, borderColor: THEME.border }}>
-              <QRCode value={pairedEnv} size={110} backgroundColor="transparent" color={THEME.text} />
+            <View style={{ padding: 12, backgroundColor: T.cardElevated, borderRadius: 12, borderWidth: 1, borderColor: T.border }}>
+              <QRCode value={pairedEnv} size={110} backgroundColor="transparent" color={T.text} />
             </View>
-            <Text style={{ color: THEME.emerald, fontSize: 13, fontWeight: '600' }}>Env: {pairedEnv}</Text>
+            <Text style={{ color: T.emerald, fontSize: 13, fontWeight: '600' }}>Env: {pairedEnv}</Text>
             {navigation ? (
-              <TouchableOpacity style={[STYLES.btnPrimary, { width: '100%', paddingVertical: 11 }]} onPress={() => navigation.navigate(ROUTES.Triage)}>
-                <Text style={STYLES.btnText}>Open Activity Feed →</Text>
+              <TouchableOpacity style={[S.btnPrimary, { width: '100%', paddingVertical: 11 }]} onPress={() => navigation.navigate(ROUTES.Triage)}>
+                <Text style={S.btnPrimaryText}>Open Activity Feed →</Text>
               </TouchableOpacity>
             ) : null}
           </View>
         ) : null}
         {!permission || !permission.granted ? (
-          <TouchableOpacity style={[STYLES.btnPrimary, { width: '100%', paddingVertical: 11 }]} onPress={requestPermission}><Text style={STYLES.btnText}>Grant Camera Permission</Text></TouchableOpacity>
+          <TouchableOpacity style={[S.btnPrimary, { width: '100%', paddingVertical: 11 }]} onPress={requestPermission}><Text style={S.btnPrimaryText}>Grant Camera Permission</Text></TouchableOpacity>
         ) : (
-          <TouchableOpacity style={[STYLES.btnPrimary, { width: '100%', paddingVertical: 11 }]} disabled={busy} onPress={() => setScanning(true)}>
-            <Text style={STYLES.btnText}>{busy ? 'Connecting…' : (pairedEnv ? 'Scan Different QR' : 'Scan Pair QR')}</Text>
+          <TouchableOpacity style={[S.btnPrimary, { width: '100%', paddingVertical: 11 }]} disabled={busy} onPress={() => setScanning(true)}>
+            <Text style={S.btnPrimaryText}>{busy ? 'Connecting…' : (pairedEnv ? 'Scan Different QR' : 'Scan Pair QR')}</Text>
           </TouchableOpacity>
         )}
         {pairedEnv ? (
-          <TouchableOpacity style={[STYLES.btnSecondary, { width: '100%', paddingVertical: 11 }]} onPress={clearAll}>
-            <Text style={[STYLES.btnText, { color: THEME.rose }]}>Disconnect Device</Text>
+          <TouchableOpacity style={[S.btnSecondary, { width: '100%', paddingVertical: 11 }]} onPress={clearAll}>
+            <Text style={[S.btnText, { color: T.rose }]}>Disconnect Device</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -94,6 +98,3 @@ export function PairScreen({ ctx, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  cancelBtn: { position: 'absolute', bottom: 30, alignSelf: 'center', backgroundColor: THEME.cardElevated, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
-});

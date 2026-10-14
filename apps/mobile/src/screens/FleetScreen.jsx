@@ -1,12 +1,17 @@
 // CrewBus M5 Fleet screen — worker cards with two-tap safe kill. JSX: not `node --check`ed.
 import React from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { THEME, STYLES } from '../theme.js';
+import { useStyles } from '../theme.js';
 import { HeaderBar } from '../components/HeaderBar.jsx';
 import { BottomNav } from '../components/BottomNav.jsx';
 import { ROUTES } from '../navigation/routes.js';
 
 export function FleetScreen({ ctx, navigation }) {
+  const { T, S } = useStyles();
+  const styles = React.useMemo(() => StyleSheet.create({
+  workerCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, marginVertical: 4 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  }), [T]);
   const [agent] = React.useState('mobile');
   const [agentToken] = React.useState('');
   const [workers, setWorkers] = React.useState([]);
@@ -44,28 +49,28 @@ export function FleetScreen({ ctx, navigation }) {
   };
 
   return (
-    <View style={STYLES.screen}>
+    <View style={S.screen}>
       <HeaderBar title="Fleet & Workers" statusText={status} navigation={navigation} rightTitle="Refresh" onRightPress={load} />
-      <View style={STYLES.body}>
+      <View style={S.body}>
         <FlatList
           data={workers}
           keyExtractor={(w, i) => String((w && w.name) || w || i)}
-          ListEmptyComponent={<Text style={styles.empty}>No workers running. Launch new workers from the Launch tab.</Text>}
+          ListEmptyComponent={<Text style={S.empty}>No workers running. Launch new workers from the Launch tab.</Text>}
           renderItem={({ item }) => {
             const name = String((item && item.name) || item);
             const alive = item && (item.alive === true || item.status === 'running');
             const isArmed = armed === name;
             return (
-              <View style={[STYLES.card, styles.workerCard]}>
+              <View style={[S.card, styles.workerCard]}>
                 <View style={{ flex: 1, gap: 4 }}>
-                  <View style={STYLES.row}>
-                    <View style={[styles.dot, { backgroundColor: alive ? THEME.emerald : THEME.textSubtle }]} />
-                    <Text style={STYLES.cardTitle}>{name}</Text>
+                  <View style={S.row}>
+                    <View style={[styles.dot, { backgroundColor: alive ? T.emerald : T.textSubtle }]} />
+                    <Text style={S.cardTitle}>{name}</Text>
                   </View>
-                  <Text style={STYLES.textMuted}>{item && item.pid ? `PID: ${item.pid}` : 'detached'} · {item && item.driver ? item.driver : 'worker'}</Text>
+                  <Text style={S.textMuted}>{item && item.pid ? `PID: ${item.pid}` : 'detached'} · {item && item.driver ? item.driver : 'worker'}</Text>
                 </View>
-                <TouchableOpacity style={isArmed ? STYLES.btnDanger : STYLES.btnSecondary} onPress={() => kill(name)}>
-                  <Text style={[STYLES.btnText, isArmed && { color: THEME.rose }]}>{isArmed ? 'Confirm Kill' : 'Kill'}</Text>
+                <TouchableOpacity style={isArmed ? S.btnDanger : S.btnSecondary} onPress={() => kill(name)}>
+                  <Text style={[S.btnText, isArmed && { color: T.rose }]}>{isArmed ? 'Confirm Kill' : 'Kill'}</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -77,8 +82,3 @@ export function FleetScreen({ ctx, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  workerCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, marginVertical: 4 },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  empty: { color: THEME.textSubtle, textAlign: 'center', marginTop: 40, fontSize: 13 },
-});

@@ -1,12 +1,18 @@
 // CrewBus M5 Briefs screen — one row per fan-out; tap for its gathered thread. JSX: not `node --check`ed.
 import React from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { THEME, STYLES } from '../theme.js';
+import { useStyles } from '../theme.js';
 import { HeaderBar } from '../components/HeaderBar.jsx';
 import { BottomNav } from '../components/BottomNav.jsx';
 import { ROUTES } from '../navigation/routes.js';
 
 export function BriefsScreen({ ctx, navigation }) {
+  const { T, S } = useStyles();
+  const styles = React.useMemo(() => StyleSheet.create({
+  rowCard: { padding: 12, gap: 6, marginVertical: 4 },
+  msgBox: { marginTop: 6, padding: 8, borderRadius: 8, borderWidth: 1, borderColor: T.border },
+  msgHead: { color: T.primaryLight, fontSize: 11, fontWeight: '700', marginBottom: 2 },
+  }), [T]);
   const [rows, setRows] = React.useState([]);
   const [openId, setOpenId] = React.useState(null);
   const [thread, setThread] = React.useState([]);
@@ -39,23 +45,23 @@ export function BriefsScreen({ ctx, navigation }) {
   };
 
   return (
-    <View style={STYLES.screen}>
+    <View style={S.screen}>
       <HeaderBar title="Briefs" statusText={status} navigation={navigation} rightTitle="Refresh" onRightPress={load} />
-      <View style={STYLES.body}>
+      <View style={S.body}>
         <FlatList
           data={rows}
           keyExtractor={(b) => String(b.batch)}
-          ListEmptyComponent={<Text style={styles.empty}>No briefs yet. Launch work from the Launch tab.</Text>}
+          ListEmptyComponent={<Text style={S.empty}>No briefs yet. Launch work from the Launch tab.</Text>}
           renderItem={({ item }) => (
-            <View style={[STYLES.card, styles.rowCard]}>
+            <View style={[S.card, styles.rowCard]}>
               <TouchableOpacity onPress={() => open(item.batch)}>
-                <Text style={STYLES.cardTitle}>{item.subject || '(no subject)'}</Text>
-                <Text style={STYLES.textMuted}>{(item.workers || []).length} workers · {item.checkpointCount || 0} checkpoints · {item.finalCount || 0} finals · {item.ackedFinals || 0} acked</Text>
+                <Text style={S.cardTitle}>{item.subject || '(no subject)'}</Text>
+                <Text style={S.textMuted}>{(item.workers || []).length} workers · {item.checkpointCount || 0} checkpoints · {item.finalCount || 0} finals · {item.ackedFinals || 0} acked</Text>
               </TouchableOpacity>
               {openId === item.batch ? thread.map((m) => (
                 <View key={String(m.id)} style={styles.msgBox}>
                   <Text style={styles.msgHead}>{!m.replyTo ? 'brief' : (m.checkpoint ? 'checkpoint' : 'final' + (m.acked ? ' ✓' : ''))} · @{m.from || '?'}</Text>
-                  <Text style={STYLES.cardSub} numberOfLines={4}>{m.body || ''}</Text>
+                  <Text style={S.cardSub} numberOfLines={4}>{m.body || ''}</Text>
                 </View>
               )) : null}
             </View>
@@ -67,9 +73,3 @@ export function BriefsScreen({ ctx, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  rowCard: { padding: 12, gap: 6, marginVertical: 4 },
-  msgBox: { marginTop: 6, padding: 8, borderRadius: 8, borderWidth: 1, borderColor: THEME.border },
-  msgHead: { color: THEME.primaryLight, fontSize: 11, fontWeight: '700', marginBottom: 2 },
-  empty: { color: THEME.textSubtle, textAlign: 'center', marginTop: 40, fontSize: 13 },
-});

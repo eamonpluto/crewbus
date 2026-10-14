@@ -1,13 +1,21 @@
 // CrewBus M5 Boards screen — route/env picker and board snapshot. JSX: not `node --check`ed.
 import React from 'react';
 import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
-import { THEME, STYLES } from '../theme.js';
+import { useStyles } from '../theme.js';
 import { HeaderBar } from '../components/HeaderBar.jsx';
 import { BottomNav } from '../components/BottomNav.jsx';
 import { IconStar, IconZap } from '../components/Icons.jsx';
 import { ROUTES } from '../navigation/routes.js';
 
 export function BoardsScreen({ ctx, navigation }) {
+  const { T, S } = useStyles();
+  const styles = React.useMemo(() => StyleSheet.create({
+  routeCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10 },
+  routeText: { color: T.text, fontSize: 13, fontWeight: '600' },
+  prefWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  prefTag: { color: T.amber, fontSize: 11 },
+  btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  }), [T]);
   const [routes, setRoutes] = React.useState([]);
   const [board, setBoard] = React.useState(null);
   const [status, setStatus] = React.useState('Add or select a relay route.');
@@ -48,46 +56,46 @@ export function BoardsScreen({ ctx, navigation }) {
   const liveCount = workerList.filter((w) => w && w.alive === true).length;
 
   return (
-    <View style={STYLES.screen}>
+    <View style={S.screen}>
       <HeaderBar title="Relay Hub" statusText={status} connState={conn} navigation={navigation} />
-      <View style={STYLES.body}>
-        <View style={STYLES.row}>
-          <TextInput style={[STYLES.input, { flex: 1 }]} value={draft} onChangeText={setDraft} placeholder="https://relay:port" placeholderTextColor={THEME.textSubtle} />
-          <TouchableOpacity style={STYLES.btnPrimary} onPress={addRoute}><Text style={STYLES.btnText}>+ Add</Text></TouchableOpacity>
+      <View style={S.body}>
+        <View style={S.row}>
+          <TextInput style={[S.input, { flex: 1 }]} value={draft} onChangeText={setDraft} placeholder="https://relay:port" placeholderTextColor={T.textSubtle} />
+          <TouchableOpacity style={S.btnPrimary} onPress={addRoute}><Text style={S.btnPrimaryText}>+ Add</Text></TouchableOpacity>
         </View>
         <FlatList
           data={routes}
           keyExtractor={(r) => r}
-          ListEmptyComponent={<Text style={styles.empty}>No relay routes yet. Scan QR or enter URL above.</Text>}
+          ListEmptyComponent={<Text style={S.empty}>No relay routes yet. Scan QR or enter URL above.</Text>}
           renderItem={({ item }) => (
-            <View style={[STYLES.card, styles.routeCard]}>
+            <View style={[S.card, styles.routeCard]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.routeText} numberOfLines={1}>{item}</Text>
                 {item === preferred ? (
                   <View style={styles.prefWrap}>
-                    <IconStar size={11} color={THEME.amber} />
+                    <IconStar size={11} color={T.amber} />
                     <Text style={styles.prefTag}>Preferred Learned Route</Text>
                   </View>
                 ) : null}
               </View>
-              <TouchableOpacity style={STYLES.btnSecondary} onPress={() => useRoute(item)}>
-                <Text style={STYLES.btnText}>Connect</Text>
+              <TouchableOpacity style={S.btnSecondary} onPress={() => useRoute(item)}>
+                <Text style={S.btnText}>Connect</Text>
               </TouchableOpacity>
             </View>
           )}
         />
         {board ? (
-          <View style={STYLES.card}>
-            <Text style={STYLES.cardTitle}>Board: {String(board.name || 'Local Board')}</Text>
-            <Text style={STYLES.cardSub}>{board.workers ? `${liveCount} of ${workerList.length || Object.keys(board.workers).length} workers live` : 'Online'}</Text>
-            <TouchableOpacity style={[STYLES.btnSecondary, styles.btnRow]} onPress={() => navigation.navigate(ROUTES.Briefs)}>
-              <Text style={STYLES.btnText}>View Briefs →</Text>
+          <View style={S.card}>
+            <Text style={S.cardTitle}>Board: {String(board.name || 'Local Board')}</Text>
+            <Text style={S.cardSub}>{board.workers ? `${liveCount} of ${workerList.length || Object.keys(board.workers).length} workers live` : 'Online'}</Text>
+            <TouchableOpacity style={[S.btnSecondary, styles.btnRow]} onPress={() => navigation.navigate(ROUTES.Briefs)}>
+              <Text style={S.btnText}>View Briefs →</Text>
             </TouchableOpacity>
           </View>
         ) : null}
-        <TouchableOpacity style={[STYLES.btnSecondary, styles.btnRow]} onPress={() => { ctx.connection.retryNow(); refreshConn(); }}>
-          <IconZap size={14} color={THEME.text} />
-          <Text style={STYLES.btnText}>Re-probe Connection</Text>
+        <TouchableOpacity style={[S.btnSecondary, styles.btnRow]} onPress={() => { ctx.connection.retryNow(); refreshConn(); }}>
+          <IconZap size={14} color={T.text} />
+          <Text style={S.btnText}>Re-probe Connection</Text>
         </TouchableOpacity>
       </View>
       <BottomNav currentRoute={ROUTES.Boards} navigation={navigation} badgeQueue={ctx.cache.pending().length} />
@@ -95,11 +103,3 @@ export function BoardsScreen({ ctx, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  routeCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10 },
-  routeText: { color: THEME.text, fontSize: 13, fontWeight: '600' },
-  prefWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  prefTag: { color: THEME.amber, fontSize: 11 },
-  btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  empty: { color: THEME.textSubtle, textAlign: 'center', marginTop: 30, fontSize: 13 },
-});
