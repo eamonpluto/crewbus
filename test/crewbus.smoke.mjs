@@ -1702,7 +1702,7 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   updFails("update: bad --version rejected", ["update", "--version", "abc"]);
   const down = updRun(["update", "--version", "8.0.0", "--yes"]);
   check("update: explicit downgrade honored", down.includes("Downgrading") && loggedInstalls().includes("install -g crewbus-test-pkg@8.0.0"));
-  fs.writeFileSync(updPkg, JSON.stringify({ name: "crewbus-test-pkg", version: "99.0.0" }));
+  fs.writeFileSync(updPkg, JSON.stringify({ name: "crewbus-test-pkg", version: "99.0.0", type: "module" }));
   const newer = updRun(["update", "--check"]);
   check("update: newer-than-registry installs nothing", newer.includes("newer than registry") && !loggedInstalls().includes("@99.0.0"));
   let checkoutRefused = false;
