@@ -32,6 +32,42 @@ function say(t, isErr) {
   msg.className = isErr ? 'warn' : 'ok';
 }
 
+function qrThemeColors() {
+  var theme = null;
+  try { theme = localStorage.getItem('crewbus-desktop-theme'); } catch (_) {}
+  if (theme !== 'light' && theme !== 'dark') {
+    try { theme = document.documentElement.getAttribute('data-theme'); } catch (_) {}
+  }
+  if (theme !== 'light' && theme !== 'dark') {
+    try { theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) ? 'dark' : 'light'; }
+    catch (_) { theme = 'light'; }
+  }
+  if (theme === 'dark') return { dark: '#e3e9ee', light: '#182028' };
+  return { dark: '#14201a', light: '#ffffff' };
+}
+
+// Pair window follows the desktop shell theme (same crewbus-desktop-theme
+// key, written by the shell toggle): no toggle here, just honor stored /
+// system theme so the QR contrast matches the shell chrome.
+try {
+  var __t = null;
+  try { __t = localStorage.getItem('crewbus-desktop-theme'); } catch (_) {}
+  if (__t !== 'light' && __t !== 'dark') {
+    try {
+      var __mq = window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)');
+      if (__mq && __mq.addEventListener) {
+        __mq.addEventListener('change', function () {
+          var cur = null;
+          try { cur = localStorage.getItem('crewbus-desktop-theme'); } catch (_) {}
+          if (cur !== 'light' && cur !== 'dark') {
+            try { document.documentElement.removeAttribute('data-theme'); } catch (_) {}
+          }
+        });
+      }
+    } catch (_) {}
+  }
+} catch (_) {}
+
 function parsePairUrlSpike(raw) {
   var parsed = parsePairUrl(String(raw == null ? '' : raw).trim());
   return { env: parsed.env || '(unknown env)', pairToken: parsed.pairToken };
@@ -67,7 +103,7 @@ if (renderBtn) {
       var svg = renderQrSvg(raw.trim(), {
         width: 200,
         margin: 1,
-        color: { dark: '#f1f5f9', light: '#12151f' },
+        color: qrThemeColors(),
       });
       if (qrWrap) qrWrap.innerHTML = svg;
       say('QR code ready for ' + describeForDisplay(raw) + ' — scan with CrewBus Mobile.');

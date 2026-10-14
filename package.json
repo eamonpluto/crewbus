@@ -16,6 +16,10 @@
   },
   "files": [
     "bin/",
+    "assets/brand/crewbus-logo-for-light.png",
+    "assets/brand/crewbus-logo-for-dark.png",
+    "assets/brand/crewbus-app-icon-1024-rounded.png",
+    "assets/brand/logo.svg",
     "packages/contracts/",
     "packages/client-runtime/",
     "opencode/",

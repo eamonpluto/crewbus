@@ -59,11 +59,94 @@ function say(t) {
   }
 }
 
+function connOkColor() {
+  try {
+    var v = getComputedStyle(document.documentElement).getPropertyValue('--acc');
+    if (v && v.trim()) return v.trim();
+  } catch (_) { /* static fallback: hex below */ }
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) return '#4cc38a';
+  } catch (_) { /* static fallback: light default */ }
+  try {
+    if (document.documentElement.getAttribute('data-theme') === 'dark') return '#4cc38a';
+  } catch (_) {}
+  return '#0e8a55';
+}
+
 function markConn(ok, detail) {
   if (!dot) return;
-  dot.style.color = ok ? '#38d39f' : '#f85149';
+  dot.style.color = ok ? connOkColor() : '#f85149';
   dot.title = (ok ? 'connected: ' : 'unreachable: ') + (detail || '');
 }
+
+// Desktop shell theme: light default, prefers-color-scheme dark, explicit
+// data-theme override persisted as crewbus-desktop-theme (same token pair
+// as the site / sidecar board). Runs as plain static JS.
+var themeBtn = document.getElementById('theme-toggle');
+
+function crewbusDesktopThemeApply(t) {
+  try {
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    else document.documentElement.removeAttribute('data-theme');
+  } catch (_) {}
+}
+
+function crewbusDesktopThemeInit() {
+  var stored = null;
+  try { stored = localStorage.getItem('crewbus-desktop-theme'); } catch (_) {}
+  if (stored === 'light' || stored === 'dark') { crewbusDesktopThemeApply(stored); return stored; }
+  crewbusDesktopThemeApply(null);
+  try {
+    var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)');
+    if (mq && mq.addEventListener) {
+      mq.addEventListener('change', function () {
+        var cur = null;
+        try { cur = localStorage.getItem('crewbus-desktop-theme'); } catch (_) {}
+        if (cur !== 'light' && cur !== 'dark') {
+          crewbusDesktopThemeApply(null);
+          if (dot && dot.title && dot.title.indexOf('connected:') === 0) dot.style.color = connOkColor();
+        }
+      });
+    }
+  } catch (_) {}
+  return null;
+}
+
+function crewbusDesktopThemeToggle() {
+  var cur = null;
+  try { cur = localStorage.getItem('crewbus-desktop-theme'); } catch (_) {}
+  var next = 'dark';
+  if (cur === 'dark') next = 'light';
+  else if (cur === 'light') next = 'dark';
+  else {
+    try { next = (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) ? 'light' : 'dark'; }
+    catch (_) { next = 'dark'; }
+  }
+  try { localStorage.setItem('crewbus-desktop-theme', next); } catch (_) {}
+  crewbusDesktopThemeApply(next);
+  crewbusDesktopThemeIcon();
+  if (dot && dot.title && dot.title.indexOf('connected:') === 0) dot.style.color = connOkColor();
+  return next;
+}
+
+function crewbusDesktopThemeSunSvg() { return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'; }
+function crewbusDesktopThemeMoonSvg() { return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'; }
+
+function crewbusDesktopThemeIcon() {
+  if (!themeBtn) return;
+  var cur = null;
+  try { cur = localStorage.getItem('crewbus-desktop-theme'); } catch (_) {}
+  if (cur !== 'light' && cur !== 'dark') {
+    try { cur = (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) ? 'dark' : 'light'; }
+    catch (_) { cur = 'light'; }
+  }
+  themeBtn.innerHTML = (cur === 'dark') ? crewbusDesktopThemeMoonSvg() : crewbusDesktopThemeSunSvg();
+  themeBtn.title = 'Theme: ' + cur + ' (click to toggle)';
+}
+
+crewbusDesktopThemeInit();
+crewbusDesktopThemeIcon();
+if (themeBtn) themeBtn.addEventListener('click', function () { crewbusDesktopThemeToggle(); });
 
 function apiBase() {
   return dashboardUrl ? dashboardUrl.replace(/\/+$/, '') : null;
