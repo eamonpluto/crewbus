@@ -1,16 +1,15 @@
 name: Release desktop
 
 # Normie-install pipeline: ONLY desktop-v* tags (never every push — CI stays
-# untouched). A maintainer bumps apps/desktop versions, pushes e.g.
-# `desktop-v0.1.0`, reviews the draft GitHub Release this creates, then
-# publishes — normies only ever see published releases. See
-# apps/desktop/RELEASE.md for the full maintainer flow.
+# untouched). A maintainer bumps apps/desktop versions and pushes e.g.
+# `desktop-v0.1.21`; CI builds every OS bundle and publishes the GitHub
+# Release LIVE (no draft) once the build succeeds. See apps/desktop/RELEASE.md.
 on:
   push:
     tags: ["desktop-v*"]
 
 # Tag pushes are unique; no cancel-in-progress (a cancelled upload would leave
-# a half-attached draft release).
+# a half-attached release).
 permissions:
   contents: write
 
@@ -45,7 +44,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - name: build + upload bundles (draft release)
+      - name: build + upload bundles (publishes live release)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,8 +53,8 @@ jobs:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
           releaseName: CrewBus ${{ github.ref_name }}
-          releaseBody: "Normie install - download the bundle for your OS below, double-click, pair your phone via QR. Draft: review before publishing."
-          releaseDraft: true
+          releaseBody: "Normie install - download the bundle for your OS below, double-click, pair your phone via QR."
+          releaseDraft: false
           prerelease: false
           args: --verbose
       - name: checksums (SHA256 over every bundle output)
