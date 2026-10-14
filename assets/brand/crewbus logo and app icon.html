@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>crewbus — logo and app icon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f6f3;--panel:#ffffff;--ink:#14201a;--dim:#5b6a62;--acc:#0e8a55;--acc-ink:#ffffff;--line:#d5ddd7;
+--sans:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1419;--panel:#182028;--ink:#e3e9ee;--dim:#8b98a5;--acc:#4cc38a;--acc-ink:#07130d;--line:#2a343e}}
+:root[data-theme="dark"]{--bg:#0f1419;--panel:#182028;--ink:#e3e9ee;--dim:#8b98a5;--acc:#4cc38a;--acc-ink:#07130d;--line:#2a343e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+.w{max-width:1000px;margin:0 auto;padding:0 24px 72px}
+h1{font-size:clamp(2.2rem,5vw,3.4rem);letter-spacing:-.035em;line-height:1;font-weight:800;margin:48px 0 12px}
+h2{font-size:1.5rem;letter-spacing:-.02em;margin:56px 0 6px;font-weight:800}
+.sub{color:var(--dim);margin:0 0 22px;max-width:60ch}
+.row{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.pv{border-radius:10px;display:flex;align-items:center;justify-content:center;padding:28px;min-height:210px;border:1px solid var(--line)}
+.pv canvas{max-width:100%;height:auto;display:block}
+.pv.l{background:#f4f6f3}.pv.d{background:#0f1419}
+.pv.ck{background:repeating-conic-gradient(#8883 0 25%,transparent 0 50%) 0 0/20px 20px}
+.pv.ck canvas{max-width:190px}
+.meta{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.meta b{font-weight:700}.meta small{display:block;color:var(--dim);font:.76rem var(--mono)}
+.btn{background:var(--acc);color:var(--acc-ink);font:700 .95rem var(--sans);border:0;border-radius:9px;padding:10px 16px;cursor:pointer}
+.btn:hover{filter:brightness(1.08)}
+#msg{color:var(--dim);font:.85rem var(--mono);min-height:1.4em;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="w">
+  <h1>crewbus logo and app icon</h1>
+  <p class="sub">The bus mark and wordmark from the site, as ready-to-use PNGs. Pick the version that suits your background.</p>
+
+  <h2>Logo</h2>
+  <p class="sub">Transparent background, 2x wordmark lockup.</p>
+  <div class="row">
+    <div class="tile"><div class="pv l"><span id="lg-l"></span></div>
+      <div class="meta"><span><b>For light backgrounds</b><small id="lg-l-s"></small></span><button class="btn" data-k="logo-light">Download PNG</button></div></div>
+    <div class="tile"><div class="pv d" id="pv-d"><span id="lg-d"></span></div>
+      <div class="meta"><span><b>For dark backgrounds</b><small id="lg-d-s"></small></span><button class="btn" data-k="logo-dark">Download PNG</button></div></div>
+  </div>
+
+  <h2>App icon</h2>
+  <p class="sub">1024 × 1024. Use the square version for app store and OS icon uploads, which apply their own rounding.</p>
+  <div class="row">
+    <div class="tile"><div class="pv ck"><span id="ic-s"></span></div>
+      <div class="meta"><span><b>Square, full bleed</b><small>1024 × 1024</small></span><button class="btn" data-k="icon-square">Download PNG</button></div></div>
+    <div class="tile"><div class="pv ck"><span id="ic-r"></span></div>
+      <div class="meta"><span><b>Rounded corners</b><small>1024 × 1024, transparent corners</small></span><button class="btn" data-k="icon-round">Download PNG</button></div></div>
+  </div>
+  <div id="msg" role="status"></div>
+</div>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+function glyph(c,x,y,S,ink,acc){c.save();c.translate(x,y);c.scale(S,S);c.lineCap='butt';c.lineWidth=2;c.strokeStyle=ink;c.beginPath();c.roundRect(1,1,28,12,3);c.stroke();c.strokeStyle=acc;c.beginPath();c.moveTo(1,7);c.lineTo(29,7);c.stroke();c.fillStyle=ink;[8,22].forEach(function(cx){c.beginPath();c.arc(cx,16,1.6,0,7);c.fill()});c.restore()}
+function setFont(x){x.font='800 300px "Bricolage Grotesque",system-ui,sans-serif';if('letterSpacing' in x)x.letterSpacing='-6px'}
+function lockup(ink,acc){var S=20,pad=120,c=document.createElement('canvas'),x=c.getContext('2d');setFont(x);var tw=x.measureText('crewbus').width;
+c.width=Math.ceil(pad*2+30*S+90+tw);c.height=pad*2+18*S;x=c.getContext('2d');setFont(x);
+glyph(x,pad,pad,S,ink,acc);x.fillStyle=ink;x.textBaseline='middle';x.fillText('crewbus',pad+30*S+90,pad+9*S+14);return c}
+function icon(round){var c=document.createElement('canvas');c.width=c.height=1024;var x=c.getContext('2d');
+if(round){x.beginPath();x.roundRect(0,0,1024,1024,228);x.clip()}
+var g=x.createLinearGradient(0,0,1024,1024);g.addColorStop(0,'#182028');g.addColorStop(1,'#0b0f14');x.fillStyle=g;x.fillRect(0,0,1024,1024);
+var S=22;glyph(x,(1024-30*S)/2,(1024-18*S)/2,S,'#e3e9ee','#4cc38a');return c}
+var A={};
+function build(){
+A['logo-light']=lockup('#14201a','#0e8a55');A['logo-dark']=lockup('#e3e9ee','#4cc38a');A['icon-square']=icon(false);A['icon-round']=icon(true);
+[['lg-l','logo-light'],['lg-d','logo-dark'],['ic-s','icon-square'],['ic-r','icon-round']].forEach(function(p){var h=$(p[0]);h.innerHTML='';h.appendChild(A[p[1]].cloneNode(false));var d=h.firstChild,s=A[p[1]];d.width=s.width;d.height=s.height;d.getContext('2d').drawImage(s,0,0)});
+$('lg-l-s').textContent=A['logo-light'].width+' × '+A['logo-light'].height;$('lg-d-s').textContent=A['logo-dark'].width+' × '+A['logo-dark'].height}
+function say(t){$('msg').textContent=t}
+async function save(name,blob){
+var d=null;try{d=window.claude&&claude.use?await claude.use('downloads'):null}catch(e){}
+if(d){try{await d.save({filename:name,data:blob});say('Saved '+name);}catch(e){say(e&&e.code==='declined'?'Download cancelled.':'Could not save: '+(e&&e.message||'unavailable'))}return}
+var u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);say('Downloaded '+name)}
+var N={'logo-light':'crewbus-logo-for-light.png','logo-dark':'crewbus-logo-for-dark.png','icon-square':'crewbus-app-icon-1024.png','icon-round':'crewbus-app-icon-1024-rounded.png'};
+document.querySelectorAll('[data-k]').forEach(function(b){b.addEventListener('click',function(){var k=b.dataset.k;A[k].toBlob(function(bl){if(bl)save(N[k],bl);else say('Could not render the PNG.')},'image/png')})});
+build();
+if(document.fonts&&document.fonts.load){document.fonts.load('800 300px "Bricolage Grotesque"').then(build).catch(function(){})}
+})();
+</script>
+</body>
+</html>
