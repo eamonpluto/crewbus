@@ -1,12 +1,11 @@
 // Regenerate Tauri desktop icons from the repo brand artwork.
 // Run from apps/desktop/: node scripts/regenerate-icons.mjs
-// Reads ../../assets/brand/crewbus-app-icon-1024-rounded.png (1024x1024,
-// transparent rounded corners per the brand sheet) and resizes with
-// System.Drawing (Windows PowerShell) into src-tauri/icons/ PNG sizes.
-// .ico/.icns are regenerated separately with Pillow (no cross-platform
-// encoder in this script):
-//   python -c "from PIL import Image; im=Image.open('../../assets/brand/crewbus-app-icon-1024-rounded.png'); im.save('../src-tauri/icons/icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)]); im.save('../src-tauri/icons/icon.icns')"
-// StoreLogo/Windows-tile PNGs ARE handled here (square resizes above).
+// Reads ../../assets/brand/crewbus-app-icon-1024.png (1024x1024, NON-ROUNDED,
+// full-bleed) and resizes with System.Drawing (Windows PowerShell) into
+// src-tauri/icons/ PNG sizes. Square source is required: Windows/macOS/Linux
+// mask the icon at the OS level, so a baked corner radius would double-round
+// (the previous *-rounded.png did). .ico/.icns are encoded here via Pillow
+// (no pure-JS encoder); StoreLogo/Windows-tile PNGs are square resizes above.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +15,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const desktop = path.resolve(here, '..');
 const repo = path.resolve(desktop, '..', '..');
 const icons = path.join(desktop, 'src-tauri', 'icons');
-const src = path.join(repo, 'assets', 'brand', 'crewbus-app-icon-1024-rounded.png');
+const src = path.join(repo, 'assets', 'brand', 'crewbus-app-icon-1024.png');
 
 if (!fs.existsSync(src)) {
   console.error('brand source missing: ' + src);
@@ -105,4 +104,17 @@ if (extra.length) {
     lines2.join('; ') + `; $im0.Dispose()`;
   execFileSync('powershell.exe', ['-NoProfile', '-Command', ps2], { stdio: 'inherit' });
 }
-console.log('icons regenerated from assets/brand/crewbus-app-icon-1024-rounded.png');
+
+// .ico / .icns: no pure-JS encoder, so shell out to Pillow. Paths are passed
+// as argv (no shell quoting); the NON-ROUNDED source is correct here too —
+// Windows/macOS mask the icon at the OS level, so a baked radius double-rounds.
+const pyIco = [
+  'import sys',
+  'from PIL import Image',
+  'im = Image.open(sys.argv[1])',
+  "im.save(sys.argv[2], sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])",
+  'im.save(sys.argv[3])',
+].join('; ');
+execFileSync('python', ['-c', pyIco, src, path.join(icons, 'icon.ico'), path.join(icons, 'icon.icns')], { stdio: 'inherit' });
+
+console.log('icons regenerated from assets/brand/crewbus-app-icon-1024.png');
