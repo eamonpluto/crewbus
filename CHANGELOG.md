@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased
+## 10.0.7 (2026-10-14)
 
-- Package is now published as unscoped `crewbus` (v10.0.2): `npm i -g crewbus`.
+PATCH RELEASE: Design refresh + icon fix. No board-schema change (`board.json` stays v2).
+
+- **Web dashboard + desktop shell restyle** to the marketing-site design tokens, with system light/dark theme support (`prefers-color-scheme` + a persisted toggle) and the new bus-mark logo.
+- **Mobile app restyle** to the same tokens with system light/dark theming; new brand app icon and header logos.
+- **Non-rounded app icons** across desktop + mobile: the OS applies its own shape mask, so the previously baked corner radius caused double-rounding. The Android adaptive foreground now keeps the glyph inside the 72/108 safe zone.
+- Landing/docs links repointed from `main/` to `master/`.
 
 ## 10.0.6 (2026-10-13)
 

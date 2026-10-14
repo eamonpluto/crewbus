@@ -1,6 +1,6 @@
 {
   "name": "@eamonpluto/crewbus-mobile",
-  "version": "0.5.0",
+  "version": "0.6.1",
   "private": true,
   "description": "CrewBus M5 mobile client (Expo, remote-only v1): QR pair, triage/approvals/launch/fleet cards, offline cache + explicitly-retried queue. Hand-written scaffold — deps listed but NOT installed on this machine (no node_modules, no lockfile).",
   "type": "module",
