@@ -10,7 +10,23 @@ What it is: a Tauri shell that owns a loopback sidecar
 sidecar's own dashboard in an `<iframe>` — the dashboard UI
 (`bin/lib/web.js` `renderBoardHtml`) is reused, never duplicated. The shell
 adds only: sidecar lifecycle, connection dot, `Local environment` toggle,
-and the pair-QR window.
+board switching, and the pair-QR window.
+
+Plug-and-play identity (no terminal): every loopback `serve`/`web` boot
+auto-provisions a `lead` operator (see `ensureLoopbackOperator` in
+`bin/lib/identity.js`) — first boot mints `agents/lead.json` +
+`logs/lead.token`, later boots are noops. The dashboard launches as
+`lead (auto)` with the token in hidden fields; `from+token` inputs moved to
+an `advanced` disclosure for manual override only.
+
+Board switching (Phase-2): header `Switch Board…` button (shell) + project
+popover `Switch Board…` / `Use Default Board` (dashboard) restart the
+sidecar against another folder's board (`<folder>/.crewbus` or a board dir
+directly) via the `switch_board` Rust command (validated, old board
+untouched). The shell header shows the active board tail; the dashboard
+popover shows the full path. Target codebase folder (CWD) is remembered
+server-side (`GET/POST /api/workspace` in `board.json.workspaceCwd`) so it
+survives the random-port origin wipe that clears per-origin localStorage.
 
 ## Releases (normie install)
 

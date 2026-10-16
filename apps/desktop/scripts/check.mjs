@@ -199,11 +199,24 @@ ok(!/\.check\(\)\.await/.test(mainRsRel), 'main.rs never auto-checks for updates
 const cargo = read('src-tauri/Cargo.toml');
 ok(cargo.includes('tauri-plugin-single-instance'), 'Cargo: tauri-plugin-single-instance declared');
 ok(cargo.includes('tauri-plugin-autostart'), 'Cargo: tauri-plugin-autostart declared');
+ok(cargo.includes('tauri-plugin-dialog'), 'Cargo: tauri-plugin-dialog declared (board-switch folder picker)');
 const mainRs = read('src-tauri/src/main.rs');
 ok(mainRsRel.includes('tauri_plugin_single_instance::init'), 'main.rs inits single-instance (second launch focuses, never double-sidecars)');
 ok(mainRsRel.includes('tauri_plugin_autostart::init'), 'main.rs inits autostart (start-minimized-friendly)');
+ok(mainRsRel.includes('tauri_plugin_dialog::init()'), 'main.rs inits dialog plugin (native board-switch folder picker)');
 ok(mainRsRel.includes('npm run tauri build'), 'main.rs comments the toolchain verify command');
 ok(permIds.includes('autostart:allow-enable') && permIds.includes('autostart:allow-disable') && permIds.includes('autostart:allow-is-enabled'), 'capabilities grant the documented autostart permissions');
+ok(permIds.includes('dialog:allow-open'), 'capabilities grant dialog:allow-open (folder picker only, no fs scope)');
+
+// Phase-2 board switching: switch_board validates + restarts, board_status
+// reports, shell + dashboard both surface it. Old boards never deleted.
+ok(mainRsRel.includes('async fn switch_board'), 'main.rs exposes switch_board (validated sidecar restart)');
+ok(mainRsRel.includes('async fn board_status'), 'main.rs exposes board_status (shell header label)');
+ok(mainRsRel.includes('fn validate_board_dir'), 'main.rs validates board dirs without writes (project OR board dir)');
+ok(mainRsRel.includes('switch_board, board_status') || mainRsRel.includes('switch_board') && mainRsRel.includes('board_status'), 'main.rs registers board commands in invoke_handler');
+ok(mainRsRel.includes('"logs"'), 'main.rs ensure_board_dir creates logs/ (operator token file lives there)');
+ok(shellJs.includes('board-open') && shellJs.includes('switch_board'), 'src/main.js shell bridge opens the board switcher');
+ok(shellJs.includes('refreshShellBoard') && shellJs.includes('board_status'), 'src/main.js header shows the active board tail');
 
 if (failures > 0) {
   console.error(failures + ' check(s) FAILED');

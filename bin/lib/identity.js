@@ -404,6 +404,60 @@ export function mergeAgentDoc(prev, patch) {
   return base;
 }
 
+// Loopback operator auto-provision (desktop plug-and-play):
+// `serve`/`web` on 127.0.0.1 auto-creates a `lead` identity on first boot so
+// the dashboard can launch without any terminal step. First agent on the
+// board becomes admin (see defaultRoleForNew), so this is the board owner.
+// CLI boards are untouched: this only fires when `lead` is missing AND the
+// bind is loopback. Returns { from, token } or null when not applicable.
+export function ensureLoopbackOperator(d, host) {
+  const loop = String(host || "127.0.0.1");
+  if (loop !== "127.0.0.1" && loop !== "localhost" && loop !== "::1") return null;
+  let rec = null;
+  try { rec = readAgent(d, "lead"); } catch { rec = null; }
+  if (rec && (rec.tokenHash || rec.token)) return null; // already provisioned
+  const fresh = mintToken();
+  const salt = newSalt();
+  const now = new Date().toISOString();
+  let prev = null;
+  try { prev = readJson(path.join(d.agents, "lead.json")); } catch { prev = null; }
+  const { v, hlc } = stampSyncDoc(prev);
+  const doc = mergeAgentDoc(prev, {
+    name: "lead",
+    firstSeen: (prev && prev.firstSeen) || now,
+    lastSeen: now,
+    tokenHash: hashToken(fresh, salt),
+    salt,
+    revokedAt: undefined,
+    offboarded: undefined,
+    role: "admin",
+    v, hlc,
+  });
+  // Atomic first-claim: exactly one boot may win. Losers re-read below.
+  let won = false;
+  try {
+    if (!prev) {
+      won = writeExclusiveJson(path.join(d.agents, "lead.json"), doc);
+    } else {
+      writeAgentFile(d, "lead", doc);
+      won = true;
+    }
+  } catch { won = false; }
+  if (!won && !prev) {
+    // Lost the race (parallel boot): read the winner, no token to return.
+    return null;
+  }
+  if (won) {
+    try { chmodAgentFile(path.join(d.agents, "lead.json")); } catch {}
+    try {
+      fs.mkdirSync(path.join(d.root, "logs"), { recursive: true });
+      fs.writeFileSync(path.join(d.root, "logs", "lead.token"), fresh + "\n", "utf8");
+      try { fs.chmodSync(path.join(d.root, "logs", "lead.token"), 0o600); } catch {}
+    } catch {}
+  }
+  return won ? { from: "lead", token: fresh } : null;
+}
+
 export function touchAgent(d, name, extra) { // line 2647
   const p = path.join(d.agents, `${name}.json`);
   const now = new Date().toISOString();

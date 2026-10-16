@@ -39,6 +39,10 @@ struct SidecarState {
     status: Mutex<Option<String>>,
     /// Human detail for the status above (port-learned URL, or error text).
     detail: Mutex<Option<String>>,
+    /// Board dir the running sidecar was booted against. None until the
+    /// first boot resolves it; updated by switch_board before respawn.
+    /// Lets board_status report without re-deriving app_data_dir.
+    board: Mutex<Option<String>>,
 }
 
 // Days-since-epoch to civil date (Howard Hinnant's algorithm): board.json
@@ -62,6 +66,8 @@ fn ymd_from_days(z: i64) -> (i32, u32, u32) {
 // absent. Never overwrites, never touches anything else. BOARD_VERSION is
 // duplicated here by necessity (no shared schema crate); check.mjs asserts
 // parity with store.js BOARD_VERSION on every run.
+// NOTE: keep the hot-dir list in lockstep with store.js dirs() + the logs/
+// addition (operator token file). check.mjs asserts the set.
 fn ensure_board_dir(root: &std::path::Path) -> std::io::Result<()> {
     for sub in [
         "",
@@ -80,6 +86,7 @@ fn ensure_board_dir(root: &std::path::Path) -> std::io::Result<()> {
         "cursors",
         "revoked",
         "holds",
+        "logs",
     ] {
         std::fs::create_dir_all(root.join(sub))?;
     }
@@ -233,6 +240,65 @@ async fn stop_sidecar(app: tauri::AppHandle, state: tauri::State<'_, SidecarStat
     Ok(())
 }
 
+// Phase-2 board switching: which board is the sidecar serving?
+// Returns { board, defaultBoard, url, status }. `board` is None until the
+// first boot resolves it.
+#[tauri::command]
+async fn board_status(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SidecarState>,
+) -> Result<serde_json::Value, String> {
+    let board = state.board.lock().map_err(|e| e.to_string())?.clone();
+    let url = state.url.lock().map_err(|e| e.to_string())?.clone();
+    let status = state.status.lock().map_err(|e| e.to_string())?.clone();
+    let default_board = app
+        .path()
+        .app_data_dir()
+        .map(|d| d.join("board").to_string_lossy().into_owned())
+        .unwrap_or_default();
+    Ok(serde_json::json!({
+        "board": board,
+        "defaultBoard": default_board,
+        "url": url,
+        "status": status,
+    }))
+}
+
+// Validate a candidate board dir WITHOUT touching it: must exist, contain
+// board.json with a numeric version, and be a directory (not a file).
+// Accepts either the project dir (containing .crewbus/) or the board dir
+// itself (containing board.json). Mirrors CLI boardDir/findBoardUpward.
+fn validate_board_dir(raw: &str) -> Result<String, String> {
+    let t = raw.trim();
+    if t.is_empty() {
+        return Err("pick a folder first".to_string());
+    }
+    let p = std::path::Path::new(t);
+    let candidates = [p.join(".crewbus"), p.to_path_buf()];
+    for cand in &candidates {
+        let meta = cand.join("board.json");
+        if meta.is_file() {
+            let text = std::fs::read_to_string(&meta)
+                .map_err(|e| format!("cannot read {}: {e}", meta.display()))?;
+            let doc: serde_json::Value = serde_json::from_str(&text)
+                .map_err(|e| format!("{} is not valid JSON: {e}", meta.display()))?;
+            match doc.get("version").and_then(|v| v.as_u64()) {
+                Some(_) => {}
+                None => {
+                    return Err(format!(
+                        "{} has no numeric version (not a crewbus board)",
+                        meta.display()
+                    ))
+                }
+            }
+            return Ok(cand.to_string_lossy().into_owned());
+        }
+    }
+    Err(format!(
+        "no board found at {t} (need <project>/.crewbus/board.json or board.json directly)"
+    ))
+}
+
 #[tauri::command]
 async fn open_pair_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("pair") {
@@ -243,6 +309,118 @@ async fn open_pair_window(app: tauri::AppHandle) -> Result<(), String> {
     } else {
         Err("pair window not found".to_string())
     }
+}
+
+// Shared boot-learner: watch sidecar stdout for the first loopback URL,
+// record it, emit dashboard-ready. Used by first boot AND switch_board so
+// both paths learn the random --port 0 port identically.
+async fn learn_sidecar_url(
+    handle: tauri::AppHandle,
+    mut rx: tauri_plugin_shell::process::CommandEventReceiver,
+) {
+    let note = |status: &str, detail: String| {
+        if let Ok(mut s) = handle.state::<SidecarState>().status.lock() {
+            *s = Some(status.to_string());
+        }
+        if let Ok(mut d) = handle.state::<SidecarState>().detail.lock() {
+            *d = Some(detail);
+        }
+    };
+    let err = |msg: String| {
+        note("error", msg.clone());
+        let _ = handle.emit(
+            "dashboard-error",
+            serde_json::json!({ "message": msg }),
+        );
+    };
+    let st: tauri::State<SidecarState> = handle.state();
+    let mut learned_url = false;
+    while let Some(evt) = rx.recv().await {
+        if let CommandEvent::Stdout(line) | CommandEvent::Stderr(line) = evt {
+            let text = String::from_utf8_lossy(&line);
+            let already_known = st.url.lock().map(|g| g.is_some()).unwrap_or(true);
+            if !already_known {
+                if let Some(url) = first_loopback_url(&text) {
+                    match st.url.lock() {
+                        Ok(mut u) => {
+                            *u = Some(url.clone());
+                            note("ready", url.clone());
+                            learned_url = true;
+                            let _ = handle.emit(
+                                "dashboard-ready",
+                                serde_json::json!({ "url": url }),
+                            );
+                        }
+                        Err(e) => {
+                            err(format!("lock failed: {e}"));
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if learned_url {
+        note("stopped", "sidecar exited after serving".to_string());
+        let _ = handle.emit("dashboard-stopped", ());
+    } else {
+        err("sidecar exited before serving a URL".to_string());
+    }
+}
+
+// Restart the sidecar against a validated board dir. Validates first
+// (no writes), mkdirs hot dirs only, kills the old child, spawns an
+// identical serve with the new --board, re-arms the URL learner.
+// Old board untouched; operator auto-provision runs inside the sidecar.
+#[tauri::command]
+async fn switch_board(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, SidecarState>,
+    path: String,
+) -> Result<serde_json::Value, String> {
+    let board_str = validate_board_dir(&path)?;
+    let board_path = std::path::PathBuf::from(&board_str);
+    ensure_board_dir(&board_path)
+        .map_err(|e| format!("board init failed: {e}"))?;
+    if let Ok(mut guard) = state.child.lock() {
+        if let Some(child) = guard.take() {
+            let _ = child.kill();
+        }
+    }
+    if let Ok(mut u) = state.url.lock() {
+        *u = None;
+    }
+    if let Ok(mut s) = state.status.lock() {
+        *s = Some("switching".to_string());
+    }
+    if let Ok(mut b) = state.board.lock() {
+        *b = Some(board_str.clone());
+    }
+    let (crewbus_opt, crewbus_report) = resolve_crewbus_js(&app);
+    let crewbus_js = match crewbus_opt {
+        Some(p) => p.to_string_lossy().into_owned(),
+        None => return Err(crewbus_report),
+    };
+    let args = [
+        crewbus_js.as_str(),
+        "serve",
+        "--port",
+        "0",
+        "--board",
+        board_str.as_str(),
+    ];
+    let (rx, child) = app
+        .shell()
+        .sidecar("node")
+        .map_err(|e| format!("sidecar missing: {e}"))?
+        .args(args)
+        .spawn()
+        .map_err(|e| format!("spawn failed: {e}"))?;
+    if let Ok(mut guard) = state.child.lock() {
+        *guard = Some(child);
+    }
+    tauri::async_runtime::spawn(learn_sidecar_url(app.clone(), rx));
+    Ok(serde_json::json!({ "board": board_str }))
 }
 
 fn main() {
@@ -262,6 +440,7 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         // Updater wiring (INERT without signing keys): registered so a future
         // SIGNED release can auto-update from the `latest.json` endpoint in
         // tauri.conf.json. No `check()` is ever called at startup, so without
@@ -282,6 +461,7 @@ fn main() {
             url: Mutex::new(None),
             status: Mutex::new(Some("starting".to_string())),
             detail: Mutex::new(Some("sidecar booting".to_string())),
+            board: Mutex::new(None),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -440,6 +620,10 @@ fn main() {
                     }
                 };
                 let board_str = board_dir.to_string_lossy().into_owned();
+                // Remember which board this boot serves (board_status).
+                if let Ok(mut b) = state.board.lock() {
+                    *b = Some(board_str.clone());
+                }
                 if !board_dir.join("board.json").is_file() {
                     if let Err(e) = ensure_board_dir(&board_dir) {
                         err(format!("default board init failed: {e}"));
@@ -530,7 +714,7 @@ fn main() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![sidecar_status, stop_sidecar, open_pair_window])
+        .invoke_handler(tauri::generate_handler![sidecar_status, stop_sidecar, open_pair_window, board_status, switch_board])
         .run(tauri::generate_context!())
         .expect("crewbus desktop failed");
 }

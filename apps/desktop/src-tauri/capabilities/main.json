@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "core:window:allow-show",
+    "dialog:allow-open",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",

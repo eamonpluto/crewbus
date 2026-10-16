@@ -42,7 +42,7 @@ import { execFileSync, spawn } from "node:child_process";
 // at top level so the import graph (store <- everyone; identity <- sync/spawn/
 // mail/groups/channels/web/relay/export) has no evaluation-order hazards.
 import { BOARD_VERSION, BROADCAST_AFTER, MAX_BODY_CHARS, MAX_RECIPIENTS, MAX_SPAWN, VALUE_FLAGS, boardDir, chmodAgentFile, cleanArtifact, cleanBranchPrefix, cleanChannelName, cleanGroupName, cleanPriority, cleanReply, cleanSenderType, cleanSubject, cleanWebName, dirs, ensureBoard, fail, findBoardUpward, getFlag, gitRevForBoard, listJson, newId, optionalAgent, parseDuration, readBoardMeta, readJson, refuseDriveRootBoard, requireBoard, resolveAgent, restArgs, sanitizeName, writeBoardMeta, writeExclusiveJson, writeJson, nextHlc, stampSyncDoc, hlcCompare, SEND_RATE_CAP, SEND_RATE_WINDOW_MS, MAX_FWD_DEPTH, DEDUPE_WINDOW_MS, webErr } from "./lib/store.js";
-import { VALID_ROLES, agentTokenMatches, assertMintWon, authorize, authorizeCheck, checkToken, cleanRole, countAgentRecords, defaultRoleForNew, ensureSender, hashToken, isHashRevoked, mergeAgentDoc, mergeSyncedAgent, mintToken, newSalt, readAgent, readBoardAcl, resolveToken, revokedPathForHash, roleOfRecord, sanitizeAgentForSync, stripAgentSecrets, timingSafeEqualStr, touchAgent, writeAgentFile, writeBoardAcl, isBoardFrozen } from "./lib/identity.js";
+import { VALID_ROLES, agentTokenMatches, assertMintWon, authorize, authorizeCheck, checkToken, cleanRole, countAgentRecords, defaultRoleForNew, ensureLoopbackOperator, ensureSender, hashToken, isHashRevoked, mergeAgentDoc, mergeSyncedAgent, mintToken, newSalt, readAgent, readBoardAcl, resolveToken, revokedPathForHash, roleOfRecord, sanitizeAgentForSync, stripAgentSecrets, timingSafeEqualStr, touchAgent, writeAgentFile, writeBoardAcl, isBoardFrozen } from "./lib/identity.js";
 import { saveTokenFile } from "./lib/tokenfile.js";
 import { CLIENT_TLS, SYNC_LWW, cleanSyncRel, clientInsecureFromArgs, crewSurvey, httpJson, readPemFlag, readSyncState, readTombstones, relayAuthEntries, relayCredFor, relayCredHeaders, setupClientTls, splitByWeight, syncRound, syncWalk, warnInsecureOnce, writeSyncState, writeTombstone, SYNC_SUBS, SYNC_UNION, RELAY_CAPS, SUB_CAP, SUB_CAP_NOTE, tombstoneIdForRel, readSyncDoc } from "./lib/sync.js";
 import { devicePath, isLoopbackHost, newDeviceCred, newPairToken, pairingPath, parseDeviceCred, readDevice, readRelayState, relaySecretFromArgs, remoteSpawn, requireRelayClientCert, requireRelaySecret, requireScope, tryAcquireFence, verifyOidcJwt, writeRelayState, relayStatePath, bearerFromReq, getOidcConfig, getOidcJwks, b64urlDecode, b64urlJson, jwsRawToDer, oidcGetJson, OIDC_SKEW_SEC, OIDC_JWKS_TTL_MS, OIDC_ALG_HASH, OIDC_EC_SIZE, deviceFromReq } from "./lib/relay.js";
@@ -4880,6 +4880,11 @@ async function cmdServe(args) {
   ensureBoardCliShim(d);
   const host = getFlag(args, "--host") || "127.0.0.1";
   const port = Number(getFlag(args, "--port") || 0);
+  // Desktop plug-and-play: loopback boots auto-provision a `lead` operator
+  // identity (first boot only) so the dashboard launch UI works with zero
+  // terminal steps. CLI boards are untouched (lead already exists there).
+  // Non-loopback binds never auto-provision.
+  try { ensureLoopbackOperator(d, host); } catch {}
   if (!(port >= 0 && port < 65536)) fail("--port must be 0-65535 (0 = random)");
   const relaySecret = relaySecretFromArgs(args);
   const remote = !isLoopbackHost(host);

@@ -204,11 +204,42 @@ function setDashboardUrl(u, why) {
     if (urlEl) urlEl.textContent = dashboardUrl.replace(/^http:\/\//, '');
     if (frame) frame.src = dashboardUrl + '/';
     supervisor.updateRoutes([dashboardUrl]);
+    // Which board is this sidecar serving? Best-effort label (post-switch
+    // the port is new, so query the fresh origin). Never blocks the iframe.
+    try { refreshShellBoard(); } catch (_) {}
     stopPoll();
     pollOnce();
     pollTimer = setInterval(pollOnce, 5000);
     supervisor.retryNow().catch(function () {});
   });
+}
+
+// Shell board label: which board is the sidecar serving? Via board_status
+// (Tauri) with an /api/workspace HTTP fallback. Shows the tail so
+// sandbox-1 vs default is obvious; full path in the tooltip.
+async function refreshShellBoard() {
+  var label = null;
+  try {
+    var invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+    if (typeof invoke === 'function') {
+      var st = await invoke('board_status');
+      if (st && st.board) label = String(st.board);
+    }
+  } catch (_) {}
+  if (!label && dashboardUrl) {
+    try {
+      var r = await fetch(dashboardUrl + '/api/workspace', { headers: { accept: 'application/json' } });
+      if (r.ok) {
+        var j = await r.json();
+        if (j && j.board) label = String(j.board);
+      }
+    } catch (_) {}
+  }
+  if (label && urlEl) {
+    var tail = label.replace(/[\\/]+$/, '').split(/[\\/]/).slice(-2).join('/');
+    urlEl.textContent = dashboardUrl.replace(/^http:\/\//, '') + ' · ' + tail;
+    urlEl.title = label;
+  }
 }
 
 // 1. dev/test override: ?dashboard=http://127.0.0.1:PORT
@@ -323,6 +354,57 @@ async function openPairWindow() {
 if (pairBtn) {
   pairBtn.addEventListener('click', function () {
     openPairWindow().catch(function () {});
+  });
+}
+
+// Phase-2 board switching (shell bridge): native folder dialog when the
+// dialog plugin is present, prompt() fallback otherwise. Validates via the
+// `switch_board` Rust command (project dir OR board dir); the sidecar
+// restarts, dashboard-ready re-fires, the iframe repoints automatically.
+// The old board is never touched; operator auto-provision runs in-sidecar.
+var boardBtn = document.getElementById('board-open');
+async function openBoardSwitcher(prefill) {
+  var invoke = null;
+  try {
+    invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  } catch (_) {}
+  if (typeof invoke !== 'function') {
+    say('Board switching needs the desktop app (running in a browser tab).');
+    return;
+  }
+  var folder = prefill || '';
+  try {
+    var dlg = window.__TAURI__ && window.__TAURI__.dialog;
+    if (dlg && typeof dlg.open === 'function') {
+      var picked = await dlg.open({ directory: true, multiple: false, title: 'Use folder\u2019s board' });
+      if (picked) folder = String(picked);
+      else return;
+    }
+  } catch (_) { /* prompt fallback below */ }
+  if (!folder) {
+    try { folder = window.prompt('Switch board: project folder (uses <folder>/.crewbus) or board dir:', ''); } catch (_) {}
+  }
+  if (!folder || !String(folder).trim()) return;
+  say('Switching board — restarting sidecar…');
+  try {
+    var res = await invoke('switch_board', { path: String(folder).trim() });
+    say('Board switched to ' + ((res && res.board) || folder) + ' — waiting for sidecar…');
+  } catch (e) {
+    say('Board switch failed: ' + String((e && e.message) || e) + ' — board untouched.');
+  }
+}
+if (boardBtn) {
+  boardBtn.addEventListener('click', function () {
+    try {
+      var invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+      if (typeof invoke === 'function') {
+        invoke('board_status').then(function (st) {
+          openBoardSwitcher('').catch(function () {});
+        }).catch(function () { openBoardSwitcher('').catch(function () {}); });
+        return;
+      }
+    } catch (_) {}
+    openBoardSwitcher('').catch(function () {});
   });
 }
 

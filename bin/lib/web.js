@@ -16,8 +16,8 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
-import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS } from "./store.js";
-import { readAgent, agentTokenMatches, authorizeCheck, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
+import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, readBoardMeta, writeBoardMeta, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS } from "./store.js";
+import { readAgent, agentTokenMatches, authorizeCheck, ensureLoopbackOperator, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
 import { readDMs, readVisible, ackedIds, ackedIdSet, findMessageById, deliverDMs, parseRecipients } from "./mail.js";
 import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim } from "./spawn.js";
 import { groupTelemetryData, collectBatch, gatherTelemetry, listBatches } from "./groups.js";
@@ -662,6 +662,9 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
         <div class="pop-label" style="margin-top:10px">Workspace Board (Bus DB)</div>
         <div class="pop-path" id="pop-board-path">${e(boardPath)}</div>
         <button type="button" id="copy-board-btn" class="pop-btn"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Board Path</button>
+        <button type="button" class="pop-btn" id="switch-board-btn" title="Use another folder's board (e.g. a CLI project): restarts the sidecar against <folder>/.crewbus"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg> Switch Board…</button>
+        <button type="button" class="pop-btn" id="reset-board-btn" title="Back to the default desktop board"> Use Default Board</button>
+        <div class="pop-path dim" id="board-switch-msg" style="display:none"></div>
         <button type="button" class="pop-btn" id="pop-pair-btn" style="margin-top:8px"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Pair Mobile Client (QR)…</button>
         <button type="button" class="pop-btn" id="pop-install-cli-btn" style="margin-top:8px"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> Install 'crewbus' CLI in PATH</button>
       </div>
@@ -803,10 +806,16 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
           </div>
 
           <div class="composer-bottom">
-            <div class="launch-identity">
-              from <input id="launch-from" size="10" placeholder="agent name">
-              token <input id="launch-token" type="password" size="18" placeholder="abt-…">
+            <div class="launch-identity" title="Desktop launches as the board owner (auto-provisioned) — no token step needed">
+              <span class="dim">launching as <b id="launch-as">lead</b> (auto)</span>
+              <input id="launch-from" type="hidden" value="">
+              <input id="launch-token" type="hidden" value="">
             </div>
+            <details class="tech-details" id="launch-identity-advanced" style="margin:0">
+              <summary class="dim" style="cursor:pointer;font-size:11px">advanced: use a different identity</summary>
+              <span class="dim" style="font-size:11px">from <input id="launch-from-manual" size="10" placeholder="agent name"></span>
+              <span class="dim" style="font-size:11px">token <input id="launch-token-manual" type="password" size="14" placeholder="abt-…"></span>
+            </details>
             <div class="launch-actions">
               <button id="launch-preview" type="button">Preview Plan</button>
               <button id="launch-go" type="button" class="btn-launch danger">Launch Agents</button>
@@ -1001,6 +1010,13 @@ function markIdent(){
   if(lf&&!lf.value&&c.from)lf.value=c.from;
   var lt=document.getElementById('launch-token');
   if(lt&&!lt.value&&c.token)lt.value=c.token;
+  // Auto badge: reflect the effective launch identity (auto lead unless the
+  // user typed a manual override in the advanced disclosure).
+  try{
+    var man=document.getElementById('launch-from-manual');
+    var lbl=document.getElementById('launch-as');
+    if(lbl)lbl.textContent=(man&&man.value.trim())||lf.value.trim()||c.from||'lead';
+  }catch(_){}
 }
 async function autoLoadOperatorCreds(){
   var lf=document.getElementById('launch-from');
@@ -1015,11 +1031,15 @@ async function autoLoadOperatorCreds(){
       if(r.ok){
         var j=await r.json();
         if(j.ok&&j.from&&j.token){
-          if(lf&&!lf.value)lf.value=j.from;
-          if(lt&&!lt.value)lt.value=j.token;
+          if(lf)lf.value=j.from;
+          if(lt)lt.value=j.token;
           if(who&&!who.value)who.value=j.from;
           if(tok&&!tok.value)tok.value=j.token;
-          try{localStorage.setItem('ab-who',j.from);localStorage.setItem('ab-tok',j.token);}catch(_){}
+          // NOTE: no localStorage write for the auto operator token.
+          // The desktop sidecar binds --port 0 (random), so the origin
+          // (127.0.0.1:PORT) changes every launch and per-origin
+          // localStorage is wiped anyway. The server is the source of
+          // truth: every launch re-fetches from /api/operator-creds.
           markIdent();
         }
       }
@@ -1029,10 +1049,14 @@ async function autoLoadOperatorCreds(){
 function say(t){document.getElementById('result').textContent=t;}
 document.getElementById('save').onclick=function(){var c=creds();try{localStorage.setItem('ab-who',c.from);localStorage.setItem('ab-tok',c.token);}catch(e){}markIdent();say('identity saved in this tab');};
 try{document.getElementById('who').value=localStorage.getItem('ab-who')||'';document.getElementById('tok').value=localStorage.getItem('ab-tok')||'';}catch(e){}markIdent();
-var _lf=document.getElementById('launch-from');
-if(_lf){_lf.oninput=function(){try{localStorage.setItem('ab-who',this.value.trim());}catch(_){}var w=document.getElementById('who');if(w)w.value=this.value.trim();markIdent();};}
-var _lt=document.getElementById('launch-token');
-if(_lt){_lt.oninput=function(){try{localStorage.setItem('ab-tok',this.value.trim());}catch(_){}var t=document.getElementById('tok');if(t)t.value=this.value.trim();markIdent();};}
+try{
+  // Manual-override fields mirror into Settings identity (two-way sync),
+  // same as the old visible from+token row did.
+  var _mf=document.getElementById('launch-from-manual');
+  var _mt=document.getElementById('launch-token-manual');
+  if(_mf){_mf.oninput=function(){var w=document.getElementById('who');if(w&&!w.value)w.value=this.value.trim();markIdent();};}
+  if(_mt){_mt.oninput=function(){var t=document.getElementById('tok');if(t&&!t.value)t.value=this.value.trim();markIdent();};}
+}catch(_){}
 autoLoadOperatorCreds();
 function stateOf(w){if(!w.known)return 'unknown';if(w.reply)return w.acked?'done · acked':'done · reply waiting';if(w.alive===true)return 'running';if(w.alive===false)return 'exited · no reply';return 'no pid';}
 var _fq=document.getElementById('feed-q');
@@ -1408,14 +1432,29 @@ if(_refBtn){
 }
 async function doLaunch(dry){
   var out=document.getElementById('launch-out');
-  var lf=document.getElementById('launch-from').value.trim()||creds().from;
-  var lt=document.getElementById('launch-token').value||creds().token;
+  // Identity resolution: advanced manual override wins, else hidden
+  // auto fields (populated from /api/operator-creds), else Settings creds.
+  // Manual fields live in the "advanced" disclosure so non-technical users
+  // never see a token step.
+  function launchCreds(){
+    var manFrom=document.getElementById('launch-from-manual');
+    var manTok=document.getElementById('launch-token-manual');
+    var mf=manFrom?manFrom.value.trim():'';
+    var mt=manTok?manTok.value:'';
+    if(mf||mt) return {from:mf,token:mt};
+    return {
+      from:document.getElementById('launch-from').value.trim()||creds().from,
+      token:document.getElementById('launch-token').value||creds().token
+    };
+  }
+  var lc=launchCreds();
+  var lf=lc.from, lt=lc.token;
   if(!lf||!lt){
     await autoLoadOperatorCreds();
-    lf=document.getElementById('launch-from').value.trim()||creds().from;
-    lt=document.getElementById('launch-token').value||creds().token;
+    lc=launchCreds();
+    lf=lc.from; lt=lc.token;
   }
-  if(!lf||!lt){out.textContent='set launch from+token (or register via CLI: crewbus register --from lead) first';return;}
+  if(!lf||!lt){out.textContent='starting up — identity not ready yet, retry in a moment';return;}
   var to=document.getElementById('launch-to').value.trim();
   var count=Number(document.getElementById('launch-count').value)||1;
   var selectedHarnesses = window.__selectedHarnesses && window.__selectedHarnesses.size ? Array.from(window.__selectedHarnesses) : (document.getElementById('launch-harness').value || 'claude').split(',').map(function(s){return s.trim();}).filter(Boolean);
@@ -1880,6 +1919,11 @@ function applyTargetCwd(pathStr, notify){
   }
   if(pathStr){
     try{localStorage.setItem('crewbus_last_cwd',pathStr);}catch(_){}
+    // Server-side memory: survives the desktop random-port origin wipe.
+    // Fire-and-forget (local apply above already updated the UI).
+    try{
+      fetch('/api/workspace',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({cwd:pathStr})}).catch(function(){});
+    }catch(_){}
     if(notify)say('Target codebase set to: '+pathStr);
   }
 }
@@ -1910,11 +1954,85 @@ async function promptOrSelectProjectFolder(){
 document.getElementById('open-folder-btn').onclick=promptOrSelectProjectFolder;
 var lcBrowse=document.getElementById('launch-cwd-browse');
 if(lcBrowse)lcBrowse.onclick=promptOrSelectProjectFolder;
+// Phase-2 board switching (desktop): use another folder's board.
+// Under Tauri this invokes the switch_board command (validated restart);
+// everywhere else (plain crewbus web) it explains the CLI equivalent.
+// After a switch the iframe reloads (new random port) and the operator
+// token is re-fetched from the NEW board via /api/operator-creds.
+function boardSwitchMsg(t, isErr){
+  var m=document.getElementById('board-switch-msg');
+  if(!m)return;
+  m.style.display=t?'block':'none';
+  m.textContent=t||'';
+  m.style.color=isErr?'var(--danger)':'var(--dim)';
+}
+async function doSwitchBoard(folderPath){
+  var folder=String(folderPath||'').trim();
+  if(!folder){
+    folder=prompt('Switch board: enter the project folder (uses <folder>/.crewbus) or board dir directly:','');
+    if(!folder||!folder.trim())return;
+    folder=folder.trim();
+  }
+  try{
+    var invoke=window.__TAURI__&&window.__TAURI__.core&&window.__TAURI__.core.invoke;
+    if(typeof invoke!=='function'){
+      boardSwitchMsg('Board switching needs the desktop app. CLI equivalent: crewbus serve --board '+folder+'/.crewbus',true);
+      return;
+    }
+    boardSwitchMsg('Switching board — restarting sidecar…');
+    var res=await invoke('switch_board',{path:folder});
+    var board=(res&&res.board)||folder;
+    boardSwitchMsg('Board switched to '+board+' — reloading…');
+    // Clear per-origin identity: the new board has its own lead token.
+    try{
+      var lf=document.getElementById('launch-from');if(lf)lf.value='';
+      var lt=document.getElementById('launch-token');if(lt)lt.value='';
+    }catch(_){}
+    setTimeout(function(){location.reload();},1200);
+  }catch(e){
+    boardSwitchMsg('Switch failed: '+String((e&&e.message)||e||e),true);
+  }
+}
+var swBtn=document.getElementById('switch-board-btn');
+if(swBtn)swBtn.onclick=function(){doSwitchBoard('');};
+var rsBtn=document.getElementById('reset-board-btn');
+if(rsBtn)rsBtn.onclick=function(){
+  // Reset = switch back via board_status defaultBoard (no hardcoded path).
+  try{
+    var invoke=window.__TAURI__&&window.__TAURI__.core&&window.__TAURI__.core.invoke;
+    if(typeof invoke!=='function'){boardSwitchMsg('Reset needs the desktop app.',true);return;}
+    boardSwitchMsg('Reading default board…');
+    invoke('board_status').then(function(st){
+      if(st&&st.defaultBoard)doSwitchBoard(st.defaultBoard);
+      else boardSwitchMsg('No default board reported',true);
+    }).catch(function(e){boardSwitchMsg('Reset failed: '+String((e&&e.message)||e),true);});
+  }catch(e){boardSwitchMsg('Reset failed: '+String((e&&e.message)||e),true);}
+};
 var lcInp=document.getElementById('launch-cwd');
 if(lcInp)lcInp.oninput=function(){applyTargetCwd(this.value,false);};
 try{
   var lastCwd=localStorage.getItem('crewbus_last_cwd');
   if(lastCwd){applyTargetCwd(lastCwd,false);}
+}catch(_){}
+// Server memory wins over stale/absent localStorage: the desktop origin
+// (127.0.0.1:RANDOM) changes every launch, wiping per-origin storage.
+// The board remembers the workspace; a picked CLI folder like sandbox-1
+// survives restarts. localStorage-only values are pushed up so a fresh
+// board learns them too.
+try{
+  fetch('/api/workspace').then(function(r){return r.ok?r.json():null;}).then(function(j){
+    if(!j||!j.cwd)return;
+    var cur=(document.getElementById('launch-cwd')?document.getElementById('launch-cwd').value.trim():'');
+    try{
+      var lsCwd=localStorage.getItem('crewbus_last_cwd')||'';
+      if(lsCwd&&lsCwd!==j.cwd&&(!cur||cur===lsCwd)){
+        // Fresh board that never saw our local pick: teach it.
+        fetch('/api/workspace',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({cwd:lsCwd})}).catch(function(){});
+        return;
+      }
+    }catch(_){}
+    if(!cur)applyTargetCwd(j.cwd,false);
+  }).catch(function(){});
 }catch(_){}
 document.getElementById('launch-brief').addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&(e.key==='Enter')){
@@ -2110,13 +2228,65 @@ export async function handleWebDashboardRoute(req, res, url, d) {
     const tokenFile = path.join(d.root, "logs", "lead.token");
     let tok = "";
     try { tok = fs.readFileSync(tokenFile, "utf8").trim(); } catch {}
+    // Verify the file token still matches the agent record: a stale file
+    // (revoked/rotated lead) must not prefill a dead token.
     if (tok) {
-      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-      res.end(JSON.stringify({ ok: true, from: "lead", token: tok }));
-      return true;
+      try {
+        const rec = readAgent(d, "lead");
+        if (rec && agentTokenMatches(rec, tok)) {
+          res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+          res.end(JSON.stringify({ ok: true, from: "lead", token: tok }));
+          return true;
+        }
+      } catch {}
     }
     res.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
     res.end(JSON.stringify({ ok: false, error: "no lead.token found" }));
+    return true;
+  }
+  // Workspace memory (server-side, survives the random-port origin wipe):
+  // GET returns the last-set target codebase dir (or default board parent);
+  // POST { cwd } validates + persists it to board.json so desktop + web agree.
+  if (req.method === "GET" && url.pathname === "/api/workspace") {
+    let meta = {};
+    try { meta = readBoardMeta(d) || {}; } catch {}
+    const cwd = (meta && meta.workspaceCwd) || path.dirname(d.root);
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    res.end(JSON.stringify({ ok: true, cwd, board: d.root }));
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/api/workspace") {
+    if (!String(req.headers["content-type"] || "").includes("application/json")) {
+      res.writeHead(415, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "content-type must be application/json" }));
+      return true;
+    }
+    const { body, error } = await readKillBody(req);
+    if (error) {
+      res.writeHead(error[0], { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: error[1] }));
+      return true;
+    }
+    const raw = body && body.cwd !== undefined && body.cwd !== null ? String(body.cwd).trim() : "";
+    const cwd = raw ? path.resolve(raw) : path.dirname(d.root);
+    let ok = false;
+    try { ok = fs.statSync(cwd).isDirectory(); } catch {}
+    if (!ok) {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: `cwd is not a directory: ${cwd}` }));
+      return true;
+    }
+    try {
+      const meta = readBoardMeta(d) || {};
+      meta.workspaceCwd = cwd;
+      writeBoardMeta(d, meta);
+    } catch (e) {
+      res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: String((e && e.message) || e) }));
+      return true;
+    }
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    res.end(JSON.stringify({ ok: true, cwd, board: d.root }));
     return true;
   }
   if (req.method === "POST" && url.pathname === "/api/install-cli") {
@@ -2146,6 +2316,9 @@ export async function cmdWeb(args) {
   ensureBoardCliShim(d);
   const host = getFlag(args, "--host") || "127.0.0.1";
   const port = Number(getFlag(args, "--port") || 0);
+  // Desktop plug-and-play: same loopback auto-provision as `serve` (see
+  // ensureLoopbackOperator in identity.js). First loopback boot mints `lead`.
+  try { ensureLoopbackOperator(d, host); } catch {}
   if (!(port >= 0 && port < 65536)) fail("--port must be 0-65535 (0 = random)");
   if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") {
     process.stderr.write(`crewbus: warning: binding non-local ${host} — the dashboard has no auth, anyone who can reach it can read the board\n`);
