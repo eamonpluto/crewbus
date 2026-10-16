@@ -914,9 +914,9 @@ const supR = bgCli(["pool-resume", "--from", "plboss", "--id", resumeId], "supR.
 check("pool-resume: adopts live worker", await waitForLog("supR.log", "adopted live plr-1"));
 run(["cli", "spawn-kill", "--from", "plboss", "--to", "plr-1"], pl.e, pl.p);
 check("pool-resume: relaunches after kill", await waitForLog("supR.log", "spawned plr-2"));
+const rst = await waitPoolState(resumeId, (st) => st && st.results && st.results.some((r) => r.to === "plr-2"));
 stopBg(supR);
-const rst = JSON.parse(fs.readFileSync(path.join(pl.p, ".crewbus", "pool-state", resumeId + ".json"), "utf8"));
-check("pool-resume: adopted once, second booted", rst.results.filter((r) => r.to === "plr-1").length === 1 && rst.results.filter((r) => r.to === "plr-2").length === 1 && rst.results.some((r) => r.to === "plr-2" && r.resumed === true) && !rst.finishedAt && rst.done === 1);
+check("pool-resume: adopted once, second booted", !!rst && rst.results.filter((r) => r.to === "plr-1").length === 1 && rst.results.filter((r) => r.to === "plr-2").length === 1 && rst.results.some((r) => r.to === "plr-2" && r.resumed === true) && !rst.finishedAt && rst.done === 1);
 check("pool-resume: killed supervisor holds lock", fs.existsSync(path.join(pl.p, ".crewbus", "locks", crypto.createHash("sha256").update(`pool/${resumeId}`).digest("hex").slice(0, 16) + ".json")));
 // reconcile: stale pid (live test-process pid + ancient spawn) reads dead
 fs.writeFileSync(path.join(pl.p, ".crewbus", "agents", "stalew.json"), JSON.stringify({ name: "stalew", spawnedPid: process.pid, spawnedBy: "plboss", spawnedAt: "2020-01-01T00:00:00.000Z", briefId: "b-s" }));

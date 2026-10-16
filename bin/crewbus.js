@@ -7103,14 +7103,15 @@ async function cmdPool(args) {
       state.active[name] = r.pid;
       state.launched++;
       state.results.push({ to: name, id: idByName.get(name), pid: r.pid, log: r.logPath, promptPath: r.promptPath });
+      saveState();
       console.log(`pool ${poolId}: spawned ${name} pid ${r.pid} [board ${d.root}]`);
     } catch (e) {
       delete state.active[name];
       state.done++;
       state.results.push({ to: name, id: idByName.get(name), error: (e && e.message) || String(e) });
+      saveState();
       console.log(`pool ${poolId}: spawn FAILED ${name}: ${(e && e.message) || e} (brief still waits on the board)`);
     }
-    saveState();
   };
   const initial = Math.min(poolSize, queue.length);
   for (; state.cursor < initial; state.cursor++) launchOne(queue[state.cursor]);
@@ -7221,14 +7222,15 @@ async function cmdPoolResume(args) {
       state.active[name] = r.pid;
       state.launched++;
       state.results.push({ to: name, id: state.idByName[name], pid: r.pid, log: r.logPath, promptPath: r.promptPath, resumed: true });
+      saveState();
       console.log(`pool ${state.id}: spawned ${name} pid ${r.pid} [board ${d.root}]`);
     } catch (e) {
       delete state.active[name];
       state.done++;
       state.results.push({ to: name, id: state.idByName[name], error: (e && e.message) || String(e) });
+      saveState();
       console.log(`pool ${state.id}: spawn FAILED ${name}: ${(e && e.message) || e} (brief still waits on the board)`);
     }
-    saveState();
   };
   const finish = (completed) => {
     if (completed) state.finishedAt = new Date().toISOString();
