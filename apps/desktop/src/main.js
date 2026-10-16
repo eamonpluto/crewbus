@@ -61,16 +61,16 @@ function say(t) {
 
 function connOkColor() {
   try {
-    var v = getComputedStyle(document.documentElement).getPropertyValue('--acc');
+    var v = getComputedStyle(document.documentElement).getPropertyValue('--ok');
     if (v && v.trim()) return v.trim();
   } catch (_) { /* static fallback: hex below */ }
   try {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) return '#4cc38a';
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) return '#4fb07f';
   } catch (_) { /* static fallback: light default */ }
   try {
-    if (document.documentElement.getAttribute('data-theme') === 'dark') return '#4cc38a';
+    if (document.documentElement.getAttribute('data-theme') === 'dark') return '#4fb07f';
   } catch (_) {}
-  return '#0e8a55';
+  return '#3d8f66';
 }
 
 function markConn(ok, detail) {

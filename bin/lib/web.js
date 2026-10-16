@@ -425,8 +425,9 @@ export function renderBoardHtml(boardPath) {
   --panel:#ffffff;
   --ink:#14201a;
   --dim:#5b6a62;
-  --acc:#0e8a55;
+  --acc:#5b6a62;
   --acc-ink:#ffffff;
+  --ok:#3d8f66;
   --warn:#b86e00;
   --line:#d5ddd7;
   --code:#0f1419;
@@ -445,13 +446,13 @@ export function renderBoardHtml(boardPath) {
   --radius-lg:12px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0f1419;--panel:#182028;--ink:#e3e9ee;--dim:#8b98a5;--acc:#4cc38a;--acc-ink:#07130d;--warn:#ffb454;--line:#2a343e;--code:#0b0f14;
+  --bg:#0f1419;--panel:#182028;--ink:#e3e9ee;--dim:#8b98a5;--acc:#8b98a5;--acc-ink:#07130d;--ok:#4fb07f;--warn:#ffb454;--line:#2a343e;--code:#0b0f14;
   --bg-card-hover:#222d37;
   --warn-bg:#241b0e;
   --scroll:rgba(255,255,255,.16);
   --scroll-hi:rgba(255,255,255,.32);
 }}
-:root[data-theme="dark"]{--bg:#0f1419;--panel:#182028;--ink:#e3e9ee;--dim:#8b98a5;--acc:#4cc38a;--acc-ink:#07130d;--warn:#ffb454;--line:#2a343e;--code:#0b0f14;--bg-card-hover:#222d37;--warn-bg:#241b0e;--scroll:rgba(255,255,255,.16);--scroll-hi:rgba(255,255,255,.32)}
+:root[data-theme="dark"]{--bg:#0f1419;--panel:#182028;--ink:#e3e9ee;--dim:#8b98a5;--acc:#8b98a5;--acc-ink:#07130d;--ok:#4fb07f;--warn:#ffb454;--line:#2a343e;--code:#0b0f14;--bg-card-hover:#222d37;--warn-bg:#241b0e;--scroll:rgba(255,255,255,.16);--scroll-hi:rgba(255,255,255,.32)}
 *{box-sizing:border-box}
 * {
   scrollbar-width: thin;
@@ -576,6 +577,9 @@ button:disabled{opacity:.4;cursor:default}
 
 /* Log and terminal boxes */
 .log{font-family:var(--mono);font-size:11px;white-space:pre-wrap;background:var(--code);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);color:var(--code-ink);max-height:250px;overflow-y:auto}
+/* Launch output is empty until an action writes to it — hide the black
+   terminal box entirely when blank instead of showing an empty bar. */
+#launch-out:empty{display:none}
 
 /* Chat Thread & Launch UI */
 .thread-hero{margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
@@ -1266,7 +1270,7 @@ async function refresh(){
     Array.prototype.forEach.call(document.querySelectorAll('[data-approve]'),function(b){b.onclick=function(){decide(b.getAttribute('data-approve'),'approved');};});
     Array.prototype.forEach.call(document.querySelectorAll('[data-deny]'),function(b){b.onclick=function(){decide(b.getAttribute('data-deny'),'denied');};});
     refreshLaunchMeta();
-    try{var _cd=document.getElementById('conn-dot');if(_cd){_cd.style.color='#38d39f';_cd.title='connected: last poll ok';}}catch(_){}
+    try{var _cd=document.getElementById('conn-dot');if(_cd){_cd.style.color='var(--ok)';_cd.title='connected: last poll ok';}}catch(_){}
   }catch(e){try{var _cd2=document.getElementById('conn-dot');if(_cd2){_cd2.style.color='#f85149';_cd2.title='poll failed';}}catch(_){}say('refresh failed: '+e.message);}
 }
 async function ackOne(id){
