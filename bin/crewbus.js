@@ -4880,13 +4880,14 @@ async function cmdServe(args) {
   ensureBoardCliShim(d);
   const host = getFlag(args, "--host") || "127.0.0.1";
   const port = Number(getFlag(args, "--port") || 0);
+  const relaySecret = relaySecretFromArgs(args);
   // Desktop plug-and-play: loopback boots auto-provision a `lead` operator
   // identity (first boot only) so the dashboard launch UI works with zero
-  // terminal steps. CLI boards are untouched (lead already exists there).
-  // Non-loopback binds never auto-provision.
-  try { ensureLoopbackOperator(d, host); } catch {}
-  if (!(port >= 0 && port < 65536)) fail("--port must be 0-65535 (0 = random)");
-  const relaySecret = relaySecretFromArgs(args);
+  // terminal steps. Relays with an explicit secret are CLI/fleet boards
+  // and do not auto-provision. Non-loopback binds never auto-provision.
+  if (!relaySecret) {
+    try { ensureLoopbackOperator(d, host); } catch {}
+  }
   const remote = !isLoopbackHost(host);
   const allowRemoteSpawn = args.includes("--allow-remote-spawn");
   // Phase 1b: opening remote spawn/kill is admin-gated when a caller identity

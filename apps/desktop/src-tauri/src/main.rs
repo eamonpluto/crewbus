@@ -353,7 +353,7 @@ fn urlencoding_encode(s: &str) -> String {
 // both paths learn the random --port 0 port identically.
 async fn learn_sidecar_url(
     handle: tauri::AppHandle,
-    mut rx: tauri_plugin_shell::process::CommandEventReceiver,
+    mut rx: tauri::async_runtime::Receiver<CommandEvent>,
 ) {
     let note = |status: &str, detail: String| {
         if let Ok(mut s) = handle.state::<SidecarState>().status.lock() {
@@ -657,6 +657,7 @@ fn main() {
                     }
                 };
                 let board_str = board_dir.to_string_lossy().into_owned();
+                let state: tauri::State<SidecarState> = handle.state();
                 // Remember which board this boot serves (board_status).
                 if let Ok(mut b) = state.board.lock() {
                     *b = Some(board_str.clone());
@@ -688,7 +689,6 @@ fn main() {
                         return;
                     }
                 };
-                let state: tauri::State<SidecarState> = handle.state();
                 match state.child.lock() {
                     Ok(mut guard) => *guard = Some(child),
                     Err(e) => {
