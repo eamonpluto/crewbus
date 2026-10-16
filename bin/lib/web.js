@@ -580,6 +580,7 @@ button:disabled{opacity:.4;cursor:default}
 /* Launch output is empty until an action writes to it — hide the black
    terminal box entirely when blank instead of showing an empty bar. */
 #launch-out:empty{display:none}
+#chat-events:empty,#launch-diff:empty{display:none}
 
 /* Chat Thread & Launch UI */
 .thread-hero{margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
@@ -592,7 +593,7 @@ button:disabled{opacity:.4;cursor:default}
 .chat-time{color:var(--dim)}
 
 /* Composer / Launch Box */
-.composer-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px;margin-top:16px;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
+.composer-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);padding:16px;margin-top:16px}
 .composer-harness-bar{margin-bottom:12px}
 .harness-pills{display:flex;gap:8px;flex-wrap:wrap}
 .harness-card{display:flex;flex-direction:column;gap:2px;padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);cursor:pointer;transition:all .15s ease;min-width:110px}
@@ -740,24 +741,13 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
     </header>
 
     <main id="view-container">
-      <!-- SECTION: LAUNCH & CHAT CONSOLE -->
+      <!-- SECTION: LAUNCH CONSOLE -->
       <section id="sec-launch" data-section="Launch">
-        <div class="thread-hero">
-          <div>
-            <h2 style="margin:0">Launch &amp; Chat</h2>
-            <div class="dim">Orchestrate coding agents with safety previews and real-time execution</div>
-          </div>
+        <div class="thread-hero" style="justify-content:flex-end">
           <div id="routes-line" class="routes-badge">routes: loading…</div>
         </div>
 
         <div class="chat-stream" id="chat-feed">
-          <div class="chat-msg system">
-            <div class="chat-header">
-              <span class="chat-author">CrewBus Studio</span>
-              <span class="chat-time">Active</span>
-            </div>
-            <div>Ready to dispatch autonomous coding agents for <code>${e(boardPath)}</code>. Configure your task below and preview execution plans before live boot.</div>
-          </div>
           <div id="chat-events"></div>
           <div id="launch-diff"></div>
           <div id="launch-out" class="log"></div>
@@ -771,13 +761,12 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
           </div>
 
           <div class="composer-config-row">
-            <span class="dim">Target:</span>
-            <input id="launch-to" size="14" placeholder="auto (or w-1)" title="Target worker name(s)">
-            <span class="dim">Count:</span>
+            <input id="launch-to" type="hidden" value="">
+            <span class="dim">No. of Agents:</span>
             <div class="stepper-wrap">
-              <button id="launch-count-minus" type="button" title="fewer workers">−</button>
-              <input id="launch-count" size="2" value="1">
-              <button id="launch-count-plus" type="button" title="more workers">+</button>
+              <button id="launch-count-minus" type="button" title="fewer agents">−</button>
+              <input id="launch-count" size="2" value="1" title="Number of agents">
+              <button id="launch-count-plus" type="button" title="more agents">+</button>
             </div>
             <span class="dim" style="margin-left:8px">Model:</span>
             <select id="launch-model" style="background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-size:12px">
@@ -1460,7 +1449,8 @@ async function doLaunch(dry){
     lf=lc.from; lt=lc.token;
   }
   if(!lf||!lt){out.textContent='starting up — identity not ready yet, retry in a moment';return;}
-  var to=document.getElementById('launch-to').value.trim();
+  var toEl=document.getElementById('launch-to');
+  var to=toEl?toEl.value.trim():'';
   var count=Number(document.getElementById('launch-count').value)||1;
   var selectedHarnesses = window.__selectedHarnesses && window.__selectedHarnesses.size ? Array.from(window.__selectedHarnesses) : (document.getElementById('launch-harness').value || 'claude').split(',').map(function(s){return s.trim();}).filter(Boolean);
   if(!selectedHarnesses.length)selectedHarnesses=['claude'];

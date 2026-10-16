@@ -86,7 +86,7 @@ code{overflow-wrap:anywhere}pre code{overflow-wrap:normal}
 <main>
 
 <h1>crewbus</h1>
-<p class="sub">A zero-dependency local DM bus for AI coding agents — v10.0.6 · package <code>crewbus</code> · <a href="https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml">CI status</a></p>
+<p class="sub">A zero-dependency local DM bus for AI coding agents — v10.0.8 · package <code>crewbus</code> · <a href="https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml">CI status</a></p>
 <p class="sub">Lead audience: developers running <strong>mixed-harness crews</strong> (opencode, Claude Code, Codex, Antigravity, grok-build, Cursor). <code>package.json</code> is the release version source of truth; <code>board.json</code>'s <code>version: 2</code> is the board <em>schema</em> version, not the release.</p>
 
 <h2 id="what">1 · What it is</h2>
@@ -299,6 +299,8 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 
 <h2 id="changes">16 · Changelog</h2>
 <ul>
+  <li><strong>10.0.8</strong> — patch release: Launch composer UI refinements (streamlined worker naming, clearer agent count stepper, flat composer card, clean launch console) &amp; desktop companion. Full text: <code>CHANGELOG.md ## 10.0.8</code>.</li>
+  <li><strong>10.0.7</strong> — patch release: design refresh and icon fix across desktop and mobile shells. Full text: <code>CHANGELOG.md ## 10.0.7</code>.</li>
   <li><strong>10.0.6</strong> — hotfix: a template-literal escape in the dashboard page killed the whole client script at parse time — fixed, with a regression test that syntax-checks the served page. Full text: <code>CHANGELOG.md ## 10.0.6</code>.</li>
   <li><strong>10.0.5</strong> — self-update command (<code>update [--check] [--yes] [--version x.y.z]</code> via your own npm config; checkouts refused with <code>git pull</code> guidance). Full text: <code>CHANGELOG.md ## 10.0.5</code>.</li>
   <li><strong>10.0.4</strong> — patch release: dashboard Briefs view + <code>GET /api/gather</code>, task-scoped spawn rosters, mobile brief/thread/watcher screens. Full text: <code>CHANGELOG.md ## 10.0.4</code>.</li>
@@ -344,7 +346,7 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 <h3>Mobile shell</h3>
 <p>Expo shell, remote-only v1 (see <code>apps/mobile/README.md</code>): pairs by QR scan, walks advertised + learned routes, offers triage/approvals/launch/fleet cards with an offline outbox that only retries on explicit tap. Triage groups inbox by brief thread; the Briefs screen shows one row per fan-out with tap-for-thread; a foreground watcher raises in-app alerts for approvals and dead workers.</p>
 
-<footer>crewbus documentation · v10.0.6 tree · zero dependencies, node ≥18 · MIT</footer>
+<footer>crewbus documentation · v10.0.8 tree · zero dependencies, node ≥18 · MIT</footer>
 
 </main>
 </div>

@@ -1,5 +1,14 @@
 # Changelog
 
+## 10.0.8 (2026-10-16)
+
+PATCH RELEASE: Launch composer UI refinements & desktop companion. No board-schema change (`board.json` stays v2).
+
+- **Streamlined Launch Composer**: Removed explicit worker target UI so all launches default to automatic agent naming (`w-1`, `w-2`, ...).
+- **Clearer agent count stepper**: Renamed 'Count' to 'No. of Agents' with improved tooltips for clarity.
+- **Flattened composer aesthetic**: Removed the box-shadow depth effect on the Launch Composer card for a clean, flat panel style.
+- **Cleaned launch console**: Removed redundant static headers ("Launch & Chat") and introductory welcome message ("CrewBus Studio") for a compact, distraction-free console.
+
 ## 10.0.7 (2026-10-14)
 
 PATCH RELEASE: Design refresh + icon fix. No board-schema change (`board.json` stays v2).
