@@ -300,15 +300,52 @@ fn validate_board_dir(raw: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn open_pair_window(app: tauri::AppHandle) -> Result<(), String> {
+async fn open_pair_window(app: tauri::AppHandle, dashboard: Option<String>) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("pair") {
         let _ = win.show();
         let _ = win.unminimize();
         let _ = win.set_focus();
+        // Plug-and-play pairing: hand the sidecar origin to pair.js via the
+        // ?dashboard= param so it can auto-mint a one-time pair URL on open
+        // (POST /api/pair-qr). Validate loopback http(s) before navigating —
+        // the pair window's CSP only allows loopback fetches anyway.
+        if let Some(db) = dashboard {
+            let db = db.trim().to_string();
+            let ok = db.starts_with("http://127.0.0.1")
+                || db.starts_with("http://localhost")
+                || db.starts_with("http://[::1]")
+                || db.starts_with("https://127.0.0.1")
+                || db.starts_with("https://localhost")
+                || db.starts_with("https://[::1]");
+            if ok {
+                let target = format!(
+                    "pair.html?dashboard={}",
+                    urlencoding_encode(&db)
+                );
+                let js = format!("location.replace({})", serde_json::to_string(&target).unwrap_or_else(|_| "\"pair.html\"".to_string()));
+                let _ = win.eval(&js);
+            }
+        }
         Ok(())
     } else {
         Err("pair window not found".to_string())
     }
+}
+
+// Minimal URL-encoding for the ?dashboard= query param (no external crate):
+// percent-encode everything outside the RFC 3986 unreserved set so Windows
+// backslashes and stray ampersands can never smuggle extra params.
+fn urlencoding_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 3);
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 // Shared boot-learner: watch sidecar stdout for the first loopback URL,

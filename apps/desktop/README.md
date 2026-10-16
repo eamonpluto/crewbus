@@ -28,6 +28,14 @@ popover shows the full path. Target codebase folder (CWD) is remembered
 server-side (`GET/POST /api/workspace` in `board.json.workspaceCwd`) so it
 survives the random-port origin wipe that clears per-origin localStorage.
 
+One-click mobile pairing (plug-and-play): the `pair` window auto-mints a
+one-time `crewbus://pair?…#abp-…` link on open via `POST /api/pair-qr`
+(loopback-only, same mint + audit as `relay pair qr`; secret stays in the
+#fragment, never logged/persisted). The shell passes the sidecar origin to
+the window (`?dashboard=`, loopback-validated in Rust + JS), so the QR
+renders with zero terminal steps. Paste-URL stays as the advanced/CLI
+fallback (relay setups). Each open mints a fresh single-use link (10m TTL).
+
 ## Releases (normie install)
 
 No node, no Rust, no terminal needed — the installer carries everything:

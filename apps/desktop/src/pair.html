@@ -75,8 +75,10 @@ button.primary:hover{background:var(--acc);filter:brightness(1.1);color:var(--ac
 </head>
 <body>
 <h2>Pair Mobile Client</h2>
-<p class="dim">Paste a <code>crewbus://pair</code> URL minted by
-<code>relay pair qr</code> or <code>serve --pair-qrcode</code> to display a scannable QR code for the mobile client.</p>
+<p class="dim">A one-time pairing link is minted automatically from the local
+board — scan the QR with CrewBus Mobile. (Advanced: paste a
+<code>crewbus://pair</code> URL from <code>relay pair qr</code> or
+<code>serve --pair-qrcode</code> to render it instead.)</p>
 
 <div id="qr-wrap">
   <div id="qr" aria-label="pairing QR">QR code will appear here after rendering</div>

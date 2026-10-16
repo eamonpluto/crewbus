@@ -117,3 +117,47 @@ if (renderBtn) {
 if (clearBtn) {
   clearBtn.addEventListener('click', clearAll);
 }
+
+// Plug-and-play auto-mint: when the shell passes ?dashboard=<sidecar-origin>
+// (open_pair_window command), mint a one-time pair URL via POST
+// /api/pair-qr on open and render the QR immediately — no terminal, no paste.
+// Loopback-validated (the pair window CSP only allows loopback fetches
+// anyway). Manual paste stays as the advanced/CLI fallback.
+function dashboardParam() {
+  try {
+    return new URLSearchParams(window.location.search).get('dashboard') || '';
+  } catch (_) { return ''; }
+}
+
+async function autoMint(base) {
+  say('minting a one-time pairing link…');
+  try {
+    var r = await fetch(base.replace(/\/+$/, '') + '/api/pair-qr', { method: 'POST' });
+    var j = null;
+    try { j = await r.json(); } catch (_) {}
+    if (!r.ok || !j || !j.ok || !j.pairUrl) {
+      say('auto-mint failed (' + (j && j.error ? j.error : ('HTTP ' + r.status)) + ') — paste a pair URL manually', true);
+      return;
+    }
+    if (box) box.value = j.pairUrl;
+    // Reuse the shared render path (parse + hygiene + QR).
+    if (renderBtn) renderBtn.click();
+    var exp = j.expiresAt ? new Date(j.expiresAt) : null;
+    say('QR ready — scan with CrewBus Mobile.' + (exp ? ' Link expires ' + exp.toLocaleTimeString() + ' (single-use).' : ''));
+  } catch (e) {
+    say('auto-mint failed: ' + String((e && e.message) || e) + ' — paste a pair URL manually', true);
+  }
+}
+
+(function bootAutoMint() {
+  var base = dashboardParam();
+  if (!base) return; // manual-only mode (no ?dashboard= — e.g. dev tab)
+  // Validate loopback: the pair window must only ever fetch the local
+  // sidecar (mirrors the shell's isLoopbackUrl gate; CSP enforces it too).
+  var u = null;
+  try { u = new URL(base); } catch (_) { return; }
+  var host = u.hostname;
+  var loop = host === '127.0.0.1' || host === 'localhost' || host === '[::1]' || host === '::1';
+  if ((u.protocol !== 'http:' && u.protocol !== 'https:') || !loop) return;
+  autoMint(base);
+})();

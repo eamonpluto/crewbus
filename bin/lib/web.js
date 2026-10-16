@@ -23,7 +23,8 @@ import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buil
 import { groupTelemetryData, collectBatch, gatherTelemetry, listBatches } from "./groups.js";
 import { httpJson } from "./sync.js";
 import { readChainRecords, verifyChainRecords, appendChainRecord, readHold, readBoardQuotas } from "./export.js";
-import { launchDrivers, detectHarnessBinaries, validateLaunchPlan, advertiseEnv, HARNESS_MODELS, getDiscoveredModels, refreshDiscoveredModels } from "./launch.js";
+import { launchDrivers, detectHarnessBinaries, validateLaunchPlan, advertiseEnv, buildPairUrl, HARNESS_MODELS, getDiscoveredModels, refreshDiscoveredModels } from "./launch.js";
+import { newPairToken, pairingPath, readRelayState } from "./relay.js";
 
 export function escapeHtml(s) {
   return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, (c) => ({
@@ -665,7 +666,7 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
         <button type="button" class="pop-btn" id="switch-board-btn" title="Use another folder's board (e.g. a CLI project): restarts the sidecar against <folder>/.crewbus"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg> Switch Board…</button>
         <button type="button" class="pop-btn" id="reset-board-btn" title="Back to the default desktop board"> Use Default Board</button>
         <div class="pop-path dim" id="board-switch-msg" style="display:none"></div>
-        <button type="button" class="pop-btn" id="pop-pair-btn" style="margin-top:8px"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Pair Mobile Client (QR)…</button>
+        <button type="button" class="pop-btn" id="pop-pair-btn" style="margin-top:8px" title="One-click: mints a one-time pairing link and shows the QR automatically"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Pair Mobile Client (QR)…</button>
         <button type="button" class="pop-btn" id="pop-install-cli-btn" style="margin-top:8px"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> Install 'crewbus' CLI in PATH</button>
       </div>
     </div>
@@ -1626,7 +1627,7 @@ function paletteActivate(m){
     else if(m.action==='copyboard'){copyBoardPath();}
     else if(m.action==='openfolder'){document.getElementById('open-folder-btn').click();}
     else if(m.action==='pairmobile'){
-      try{window.parent.postMessage({type:'crewbus:open-pair'},'*');}catch(_){}
+      try{window.parent.postMessage({type:'crewbus:open-pair', dashboard: location.origin},'*');}catch(_){}
       try{window.open('./pair.html','_blank','width=420,height=560');}catch(_){}
     }
     else if(m.action==='refresh'){refresh();}
@@ -1858,7 +1859,7 @@ function copyBoardPath(){
 document.getElementById('copy-board-btn').onclick=copyBoardPath;
 var ppb=document.getElementById('pop-pair-btn');
 if(ppb){ppb.onclick=function(){
-  try{window.parent.postMessage({type:'crewbus:open-pair'},'*');}catch(_){}
+  try{window.parent.postMessage({type:'crewbus:open-pair', dashboard: location.origin},'*');}catch(_){}
   try{window.open('./pair.html','_blank','width=420,height=560');}catch(_){}
 };}
 var picb=document.getElementById('pop-install-cli-btn');
@@ -2304,6 +2305,41 @@ export async function handleWebDashboardRoute(req, res, url, d) {
     } catch (err) {
       res.writeHead(500, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
       res.end(JSON.stringify({ ok: false, error: String(err && err.message ? err.message : err) }));
+    }
+    return true;
+  }
+  // One-click mobile pairing (plug-and-play): mint a one-time pair URL
+  // server-side and return it for immediate QR render. Loopback-only;
+  // same mint + audit as relay pair qr / serve --pair-qrcode. The dashboard
+  // pair window calls this on open, so normies never touch a terminal.
+  if (req.method === "POST" && url.pathname === "/api/pair-qr") {
+    const ip = req.socket.remoteAddress || "";
+    const isLoop = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1" || ip === "localhost";
+    if (!isLoop) {
+      res.writeHead(403, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "loopback only" }));
+      return true;
+    }
+    try {
+      const token = newPairToken();
+      const salt = newSalt();
+      const now = Date.now();
+      const ttlMs = 10 * 60 * 1000;
+      const doc = {
+        tokenHash: hashToken(token, salt), salt, label: "dashboard-oneclick",
+        createdBy: "lead", createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + ttlMs).toISOString(),
+      };
+      fs.mkdirSync(path.join(d.root, "pairing"), { recursive: true });
+      writeJson(pairingPath(d, doc.tokenHash), doc);
+      try { appendChainRecord(d, "lead", "pair", { label: "dashboard-oneclick", expiresAt: doc.expiresAt }); } catch {}
+      const envId = (readRelayState(d) && readRelayState(d).envId) || ("board:" + path.basename(d.root));
+      const pairUrl = buildPairUrl({ envId, routes: [], caps: ["hlc", "tombstones", "channels", "revoked", "holds", "launch"], pairToken: token });
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ ok: true, pairUrl, expiresAt: doc.expiresAt, envId }));
+    } catch (err) {
+      res.writeHead(500, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
     }
     return true;
   }

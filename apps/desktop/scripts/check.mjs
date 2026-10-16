@@ -218,6 +218,17 @@ ok(mainRsRel.includes('"logs"'), 'main.rs ensure_board_dir creates logs/ (operat
 ok(shellJs.includes('board-open') && shellJs.includes('switch_board'), 'src/main.js shell bridge opens the board switcher');
 ok(shellJs.includes('refreshShellBoard') && shellJs.includes('board_status'), 'src/main.js header shows the active board tail');
 
+// One-click mobile pairing: no terminal, no paste. The pair window
+// auto-mints via POST /api/pair-qr on open; paste stays as advanced fallback.
+ok(mainRsRel.includes('fn open_pair_window(app: tauri::AppHandle, dashboard: Option<String>)'), 'main.rs open_pair_window accepts a dashboard param for auto-mint');
+ok(mainRsRel.includes('urlencoding_encode'), 'main.rs percent-encodes the ?dashboard= param (no injection)');
+const pairJs = read('src/pair.js');
+ok(pairJs.includes('/api/pair-qr') && pairJs.includes('autoMint'), 'pair.js auto-mints a one-time pair URL on open');
+ok(pairJs.includes('dashboardParam') && pairJs.includes('location.search'), 'pair.js reads the ?dashboard= param from the shell');
+const webJs = read('../../bin/lib/web.js');
+ok(webJs.includes('/api/pair-qr') && webJs.includes('dashboard-oneclick'), 'web.js exposes POST /api/pair-qr (loopback-only, one-time)');
+ok(webJs.includes("type:'crewbus:open-pair', dashboard: location.origin"), 'dashboard pair button forwards its origin to the shell');
+
 if (failures > 0) {
   console.error(failures + ' check(s) FAILED');
   process.exit(1);

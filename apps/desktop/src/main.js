@@ -325,11 +325,15 @@ if (localEnv) {
 // Pair window: Tauri `pair` webview when available, else a plain tab.
 // The pair URL (crewbus://pair?...#abp-…) is handled in pair.js under
 // fragment-secret hygiene (never logged, never persisted, #fragment only).
-async function openPairWindow() {
+// Plug-and-play: pass the sidecar origin so pair.js auto-mints a one-time
+// link via POST /api/pair-qr on open — no terminal, no paste. Falls back to
+// the shell's current dashboardUrl when no explicit arg is given.
+async function openPairWindow(explicitDashboard) {
+  var dash = String(explicitDashboard || dashboardUrl || '').trim();
   try {
     var invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
     if (typeof invoke === 'function') {
-      await invoke('open_pair_window');
+      await invoke('open_pair_window', dash ? { dashboard: dash } : {});
       return;
     }
   } catch (_) { }
@@ -348,7 +352,7 @@ async function openPairWindow() {
     }
   } catch (_) { }
 
-  window.open('./pair.html', '_blank', 'width=420,height=560');
+  window.open('./pair.html' + (dash ? ('?dashboard=' + encodeURIComponent(dash)) : ''), '_blank', 'width=420,height=560');
 }
 
 if (pairBtn) {
@@ -410,6 +414,6 @@ if (boardBtn) {
 
 window.addEventListener('message', function (ev) {
   if (ev.data && ev.data.type === 'crewbus:open-pair') {
-    openPairWindow().catch(function () {});
+    openPairWindow(ev.data.dashboard || '').catch(function () {});
   }
 });
