@@ -803,7 +803,7 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
             <div class="launch-identity" title="Desktop launches as the board owner (auto-provisioned) — no token step needed">
               <span class="dim">launching as <b id="launch-as">lead</b> (auto)</span>
               <input id="launch-from" type="hidden" value="">
-              <input id="launch-token" type="hidden" value="">
+              <input id="launch-token" type="password" style="display:none" value="">
             </div>
             <details class="tech-details" id="launch-identity-advanced" style="margin:0">
               <summary class="dim" style="cursor:pointer;font-size:11px">advanced: use a different identity</summary>

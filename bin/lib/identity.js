@@ -416,6 +416,7 @@ export function ensureLoopbackOperator(d, host) {
   let rec = null;
   try { rec = readAgent(d, "lead"); } catch { rec = null; }
   if (rec && (rec.tokenHash || rec.token)) return null; // already provisioned
+  if (countAgentRecords(d) > 0) return null; // board already has registered agents
   const fresh = mintToken();
   const salt = newSalt();
   const now = new Date().toISOString();
