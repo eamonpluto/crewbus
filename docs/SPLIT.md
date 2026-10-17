@@ -2,10 +2,10 @@
 
 Status: landed. `bin/crewbus.js` is a dispatcher that intentionally
 retains the `cmd*` wrappers, `USAGE`, `main()`, and the opencode
-tool/plugin embeds; domain logic lives in the 12 lib modules
+tool/plugin embeds; domain logic lives in the 13 lib modules
 (`bin/lib/` holds channels, export, groups, identity, launch, mail,
-relay, spawn, store, sync, tokenfile, web; import block,
-`bin/crewbus.js` lines 44–55). No behavior change is intended, with one deliberate exception recorded in CHANGELOG (parseRecipients full-version canonicalization).
+relay, spawn, store, sync, tokenfile, web, workbench; import block,
+`bin/crewbus.js` lines 44–56). No behavior change is intended, with one deliberate exception recorded in CHANGELOG (parseRecipients full-version canonicalization).
 
 ## Module map
 
@@ -23,9 +23,10 @@ relay, spawn, store, sync, tokenfile, web; import block,
 | `bin/lib/channels.js` | Shared channels + locks: log IO, per-reader cursors, digest/summarize, group mirrors, advisory locks, channel text-merge | `appendChannelPost`, `readChannelPosts`, `tailChannelPosts`, `parseChannelText`, `mergeChannelText`, `mirrorToGroupChannels`, `acquireLockDoc`, `releaseLockDoc` |
 | `bin/lib/web.js` | Dashboard + API: snapshots, HTML render, ack/kill/launch handlers, `cmdWeb`; control-plane additions: `handleApiLaunch`, `POST /api/launch`, `GET /api/harnesses\|routes\|holds\|quotas`, Holds/Quotas/AppRoot sections | `boardSnapshot`, `fleetSnapshot`, `channelsSnapshot`, `resultsSnapshot`, `auditSnapshot`, `renderBoardHtml`, `handleApiAck`, `handleApiKill`, `handleApiLaunch`, `cmdWeb` |
 | `bin/lib/tokenfile.js` | Token-file convention for long runs: save/re-read agent tokens across compaction/restart amnesia (0600 best-effort); standalone, no local imports (cycle-free) | `tokenFilePath`, `saveTokenFile`, `loadTokenFile` |
+| `bin/lib/workbench.js` | Artifacts + lessons (compound-memory layer): artifact objects with deps/adoption/verification edges, scoped lessons, spawn-brief Workbench block, gather metrics; pure helpers, monolith keeps `cmdArtifact`/`cmdLesson` | `publishArtifact`, `adoptArtifact`, `verifyArtifact`, `readArtifactById`, `listArtifacts`, `listLessons`, `postLesson`, `selectLessons`, `renderWorkbenchBlock`, `workbenchMetrics`, `cleanArtifactId`, `cleanLessonScope`, `parseArtifactDeps`, `ARTIFACT_ID_RE` |
 
 Full export lists: see the import block at the top of `bin/crewbus.js`
-(lines 44–55). Entry-point `cmd*` functions (e.g. `cmdSend`, `cmdSync`,
+(lines 44–56). Entry-point `cmd*` functions (e.g. `cmdSend`, `cmdSync`,
 `cmdServe`) stay in the monolith; lib modules carry the computation helpers
 those verbs call.
 

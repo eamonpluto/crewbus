@@ -1,4 +1,4 @@
-# crewbus v10.0.8 — DM bus
+# crewbus v10.0.9 — DM bus
 
 [![CI](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml/badge.svg)](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml)
 
@@ -55,7 +55,7 @@ env overrides below.)
 Layout: `board.json`, `agents/<name>.json`, `dm/<recipient>/<id>.json`,
 `delivered/<recipient>/<id>.json` (push markers, written by the plugin).
 
-Versions: `package.json` (currently 10.0.8) is the source of truth for the
+Versions: `package.json` (currently 10.0.9) is the source of truth for the
 release version. `board.json`'s `version: 2` is the **board schema version**
 (a different number on purpose — do not "align" them). New to the project?
 Start with `docs/QUICKSTART.md` (5 minutes).
@@ -138,7 +138,9 @@ reply across inboxes — feed it to a reducer agent or aggregate it yourself.
 Group management is CLI-only; agents address groups via `--to-group`
 (CLI/spawn), `to_group` (MCP, `dm-send` tool). Unknown groups fail loudly so
 a typo never half-sends. `gather` also prints a telemetry footer
-(msgs, ~tokens as chars/4, contributing groups).
+(msgs, ~tokens as chars/4, contributing groups) plus **workbench
+metrics** — artifacts referenced, feed-forward edges, adopted, verified
+(`--json` adds a `workbench` object).
 
 Outcomes are native (replaces the old one-group-per-approach +
 `RESULT:`-subject + verifier-agent + `gather --json` script workaround):
@@ -312,10 +314,37 @@ it. Leads ack workers' replies, and `spawn status` reports the ack state:
 crewbus ack --from ui-lead --id msg-260924-081159-dedcc7  # handled it
 crewbus ack --from ui-lead --all                          # inbox zero
 crewbus ack --from ui-lead --id <reply> --verify "node test/check.mjs"  # verifier hook: exit 0 acks+stores verified:true, else no ack (docs/VERIFIER.md)
-crewbus send --from w1 --to ui-lead --reply <brief> --artifact out/w1.json --body "done"  # checkable artifact, shown by inbox/gather/thread
-crewbus inbox --from ui-lead --unacked                    # only open items
+crewbus send --from w1 --to ui-lead --reply <brief> --artifact out/w1.json --needs-by 2h --body "done"  # artifact + handoff deadline
+crewbus inbox --from ui-lead --unacked --overdue          # still-open briefs past --needs-by ([OVERDUE] in digests)
 crewbus thread --id msg-260924-081159-dedcc7              # brief + all replies, across inboxes
 ```
+
+## Workbench (output that compounds)
+
+`artifact publish|list|show|adopt|verify` keeps spent output load-bearing
+for teammates: artifacts are board objects (a `--path` reference + summary
++ deps edges, never inline data) with adoption and verification recorded
+*on the object*, so the next crew starts where this one ended. `lesson
+post|list` stores scoped one-liners that later spawn briefs auto-select
+into a **Workbench block** (this board's groups + global scope, freshest
+first, both bounded) — a lesson learned once need not be learned again:
+
+```powershell
+crewbus artifact publish --from alice --path out/parser.md --summary "40ms parse table" --deps <art-id>  # deps must exist; publish upstream first
+crewbus artifact list --from bob                                        # what exists, with adoption/verification state
+crewbus artifact adopt --from bob --id <art-id> --note "wired into prefetch"  # records move with the thing
+crewbus lesson post --from alice --scope ui-crew --text "Windows spawns need a real workdir root, not a drive-relative path."
+crewbus gather --batch <batch-id>                                       # footer adds: N artifact(s) referenced, N feed-forward edge(s), N adopted, N verified
+```
+
+`verify` pairs with the verifier hook — checker-verified claims only; a
+bare "works" incident with no captured output is inadmissible (see
+`docs/VERIFIER.md`). Feed-forward edges (a downstream agent consumed an
+artifact its producer did not post) make cross-crew reuse auditable.
+Handoff deadlines (`send`/`spawn --needs-by 30m`) turn stale unclaimed
+briefs into a filter instead of a feeling: `inbox --overdue` (often
+paired with `--unacked`) lists the retry-able set, `needs-by:` shows on
+message reads, and digests tag late items `[OVERDUE]`.
 
 ## Fanning work out (the DM *is* the task)
 
@@ -389,7 +418,11 @@ counted — `--max-spawn N` overrides it when you have the compute.
 
 Caps at 20 workers/call by default (`--max-spawn N` overrides — a whole harness each, so budget it like compute); bigger crews
 get a broadcast DM for live agents to pick up. `--to @all` is refused
-(membership is dynamic). Children run with your user privileges — same trust
+(membership is dynamic). Every spawned brief carries a **Workbench block**
+(board lessons matching the crew's scopes + recent artifacts, both
+bounded) and pins the reply lane to the literal `--to <lead>` so
+auto-named workers never invent recipient names. Children run with your
+user privileges — same trust
 boundary as hooks. Detached children can't answer permission prompts, hence
 the defaults above; `--auto` means each harness's fully-unattended mode
 (dangerous — isolated runners only).
@@ -657,7 +690,7 @@ primaries by weight (`serve --weight`, `crew survey`, `crew dispatch`
 ## Publishing (maintainer)
 
 ```powershell
-npm test          # 20 suites (smoke + harness + compact + tokenfile + digest + control-plane + launch + web-launch + pair-api + web-panel + web-approot + client-runtime + runtime-wiring + desktop-sidecar + mobile-client + approvals x3 + fault-injection + integration), all must pass
+npm test          # 24 suites (smoke + harness + opencode-respawn + compact + tokenfile + digest + workbench + control-plane + launch + pair-api + web-launch + web-panel + web-approot + client-runtime + runtime-wiring + desktop-sidecar + mobile-client + holds-quotas + grok-hooks + approval-protocol + approvals-init + approvals-web + fault-injection + integration), all must pass
 npm publish       # ships bin/ + opencode/ + docs (see "files" in package.json)
 ```
 
@@ -668,7 +701,7 @@ and verify with `npm test`. `init` prefers the repo files when run from a
 checkout, so the embed only matters for `npm i -g` installs.
 
 Code layout: `bin/crewbus.js` is a dispatcher + `cmd*` wrappers; domain
-logic lives in `bin/lib/` (12 modules). See `docs/SPLIT.md` for the module
+logic lives in `bin/lib/` (13 modules). See `docs/SPLIT.md` for the module
 map, dependency rules, and how to add a command.
 
 After publishing, projects can skip the checkout entirely:

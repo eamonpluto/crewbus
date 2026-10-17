@@ -1,5 +1,17 @@
 # Changelog
 
+## 10.0.9 (2026-10-17)
+
+MINOR RELEASE: Workbench compound-memory layer (artifacts, lessons, needs-by) + opencode respawn capture fix. No board-schema change (`board.json` stays v2); the additive `artifacts/` and `lessons/` directories appear on first write — old boards pick them up lazily, nothing to migrate.
+
+- **Artifacts with adoption (L2)**: `crewbus artifact publish|list|show|adopt|verify`. Spent outputs compound instead of dissipating: `publish --path <path-or-url> [--summary ...] [--deps <art-id,art-id>]` records the reference on the board (deps must exist — publish the dependency first); `adopt`/`verify` stamp the artifact object itself (`adoptedBy`/`verifiedBy` entries with ≤200-char notes), so records move *with the thing* as it gets reused across crews and tasks. Dependency records form feed-forward edges (a message consumed by someone other than the producer), so listing artifacts shows what shipped and what downstream crews actually picked up. `verify` rides the existing `ack --verify` execution ground truth — `works` incidents are inadmissible without output.
+- **Lessons paid forward (L3)**: `crewbus lesson post --scope <group-or-task> --text "..."` (≤800 chars; scope missing = `global`) stores one-liners in `lessons/`; later spawn briefs auto-select matching lessons (this board's groups + global, freshest first, ≤8) into a **Workbench block** alongside recent artifacts. A lesson learned once need not be learned again. Selecting, not caching: nothing rides a cache TTL, and lessons can expire by budget, never by staleness (a strong lesson is more load-bearing than a big one).
+- **Handoff deadlines (L4)**: `send`/`spawn` `--needs-by 30m` stamps a handoff deadline on the DM (positive duration) — *if* an unclaimed brief still matters, deadline math makes it a filter rather than a feeling. `crewbus inbox --overdue` lists still-open briefs past deadline (paired shape `--overdue --unacked` = retry-able work; overdue `--checkpoint` progress notes are skipped — they never need ack). `inbox` shows a `needs-by:` line; digests tag late items with `[OVERDUE]`. Workers triage unacknowledged handoffs on awaken instead of re-polling.
+- **Exact-recipient pinning in spawn briefs**: briefs now say "send to EXACTLY `--to <lead>`" — never invent a recipient name like `<worker>-lead` or `lead` — killing the hallucinated-reply-lane failure mode in auto-named crews.
+- **Gather workbench metrics**: the reduce footer adds workbench counters (`-- workbench: 3 artifact(s) referenced, 4 feed-forward edge(s), 1 adopted, 1 verified --`), and JSON includes a `workbench` metric; an empty board prints a unique "no artifacts referenced" additive line so replayed gathers never wrong-foot a reducer.
+- **Respawn session-capture fix (L1 repair)**: opencode spawn boots the real exe with argv verbatim (no `cmd /c` shim — the session id capture line is no longer swallowed by shell buffering); when the log ends up empty, the spawn record falls back to reading the opencode SQLite session DB (`~/.local/share/opencode/opencode.db`, read-only). `crewbus doctor --harness opencode` now checks opencode drift (binary present, `--format json` supported, session DB readable), so `respawn` reliably lands its catch-up brief in the same conversation.
+- New tests: `test/crewbus.workbench.mjs` (33 checks) + `test/crewbus.opencode-respawn.mjs`.
+
 ## 10.0.8 (2026-10-16)
 
 PATCH RELEASE: Launch composer UI refinements & desktop companion. No board-schema change (`board.json` stays v2).
