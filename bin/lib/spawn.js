@@ -537,12 +537,12 @@ function opencodeSqliteModule() {
 }
 
 // opencode normalizes paths to forward slashes and (verified) stores
-// 'C:/Users/...'; compare case-insensitively on Windows, where drive and
-// segment casing disagree freely.
+// 'C:/Users/...'; compare lowercased on every platform. Both sides derive
+// from the same spawn cwd wearing two spellings (Windows drive/segment
+// casing disagrees freely; opencode's own normalization may recase
+// elsewhere) — the matcher is about spellings, not filesystem identity.
 function normalizeWorkspaceDir(dir) {
-  let s = String(dir || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
-  if (process.platform === "win32") s = s.toLowerCase();
-  return s;
+  return String(dir || "").trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
 // Best-effort opencode.db probe: { name, cwd, spawnedAt, dbPath? } -> id|null.
