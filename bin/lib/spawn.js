@@ -22,6 +22,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import os from "node:os";
+import { createRequire } from "node:module";
 import { execFileSync, spawn } from "node:child_process";
 import { fail, readJson, writeJson, cleanBranchPrefix } from "./store.js";
 import { touchAgent } from "./identity.js";
@@ -231,6 +232,43 @@ export function buildCrewContext({ name, from, subject, groups, myGroups, offTas
   return out;
 }
 
+// Resolve the real opencode binary from PATH, once per process. npm installs
+// expose cmd/bash/ps1 shims that shell out to the real exe; running through
+// them (the old `shell: true` path) drags the Bun binary into cmd.exe, which
+// block-buffers stdout in console-less detached contexts — a hard kill then
+// drops the buffer and the worker log never reveals the session id. Each shim
+// embeds its target path (cmd: "%dp0%\node_modules\...\opencode.exe", shims:
+// "$basedir/node_modules/...\opencode.exe"), so extract it, verify the file
+// exists, and memoize. Returns the exe path, or null when resolution fails —
+// callers fall back to the shim invocation they always used.
+let _opencodeExe = undefined; // undefined = unresolved; string | null after
+export function resolveOpencodeExe() {
+  if (_opencodeExe !== undefined) return _opencodeExe;
+  _opencodeExe = null;
+  try {
+    const out = execFileSync(process.platform === "win32" ? "where" : "which", ["opencode"], { encoding: "utf8", shell: true, stdio: ["ignore", "pipe", "ignore"], timeout: 10000 });
+    for (const raw of String(out || "").split(/\r?\n/)) {
+      const shim = raw.trim();
+      if (!shim) continue;
+      let target = shim;
+      if (process.platform === "win32" && !/\.exe$/i.test(shim)) {
+        try {
+          const m = /"([^"\n]*?\.exe)"/i.exec(fs.readFileSync(shim, "utf8"));
+          if (m) target = m[1].replace(/%~?dp0%/gi, path.dirname(shim)).replace(/\$basedir/gi, path.dirname(shim));
+        } catch {}
+      }
+      target = path.resolve(target);
+      try {
+        if (fs.existsSync(target) && fs.statSync(target).isFile() && (process.platform === "win32" ? /\.exe$/i.test(target) : true)) {
+          _opencodeExe = target;
+          break;
+        }
+      } catch {}
+    }
+  } catch {}
+  return _opencodeExe;
+}
+
 export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt, sessionId }) { // line 4114
   const quoteFree = (s) => String(s).replace(/"/g, "'");
   if (harness === "opencode") {
@@ -243,6 +281,11 @@ export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowToo
     // extractHarnessSessionId / syncWorkerSession).
     oargs.push("--format", "json");
     oargs.push(shortMsg);
+    // The resolved real exe runs with shell:false: output streams to the log
+    // from byte one (no cmd.exe buffering) and the spawned pid IS the
+    // harness process, so kill semantics stay honest too.
+    const exe = resolveOpencodeExe();
+    if (exe) return { exe, args: oargs, shell: false };
     return { exe: "opencode", args: oargs, shell: true };
   }
   if (harness === "claude") {
@@ -315,6 +358,12 @@ export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowToo
 // cursor `--resume`. Generic has no session continuity: plain fresh boot of
 // the catch-up brief. File/stdin plumbing mirrors buildSpawnTarget.
 export function buildRespawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt, sessionId }) { // respawn slice 2
+  // No captured session id (generic, or the respawn --fresh fallback when a
+  // harness id could not be captured): plain fresh boot of the catch-up
+  // brief — the same command shape as spawn.
+  if (!sessionId) {
+    return buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt });
+  }
   if (harness === "codex") {
     const base = buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt });
     // Point at the catch-up file (which links the original brief), not the
@@ -337,9 +386,13 @@ export function buildRespawnTarget({ harness, cmd, model, auto, maxTurns, allowT
 }
 
 export function buildRespawnBrief({ name, attempt, origPromptPath, briefId, harnessSessionId, harness, lead, extraBody }) { // respawn slice 2
+  // --fresh respawn (opencode with no captured id) boots fresh like generic;
+  // the wording must not claim "prior context intact" when there is none.
   const resumed = harness === "generic"
     ? "fresh session (generic harness has no session continuity — no prior context)"
-    : `resumed ${harness} session ${harnessSessionId} (prior context intact)`;
+    : !harnessSessionId && harness === "opencode"
+      ? "fresh session (opencode session id could not be captured; brief + checkpoints are your memory)"
+      : `resumed ${harness} session ${harnessSessionId} (prior context intact)`;
   const lines = [
     `You are '${name}': this is restart attempt ${attempt} (${resumed}). Your previous process died.`,
     ``,
@@ -452,6 +505,115 @@ export function extractHarnessSessionId(harness, text) { // respawn slice 1
   return null;
 }
 
+// ----------------------------------------------------------- opencode storage fallback
+// opencode.exe (a Bun binary) buffers ALL stdout when run through the cmd.exe
+// wrapper in a console-less detached context; a hard kill drops the buffer, so
+// the worker log can stay empty and the log-scan capture above never fires.
+// opencode 1.19+ independently persists every session to its SQLite database
+// (WAL) the moment a run starts — on every platform at
+// `%USERPROFILE%\.local\share\opencode\opencode.db` — with the exact spawn
+// marker `--title crewbus:<name>` (buildSpawnTarget) and the worker cwd in
+// `directory` (forward slashes). node:sqlite ships with Node >= 22 (repo floor
+// is 18): every failure below degrades SILENTLY to log-scan-only.
+let _sqliteModule = undefined; // undefined = not probed; object or null after
+function opencodeSqliteModule() {
+  if (_sqliteModule !== undefined) return _sqliteModule;
+  _sqliteModule = null;
+  // Dynamic import caches the module when its promise settles; the sync
+  // require keeps the first (possibly pre-microtask) probe working. Missing
+  // builtin (Node < 22) rejects — caught, cached as unavailable.
+  import("node:sqlite").then(
+    (m) => { _sqliteModule = m && typeof m.DatabaseSync === "function" ? m : null; },
+    () => {}
+  );
+  try {
+    const req = createRequire(import.meta.url);
+    const m = req("node:sqlite");
+    if (m && typeof m.DatabaseSync === "function") _sqliteModule = m;
+  } catch {}
+  return _sqliteModule;
+}
+
+// opencode normalizes paths to forward slashes and (verified) stores
+// 'C:/Users/...'; compare case-insensitively on Windows, where drive and
+// segment casing disagree freely.
+function normalizeWorkspaceDir(dir) {
+  let s = String(dir || "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  if (process.platform === "win32") s = s.toLowerCase();
+  return s;
+}
+
+// Best-effort opencode.db probe: { name, cwd, spawnedAt, dbPath? } -> id|null.
+// Read-only (the WAL DB is opened readOnly whenever the Node build supports
+// it); every failure returns null so the caller just stays log-scan-only. The
+// 5-minute lookback from the spawn time guards title reuse across runs;
+// ordering picks the newest row inside the window.
+export function probeOpencodeStorage({ name, cwd, spawnedAt, dbPath } = {}) {
+  try {
+    const clean = String(name || "").trim();
+    if (!clean || !cwd) return null;
+    const birth = spawnedAt ? Date.parse(spawnedAt) : NaN;
+    if (Number.isNaN(birth)) return null; // no window -> refuse to guess
+    const mod = opencodeSqliteModule();
+    if (!mod || typeof mod.DatabaseSync !== "function") return null;
+    const dbFile = String(dbPath || process.env.OPENCODE_DB_PATH || path.join(os.homedir(), ".local", "share", "opencode", "opencode.db"));
+    if (!fs.existsSync(dbFile)) return null;
+    let db = null;
+    try {
+      db = new mod.DatabaseSync(dbFile, { readOnly: true });
+    } catch {
+      db = null;
+    }
+    if (!db) {
+      try { db = new mod.DatabaseSync(dbFile); } catch { return null; }
+    }
+    // Directory is filtered in JS, not SQL: sqlite `=` is case-sensitive and
+    // the row spelling may disagree in case with the recorded cwd.
+    let rows = [];
+    try {
+      rows = db.prepare("SELECT id, time_created, directory FROM session WHERE title = ? ORDER BY time_created DESC").all(`crewbus:${clean}`);
+    } catch {
+      // schema drift (doctor guards this with PRAGMA table_info(session))
+      try { db.close(); } catch {}
+      return null;
+    }
+    try { db.close(); } catch {}
+    const want = normalizeWorkspaceDir(cwd);
+    const floor = birth - 5 * 60 * 1000;
+    for (const row of rows) {
+      if (!row || typeof row.id !== "string" || !row.id.trim()) continue;
+      if (normalizeWorkspaceDir(row.directory) !== want) continue;
+      const t = typeof row.time_created === "bigint" ? Number(row.time_created) : row.time_created;
+      const at = typeof t === "number" ? (t > 1e12 ? t : t * 1000) : Date.parse(String(t));
+      if (Number.isNaN(at) || at < floor) continue;
+      return row.id.trim().slice(0, 200);
+    }
+  } catch {}
+  return null;
+}
+
+// Doctor support: can the storage fallback read session rows at all?
+// One of "ok" | "drift" | "no-db" | "no-sqlite" | "error". Never throws.
+export function opencodeStorageStatus(dbPath) {
+  const p = String(dbPath || process.env.OPENCODE_DB_PATH || path.join(os.homedir(), ".local", "share", "opencode", "opencode.db"));
+  const mod = opencodeSqliteModule();
+  const sqliteAvailable = !!mod && typeof mod.DatabaseSync === "function";
+  if (!fs.existsSync(p)) return { status: "no-db", dbPath: p, sqliteAvailable };
+  if (!sqliteAvailable) return { status: "no-sqlite", dbPath: p, sqliteAvailable: false };
+  try {
+    const db = new mod.DatabaseSync(p, { readOnly: true });
+    try {
+      const cols = db.prepare("PRAGMA table_info(session)").all().map((c) => c && c.name);
+      const ok = cols.includes("id") && cols.includes("title") && cols.includes("directory") && cols.includes("time_created");
+      return { status: ok ? "ok" : "drift", dbPath: p, sqliteAvailable: true };
+    } finally {
+      try { db.close(); } catch {}
+    }
+  } catch (e) {
+    return { status: "error", dbPath: p, sqliteAvailable: true, detail: String((e && (e.message || e)) || "").slice(0, 120) };
+  }
+}
+
 // Worker-session binding lives beside the agent doc (not inside it) so
 // presence heartbeats — which rewrite agent docs field-by-field in five
 // places — can never wipe a captured id. Machine-local like pids: never
@@ -516,16 +678,27 @@ function readLogTail(p, maxBytes) {
 // "preassigned-confirmed" (log corroborates the minted id),
 // "log" (found in the log, nothing minted), "log-override" (log disagrees
 // with the minted id — trust the log: the installed harness may have
-// ignored the pre-assign flag). Workers that never emit an id cost one
-// small stat per status call, never a scan. Never throws.
-export function syncWorkerSession(d, name, logPath) { // respawn slice 1
+// ignored the pre-assign flag), and "storage" (read from the harness's own
+// on-disk store when the log reveals nothing — see probeOpencodeStorage).
+// Workers that never emit an id cost one small stat per status call, never
+// a scan. Never throws.
+const STORAGE_PROBE_INTERVAL_MS = 30000;
+
+export function syncWorkerSession(d, name, logPath, storageProbe) { // respawn slice 1
   const prev = readWorkerSession(d, name);
   const lp = logPath || (prev && prev.logPath) || newestWorkerLog(d, name);
   if (!lp) return prev;
   const tail = readLogTail(lp, WORKER_SESSION_TAIL_BYTES);
   if (!tail) return prev;
-  if (prev && prev.logPath === lp && prev.checkedSize === tail.size && prev.checkedMtime === tail.mtime) return prev;
-  const now = new Date().toISOString();
+  // Storage fallback applies only for opencode with no id captured yet, and
+  // at most every ~30s (storageCheckedAt guard). Log-scan keeps precedence:
+  // a log-confirmed id always wins over a DB-read one, regardless of order.
+  const storagePending = ((prev && prev.harness) === "opencode") && !(prev && prev.harnessSessionId);
+  const lastStorageAt = prev && prev.storageCheckedAt ? Date.parse(prev.storageCheckedAt) : NaN;
+  const storageDue = Number.isNaN(lastStorageAt) || Date.now() - lastStorageAt >= STORAGE_PROBE_INTERVAL_MS;
+  if (prev && prev.logPath === lp && prev.checkedSize === tail.size && prev.checkedMtime === tail.mtime && !(storagePending && storageDue)) return prev;
+  const nowMs = Date.now();
+  const now = new Date(nowMs).toISOString();
   const extracted = extractHarnessSessionId(prev && prev.harness, tail.text);
   const prevId = prev && prev.harnessSessionId;
   let id = prevId || undefined;
@@ -538,6 +711,22 @@ export function syncWorkerSession(d, name, logPath) { // respawn slice 1
   } else if (extracted && prevId && source === "preassigned") {
     source = "preassigned-confirmed";
   }
+  let storageCheckedAt = (prev && prev.storageCheckedAt) || undefined;
+  if (storagePending && storageDue && !id) { // log scan wins when both fire
+    storageCheckedAt = now;
+    const probe = storageProbe === undefined ? probeOpencodeStorage : storageProbe; // tests inject a fake
+    let probed = null;
+    try {
+      probed = probe({ name, cwd: prev && prev.cwd, spawnedAt: prev && prev.spawnedAt });
+    } catch {
+      probed = null;
+    }
+    if (probed) {
+      id = String(probed);
+      source = "storage";
+      capturedAt = now;
+    }
+  }
   const doc = {
     ...((prev && typeof prev === "object") ? prev : {}),
     name,
@@ -549,6 +738,7 @@ export function syncWorkerSession(d, name, logPath) { // respawn slice 1
     harnessSessionId: id,
     idSource: source,
     capturedAt,
+    storageCheckedAt,
     checkedSize: tail.size,
     checkedMtime: tail.mtime,
     checkedAt: now,

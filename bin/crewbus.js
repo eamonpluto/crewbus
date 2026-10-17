@@ -46,7 +46,7 @@ import { VALID_ROLES, agentTokenMatches, assertMintWon, authorize, authorizeChec
 import { saveTokenFile } from "./lib/tokenfile.js";
 import { CLIENT_TLS, SYNC_LWW, cleanSyncRel, clientInsecureFromArgs, crewSurvey, httpJson, readPemFlag, readSyncState, readTombstones, relayAuthEntries, relayCredFor, relayCredHeaders, setupClientTls, splitByWeight, syncRound, syncWalk, warnInsecureOnce, writeSyncState, writeTombstone, SYNC_SUBS, SYNC_UNION, RELAY_CAPS, SUB_CAP, SUB_CAP_NOTE, tombstoneIdForRel, readSyncDoc } from "./lib/sync.js";
 import { devicePath, isLoopbackHost, newDeviceCred, newPairToken, pairingPath, parseDeviceCred, readDevice, readRelayState, relaySecretFromArgs, remoteSpawn, requireRelayClientCert, requireRelaySecret, requireScope, tryAcquireFence, verifyOidcJwt, writeRelayState, relayStatePath, bearerFromReq, getOidcConfig, getOidcJwks, b64urlDecode, b64urlJson, jwsRawToDer, oidcGetJson, OIDC_SKEW_SEC, OIDC_JWKS_TTL_MS, OIDC_ALG_HASH, OIDC_EC_SIZE, deviceFromReq } from "./lib/relay.js";
-import { assertGitCheckout, bootRespawnedWorker, bootWorker, buildCrewContext, buildRespawnBrief, buildRespawnTarget, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, isPidStale, killWorkers, maybeIsolate, parseAllowEnv, pidAlive, provisionBranch, provisionWorktree, readWorkerSession, requireAutoConfirm, sandboxPresent, scrubChildEnv, syncWorkerSession, workerStatus, worktreeStamp, defaultMaxTurnsFor, ensureBoardCliShim, installCliToUserPath } from "./lib/spawn.js";
+import { assertGitCheckout, bootRespawnedWorker, bootWorker, buildCrewContext, buildRespawnBrief, buildRespawnTarget, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, isPidStale, killWorkers, maybeIsolate, opencodeStorageStatus, parseAllowEnv, pidAlive, provisionBranch, provisionWorktree, readWorkerSession, requireAutoConfirm, resolveOpencodeExe, sandboxPresent, scrubChildEnv, syncWorkerSession, workerStatus, worktreeStamp, defaultMaxTurnsFor, ensureBoardCliShim, installCliToUserPath } from "./lib/spawn.js";
 import { appendChainRecord, auditHmacKey, boardTotalBytes, chainFilePath, countChannels, dirSize, doExportToFile, enforceAgentQuota, enforceBytesQuota, enforceChannelQuota, holdActive, holdDocPath, holdRefusal, parseQuotaBytes, parseQuotaCount, readBackupInner, readBoardQuotas, readChainRecords, readHold, readSnapshotSchedule, resolveBackupKeyMaterial, setAuditForward, snapshotStamp, startAuditForwarder, verifyChainRecords, collectBoardFiles, encryptBackupPayload, decryptBackupPayload, rawKeyFromMaterial, deriveBackupKey, toAuditExport, spoolAuditEvent, postAuditEvent, auditSpoolDir, drainAuditSpool, enqueueAuditForward, signAuditRecord, chainRecordHash, AUDIT_FORWARD_URL, AUDIT_FORWARD_KEY } from "./lib/export.js";
 import { ackedIds, checkSendRateLimit, deliverDMs, enforceMaxChars, filterDigest, findDuplicateSend, findMessageById, heartbeat, isVerified, loadManifest, manifestPath, msgTimeMs, parseRecipients, printDigest, printMsg, readDMs, readVisible, recordBroadcastManifest, requireFanoutConfirm, resolveFwdDepth, runVerifier, verifyMessageSig, isHigh, signMessage, untrustedEnvelope, relTime, rateFilePath, broadcastTargets, readBroadcastsFor, formatTo, msgHeader, readAckMarker, splitCommand, readRecipientsFile } from "./lib/mail.js";
 import { batchReplyIds, collectBatch, contributingGroups, expandGroups, expandGroupsOrFail, gatherTelemetry, groupTelemetryData, heuristicSenderType, readGroup, ensureGroupCreatedAt, readResultRecord, writeResultRecord, findFirstVerifiedReply } from "./lib/groups.js";
@@ -3302,6 +3302,10 @@ async function cmdRespawn(args) {
   const name = names[0];
   const force = args.includes("--force");
   const dry = args.includes("--dry-run");
+  // --fresh: when the harness session id was never captured (opencode kills
+  // its buffered output before the log scan can read it), skip the resume
+  // requirement and boot the catch-up brief fresh — same as the generic path.
+  const fresh = args.includes("--fresh");
   const extraBody = getFlag(args, "--body");
   if (extraBody !== undefined && String(extraBody).length > MAX_BODY_CHARS) fail(`message body too large (max ${MAX_BODY_CHARS} chars)`);
   const minted = ensureSender(d, from, resolveToken(args));
@@ -3317,7 +3321,7 @@ async function cmdRespawn(args) {
   const harness = prev.harness;
   if (!harness) fail(`no harness recorded for "${name}" (spawned before session capture — re-boot fresh with spawn --to ${name})`);
   const sessionId = prev.harnessSessionId;
-  if (!sessionId && harness !== "generic") fail(`no harness session id recorded for "${name}"${prev.idSource ? ` (source: ${prev.idSource})` : ""} — its conversation can't be resumed; re-brief with send --reply ${prev.briefId || "<brief-id>"} or spawn a fresh worker`);
+  if (!sessionId && harness !== "generic" && !fresh) fail(`no harness session id recorded for "${name}"${prev.idSource ? ` (source: ${prev.idSource})` : ""} — its conversation can't be resumed; re-brief with send --reply ${prev.briefId || "<brief-id>"}, respawn with --fresh to reboot it without the old conversation, or spawn a fresh worker`);
   if ((prev.auto || false) && !args.includes("--auto")) fail(`worker "${name}" was spawned --auto (fully-unattended) — pass --auto to confirm the respawn carries the same danger (see docs/ISOLATION.md)`);
   if (args.includes("--auto")) requireAutoConfirm(args);
   if (!prev.promptPath) fail(`no original prompt on record for "${name}" (spawned before prompt capture — re-boot fresh with spawn --to ${name})`);
@@ -4331,6 +4335,7 @@ function cmdDoctor(args) {
     console.log(`FAIL  ${label}${hint ? ` — ${hint}` : ""}`);
   };
   const info = (label) => console.log(`info  ${label}`);
+  const warn = (label) => console.log(`warn  ${label}`);
 
   const nodeMajor = Number(String(process.version).replace(/^v/, "").split(".")[0]);
   if (nodeMajor >= 18) ok(`node ${process.version} (>= 18)`);
@@ -4424,6 +4429,41 @@ function cmdDoctor(args) {
         else no("opencode tool .opencode/tools/dm-send.js", "run: crewbus init --harness opencode (then restart opencode)");
         if (fs.existsSync(path.join(cwd, ".opencode", "plugins", "dm-watch.js"))) ok("opencode plugin .opencode/plugins/dm-watch.js");
         else no("opencode plugin .opencode/plugins/dm-watch.js", "run: crewbus init --harness opencode (then restart opencode)");
+        // Binary + schema sanity for the respawn capture path (only when the
+        // harness is actually installed): the log stream the session-id
+        // capture reads (--format json events) and the storage-fallback DB.
+        // --help is captured through a file descriptor, not a pipe —
+        // opencode drops output onto some piped stdios (first-byte quirk).
+        {
+          const exe = resolveOpencodeExe();
+          if (exe) {
+            info(`opencode binary ${exe} (direct spawn, no shim)`);
+            try {
+              const helpFile = path.join(os.tmpdir(), `crewbus-oc-help-${process.pid}.txt`);
+              let fd;
+              try {
+                fd = fs.openSync(helpFile, "w");
+                execFileSync(exe, ["run", "--help"], { stdio: ["ignore", fd, fd], timeout: 15000 });
+              } finally {
+                try { fs.closeSync(fd); } catch {}
+              }
+              let h = "";
+              try { h = fs.readFileSync(helpFile, "utf8"); } catch {}
+              try { fs.rmSync(helpFile, { force: true }); } catch {}
+              if (h.includes("--format") && /\bjson\b/.test(h)) ok("opencode run --help exposes --format json (capture flag present)");
+              else no("opencode run --help flags", `--format json not offered by this opencode build — schema drift; session-id capture may not work (bin ${exe})`);
+            } catch (e) {
+              const detail = String((e && (e.message || e.stderr)) || e).slice(0, 120);
+              no("opencode run --help", `could not run the resolved binary ${exe}: ${detail}`);
+            }
+            const st = opencodeStorageStatus();
+            if (st.status === "ok") ok(`opencode storage DB session table readable ${st.dbPath}`);
+            else if (st.status === "no-db") warn(`opencode storage DB not found (${st.dbPath}) — respawn capture limited to log scan`);
+            else if (st.status === "no-sqlite") warn(`node:sqlite unavailable (needs Node >= 22) — respawn capture limited to log scan`);
+            else if (st.status === "drift") no(`opencode storage DB session table ${st.dbPath}`, "schema drift — storage fallback cannot read session rows; update crewbus");
+            else warn(`opencode storage DB unreadable (${st.detail || "transient lock"}) — respawn capture falls back to log scan`);
+          }
+        }
         break;
       case "claude": {
         if (hasHookRef(path.join(cwd, ".claude", "settings.json"), ["SessionStart", "Stop"])) ok("claude hooks .claude/settings.json");
@@ -6454,13 +6494,16 @@ Messaging (primitive — just a tool call, whenever you want):
   crewbus spawn-kill --from <you> (--to <worker,...> | --all)
     (the kill switch: closing the terminal does NOT stop detached workers.
      Terminates by recorded pid, confirms death, reports. Needs your token.)
-  crewbus respawn --from <you> --to <worker> [--body "..."] [--force] [--cwd <dir>] [--cmd "..."] [--keep-env] [--allow-env ...] [--dry-run]
+  crewbus respawn --from <you> --to <worker> [--body "..."] [--force] [--fresh] [--cwd <dir>] [--cmd "..."] [--keep-env] [--allow-env ...] [--dry-run]
     (reboot one DEAD worker in its SAME harness conversation: needs the
-     captured session id (spawn-status shows it; generic re-boots fresh).
-     Refuses live workers unless --force (kills first, own crew only).
-     The catch-up brief points at the original prompt file and threads the
-     same reply id; --body appends lead instructions. Attempt counted on
-     the worker-session record. Lead/admin only.)
+      captured session id (spawn-status shows it; generic re-boots fresh).
+      --fresh skips the resume requirement when the id can't be captured
+      (e.g. an opencode worker died before its log revealed anything) and
+      re-boots the catch-up brief as a fresh session.
+      Refuses live workers unless --force (kills first, own crew only).
+      The catch-up brief points at the original prompt file and threads the
+      same reply id; --body appends lead instructions. Attempt counted on
+      the worker-session record. Lead/admin only.)
   crewbus stop --all --from <you>
     (global stop: kills every spawned worker truly (whole process tree).)
   crewbus token rotate --from <you> [--expires-in <dur>]

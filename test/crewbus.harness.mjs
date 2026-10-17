@@ -9,7 +9,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(new URL("../bin/crewbus.js", import.meta.url));
 const HOOK = fileURLToPath(new URL("../bin/crewbus-hook.js", import.meta.url));
 const MCP = fileURLToPath(new URL("../bin/crewbus-mcp.js", import.meta.url));
-import { buildSpawnTarget, buildSpawnPrompt, buildCrewContext, buildRespawnTarget, buildRespawnBrief, extractHarnessSessionId, isPidStale, readWorkerSession, syncWorkerSession, workerStatus, bootWorker, pidStartTime, parsePsEtime } from "../bin/lib/spawn.js";
+import { buildSpawnTarget, buildSpawnPrompt, buildCrewContext, buildRespawnTarget, buildRespawnBrief, extractHarnessSessionId, isPidStale, readWorkerSession, syncWorkerSession, workerStatus, bootWorker, pidStartTime, parsePsEtime, probeOpencodeStorage, resolveOpencodeExe } from "../bin/lib/spawn.js";
 import { mergeAgentDoc } from "../bin/lib/identity.js";
 import { boardSnapshot } from "../bin/lib/web.js";
 import { ensureBoard } from "../bin/lib/store.js";
@@ -455,6 +455,78 @@ fs.appendFileSync(cap5doc.logPath, JSON.stringify({ session_id: "other-id-9" }) 
   check("capture: boot line leads the log", cap5log0.startsWith("# crewbus boot cap5") && cap5log0.includes("brief msg-v"));
   const cap4st = workerStatus(capD, "cap4", 1);
   check("status: log size + mtime + idle surfaced", typeof cap4st.logSize === "number" && typeof cap4st.logMtimeMs === "number" && typeof cap4st.logIdleMs === "number");
+  // --- opencode storage fallback (probeOpencodeStorage via syncWorkerSession):
+  // bootWorker would launch a real harness, so these craft binding docs.
+  const mkOcWorker = (nm) => {
+    fs.writeFileSync(path.join(capBoard, "agents", `${nm}.json`), JSON.stringify({ name: nm, spawnedPid: 999999994, spawnedBy: "lead", briefId: "msg-o" }));
+    const lp = path.join(capBoard, "logs", `${nm}-261004-000000.log`);
+    fs.writeFileSync(lp, `# crewbus boot ${nm} at 2026-10-04T00:00:00.000Z brief msg-o (no json events yet)\n`);
+    fs.writeFileSync(path.join(capBoard, "worker-sessions", `${nm}.json`), JSON.stringify({ name: nm, harness: "opencode", spawnedPid: 999999994, spawnedAt: new Date().toISOString(), briefId: "msg-o", cwd: capBoard, logPath: lp }));
+    return lp;
+  };
+  const oc1Log = mkOcWorker("ocs1");
+  let ocs1Calls = 0;
+  const oc1 = syncWorkerSession(capD, "ocs1", undefined, () => { ocs1Calls++; return "ses_storage_fixed"; });
+  check("capture: storage probe records id", oc1.harnessSessionId === "ses_storage_fixed" && oc1.idSource === "storage" && !!oc1.capturedAt && typeof oc1.storageCheckedAt === "string");
+  const oc1b = syncWorkerSession(capD, "ocs1", undefined, () => { ocs1Calls++; return "ses_second_thought"; });
+  check("capture: captured id not re-probed", oc1b.harnessSessionId === "ses_storage_fixed" && ocs1Calls === 1);
+  fs.appendFileSync(oc1Log, JSON.stringify({ type: "step_start", sessionID: "ses_log_later" }) + "\n");
+  const oc1c = syncWorkerSession(capD, "ocs1", undefined, () => { ocs1Calls++; return "ses_second_thought"; });
+  check("capture: log beats storage once the log speaks", oc1c.harnessSessionId === "ses_log_later" && (oc1c.idSource === "log" || oc1c.idSource === "log-override"));
+  const oc2Log = mkOcWorker("ocs2");
+  let ocs2Calls = 0;
+  const oc2Probe = () => { ocs2Calls++; return null; };
+  const oc2 = syncWorkerSession(capD, "ocs2", undefined, oc2Probe);
+  check("capture: storage null keeps id unset", oc2.harnessSessionId === undefined && ocs2Calls === 1 && typeof oc2.storageCheckedAt === "string");
+  const oc2b = syncWorkerSession(capD, "ocs2", undefined, oc2Probe);
+  check("capture: storage probe rate-limited (~30s guard)", oc2b.harnessSessionId === undefined && ocs2Calls === 1);
+  const oc2doc = readWorkerSession(capD, "ocs2");
+  oc2doc.storageCheckedAt = new Date(Date.now() - 31000).toISOString();
+  fs.writeFileSync(path.join(capBoard, "worker-sessions", "ocs2.json"), JSON.stringify(oc2doc) + "\n");
+  syncWorkerSession(capD, "ocs2", undefined, oc2Probe);
+  check("capture: storage probe retries after the guard window", ocs2Calls === 2);
+  const oc3Log = mkOcWorker("ocs3");
+  fs.appendFileSync(oc3Log, JSON.stringify({ type: "step_start", sessionID: "ses_log_3" }) + "\n");
+  let ocs3Calls = 0;
+  const oc3 = syncWorkerSession(capD, "ocs3", undefined, () => { ocs3Calls++; return "ses_db_3"; });
+  check("capture: log wins when both sources present", oc3.harnessSessionId === "ses_log_3" && oc3.idSource === "log");
+  const genProbe = syncWorkerSession(capD, "cap2", undefined, () => { ocs3Calls++; return "ses_never"; });
+  check("capture: non-opencode harness never probes storage", genProbe.harnessSessionId === undefined && ocs3Calls === 0);
+  // probeOpencodeStorage against a real temp sqlite DB (needs node:sqlite,
+  // Node >= 22 — skipped silently below that floor like the runtime does)
+  let ocSqlite = null;
+  try { ocSqlite = await import("node:sqlite"); } catch {}
+  if (ocSqlite && typeof ocSqlite.DatabaseSync === "function") {
+    const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), "cb-ocdb-"));
+    const dbPath = path.join(dbDir, "opencode.db");
+    const odb = new ocSqlite.DatabaseSync(dbPath);
+    odb.exec("CREATE TABLE session (id TEXT, title TEXT, directory TEXT, time_created INTEGER)");
+    const ins = odb.prepare("INSERT INTO session (id, title, directory, time_created) VALUES (?, ?, ?, ?)");
+    const hitAt = Date.now() - 60 * 1000;
+    const spawnAt = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    ins.run("ses_db_hit", "crewbus:probe-1", "C:/WorkSpace/Proj-1", hitAt);
+    ins.run("ses_db_older_out_of_window", "crewbus:probe-1", "C:/WorkSpace/Proj-1", hitAt - 10 * 60 * 1000);
+    ins.run("ses_db_other_title", "crewbus:probe-else", "C:/WorkSpace/Proj-1", hitAt - 60 * 1000);
+    ins.run("ses_db_other_dir", "crewbus:probe-1", "C:/Elsewhere", hitAt - 60 * 1000);
+    ins.run("ses_db_only_old", "crewbus:probe-old", "C:/WorkSpace/Proj-1", hitAt - 10 * 60 * 1000);
+    check("storage: probes newest row inside the window", probeOpencodeStorage({ name: "probe-1", cwd: "C:\\workspace\\proj-1", spawnedAt: spawnAt, dbPath }) === "ses_db_hit");
+    check("storage: norm backslashes + case", probeOpencodeStorage({ name: "probe-1", cwd: "C:/WORKSPACE/PROJ-1", spawnedAt: spawnAt, dbPath }) === "ses_db_hit");
+    check("storage: unknown title null", probeOpencodeStorage({ name: "probe-none", cwd: "C:\\workspace\\proj-1", spawnedAt: spawnAt, dbPath }) === null);
+    check("storage: other directory null", probeOpencodeStorage({ name: "probe-1", cwd: "C:\\NoWhere", spawnedAt: spawnAt, dbPath }) === null);
+    check("storage: out-of-window only null", probeOpencodeStorage({ name: "probe-old", cwd: "C:\\workspace\\proj-1", spawnedAt: spawnAt, dbPath }) === null);
+    check("storage: bad spawn time refuses to guess", probeOpencodeStorage({ name: "probe-1", cwd: "C:\\workspace\\proj-1", spawnedAt: "not-a-date", dbPath }) === null);
+    const emptyDb = path.join(dbDir, "empty.db");
+    new ocSqlite.DatabaseSync(emptyDb).exec("CREATE TABLE other (x TEXT)");
+    check("storage: schema drift null (no session table)", probeOpencodeStorage({ name: "probe-1", cwd: "C:\\workspace\\proj-1", spawnedAt: spawnAt, dbPath: emptyDb }) === null);
+    check("storage: missing db null", probeOpencodeStorage({ name: "probe-1", cwd: "C:\\workspace\\proj-1", spawnedAt: spawnAt, dbPath: path.join(dbDir, "absent.db") }) === null);
+    odb.close();
+    for (let i = 0; i < 10; i++) {
+      try { fs.rmSync(dbDir, { recursive: true, force: true }); break; } catch { await new Promise((r) => setTimeout(r, 200)); }
+    }
+  }
+  check("storage: resolveOpencodeExe sane", resolveOpencodeExe() === null || (typeof resolveOpencodeExe() === "string" && fs.existsSync(resolveOpencodeExe())));
+  const tGO = buildSpawnTarget({ harness: "opencode", cwd: "/tmp", name: "w", promptPath: "/tmp/x.md", prompt: "p" });
+  check("spawn: opencode direct exe when resolvable", resolveOpencodeExe() ? (tGO.shell === false && tGO.exe === resolveOpencodeExe()) : (tGO.shell === true && tGO.exe === "opencode"));
 // the detached boot child can hold its log file briefly on Windows — retry
 for (let i = 0; i < 10; i++) {
   try {
@@ -485,6 +557,14 @@ const brief = buildRespawnBrief({ name: "w", attempt: 2, origPromptPath: "/l/w.p
 check("respawn: brief threads + attempt", brief.includes("attempt 2") && brief.includes("/l/w.prompt.md") && brief.includes("--reply msg-1") && brief.includes("hurry") && brief.includes("SID"));
 const briefG = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: null, harness: "generic", lead: "boss" });
 check("respawn: generic brief fresh", briefG.includes("fresh session"));
+const briefO = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: null, harness: "opencode", lead: "boss" });
+check("respawn: opencode fresh brief wording", briefO.includes("fresh session (opencode session id could not be captured") && !briefO.includes("prior context intact") && briefO.includes("checkpoints are your memory"));
+const briefR2 = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: "SID", harness: "opencode", lead: "boss" });
+check("respawn: opencode resumed brief unchanged", briefR2.includes("resumed opencode session SID") && briefR2.includes("prior context intact"));
+const rtNoF = buildRespawnTarget({ harness: "opencode", cwd: "/tmp", name: "w", promptPath: "/p.md", prompt: "c", sessionId: null });
+check("respawn: missing id boots fresh (no --session)", !rtNoF.args.includes("--session") && !rtNoF.args.join(" ").includes("undefined"));
+const rtWithId = buildRespawnTarget({ harness: "opencode", cwd: "/tmp", name: "w", promptPath: "/p.md", prompt: "c", sessionId: "SID" });
+check("respawn: with id keeps --session", rtWithId.args.includes("--session") && rtWithId.args[rtWithId.args.indexOf("--session") + 1] === "SID");
 
 // ------------------------------------------------------- init adapters
 const mkproj = () => {
