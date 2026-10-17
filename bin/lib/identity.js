@@ -330,7 +330,7 @@ export function authorizeCheck(d, agent, action, scope) { // line 537
   const act = String(action || "");
   const ADMIN_ONLY = new Set(["prune", "acl-set", "role-grant", "offboard", "group-restrict", "serve-remote", "import", "snapshot-schedule", "quota-set", "hold-place", "hold-lift", "pairing"]);
   const LEAD_PLUS = new Set(["spawn", "respawn", "pool", "group-manage", "channel-post", "result-record", "race-close"]);
-  const WORKER_WRITES = new Set(["send", "ack", "redeliver", "lock"]);
+  const WORKER_WRITES = new Set(["send", "ack", "redeliver", "lock", "artifact-write", "lesson-write"]);
   const EXPORT_ROLES = new Set(["admin", "auditor"]);
   if (act === "export") {
     if (!EXPORT_ROLES.has(role)) return { ok: false, reason: `role "${role}" cannot export (need admin|auditor)` };

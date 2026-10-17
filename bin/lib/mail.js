@@ -69,7 +69,7 @@ export function findMessageById(d, id) {
   return null;
 }
 
-export function deliverDMs(d, { from, recipients, body, subject, replyTo, artifact, priority, checkpoint, senderType, fwd, rev, at, forceBroadcast, forceDirect }) {
+export function deliverDMs(d, { from, recipients, body, subject, replyTo, artifact, priority, checkpoint, senderType, fwd, rev, at, forceBroadcast, forceDirect, needsBy }) {
   const isAll = recipients.length === 1 && recipients[0] === "@all";
   // Large fan-outs (> BROADCAST_AFTER) and @all go to ONE broadcast file;
   // small fan-outs keep one copy per recipient (unique id each, shared batch).
@@ -84,6 +84,7 @@ export function deliverDMs(d, { from, recipients, body, subject, replyTo, artifa
     if (checkpoint === true) msg.checkpoint = true;
     if (senderType) msg.senderType = senderType;
     if (typeof fwd === "number") msg.fwd = fwd;
+    if (needsBy) msg.needsBy = needsBy;
     if (rev) msg.rev = rev;
     const sig = signMessage({ ...msg, to: msg.to });
     if (sig) msg.sig = sig;
@@ -106,6 +107,7 @@ export function deliverDMs(d, { from, recipients, body, subject, replyTo, artifa
     if (checkpoint === true) msg.checkpoint = true;
     if (senderType) msg.senderType = senderType;
     if (typeof fwd === "number") msg.fwd = fwd;
+    if (needsBy) msg.needsBy = needsBy;
     if (batch) msg.batch = batch;
     if (rev) msg.rev = rev;
     const sig = signMessage(msg);
@@ -293,6 +295,7 @@ export function printMsg(m, showTo, json) {
   console.log(`  ${untrustedEnvelope(m.from, m.senderType || "peer")}`);
   if (m.subject) console.log(`  subj: ${m.subject}`);
   if (m.artifact) console.log(`  artifact: ${m.artifact}`);
+  if (m.needsBy) console.log(`  needs-by: ${m.needsBy}${isOverdue(m) ? " (OVERDUE)" : ""}`);
   if (isHigh(m)) console.log(`  priority: high`);
   if (isCheckpoint(m)) console.log(`  checkpoint: progress (not a final summary)`);
   if (typeof m.fwd === "number") console.log(`  fwd: ${m.fwd}/${MAX_FWD_DEPTH}`);
@@ -328,6 +331,15 @@ export function scanAllMessages(d) {
 
 export function isHigh(m) {
   return m && String(m.priority || "").toLowerCase() === "high";
+}
+
+// Needs-by deadline (L4 handoff): present on messages the sender stamped
+// with --needs-by; overdue once the timestamp passes. Read-only helpers,
+// shared by printMsg / printDigest / inbox --overdue.
+export function isOverdue(m) {
+  if (!m || !m.needsBy) return false;
+  const t = Date.parse(m.needsBy);
+  return !Number.isNaN(t) && t < Date.now();
 }
 
 // Progress checkpoints ride the DM thread (replyTo the brief) but are not
@@ -372,7 +384,7 @@ export function enforceMaxChars(items, maxChars) {
 export function printDigest(items) {
   for (const m of items) {
     const head = String(m.body || "").split("\n")[0].slice(0, 140);
-    console.log(`${m.id} [peer:${m.from}]${isHigh(m) ? " [!HIGH]" : ""}${isCheckpoint(m) ? " [checkpoint]" : ""}${m.subject ? ` subj:${String(m.subject).slice(0, 80)}` : ""} :: ${head}`);
+    console.log(`${m.id} [peer:${m.from}]${isHigh(m) ? " [!HIGH]" : ""}${isCheckpoint(m) ? " [checkpoint]" : ""}${isOverdue(m) ? " [OVERDUE]" : m.needsBy ? " [needs-by]" : ""}${m.subject ? ` subj:${String(m.subject).slice(0, 80)}` : ""}${m.needsBy ? ` by:${String(m.needsBy).slice(0, 16)}` : ""} :: ${head}`);
   }
 }
 

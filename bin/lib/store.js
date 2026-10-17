@@ -118,12 +118,14 @@ export function dirs(root) { // line 122
     cursors: path.join(root, "cursors"),
     revoked: path.join(root, "revoked"),
     holds: path.join(root, "holds"),
+    artifacts: path.join(root, "artifacts"),
+    lessons: path.join(root, "lessons"),
   };
 }
 
 export function ensureBoard(root) { // line 142
   const d = dirs(root);
-  for (const p of [d.root, d.agents, d.dm, d.delivered, d.broadcast, d.groups, d.channels, d.locks, d.results, d.tombstones, d.poolState, d.workerSessions, d.index, d.cursors, d.revoked, d.holds, path.join(root, "logs")]) {
+  for (const p of [d.root, d.agents, d.dm, d.delivered, d.broadcast, d.groups, d.channels, d.locks, d.results, d.tombstones, d.poolState, d.workerSessions, d.index, d.cursors, d.revoked, d.holds, d.artifacts, d.lessons, path.join(root, "logs")]) {
     fs.mkdirSync(p, { recursive: true });
   }
   const metaPath = path.join(d.root, "board.json");
@@ -224,7 +226,7 @@ export const VALUE_FLAGS = new Set(["--from", "--to", "--to-file", "--to-group",
 // reads the same comma/newline-separated list from a file so large fan-outs
 // don't hit Windows argv limits (~8191 chars).
 // §4.4 value-taking flags (skipped with their value by restArgs).
-for (const _f of ["--sender-type", "--fwd", "--secret", "--device", "--pair-token", "--pair-label", "--label", "--ttl", "--id", "--allow-env", "--allow-cmd", "--workdir-root", "--budget-tokens", "--budget-minutes", "--tls-cert", "--tls-key", "--tls-ca", "--mtls-ca", "--mtls-cert", "--mtls-key", "--oidc-issuer", "--oidc-audience", "--issuer", "--client-id", "--bearer", "--oidc-token", "--expires-in", "--service", "--offboard", "--target", "--reason", "--role", "--for", "--default-role", "--freeze", "--unfreeze", "--out", "--in", "--into", "--key-env", "--key-file", "--every", "--keep", "--out-dir", "--max-bytes", "--max-agents", "--max-channels", "--tenant", "--audit-forward", "--audit-forward-key", "--standby", "--promote-on-miss", "--fence", "--relay-interval", "--relays", "--weights", "--relay-auth", "--via", "--weight"]) VALUE_FLAGS.add(_f); // line 673
+for (const _f of ["--sender-type", "--fwd", "--secret", "--device", "--pair-token", "--pair-label", "--label", "--ttl", "--id", "--allow-env", "--allow-cmd", "--workdir-root", "--budget-tokens", "--budget-minutes", "--tls-cert", "--tls-key", "--tls-ca", "--mtls-ca", "--mtls-cert", "--mtls-key", "--oidc-issuer", "--oidc-audience", "--issuer", "--client-id", "--bearer", "--oidc-token", "--expires-in", "--service", "--offboard", "--target", "--reason", "--role", "--for", "--default-role", "--freeze", "--unfreeze", "--out", "--in", "--into", "--key-env", "--key-file", "--every", "--keep", "--out-dir", "--max-bytes", "--max-agents", "--max-channels", "--tenant", "--audit-forward", "--audit-forward-key", "--standby", "--promote-on-miss", "--fence", "--relay-interval", "--relays", "--weights", "--relay-auth", "--via", "--weight", "--needs-by", "--deps", "--path", "--text", "--note"]) VALUE_FLAGS.add(_f); // line 673
 
 export function cleanSenderType(raw) { // line 1181
   if (raw === undefined || raw === null || String(raw).trim() === "") return undefined;
@@ -306,7 +308,7 @@ export function requireBoard(root) { // line 3105
     );
   }
   const d = dirs(root);
-  for (const p of [d.root, d.agents, d.dm, d.delivered, d.broadcast, d.groups, d.tombstones, d.poolState, d.index, d.cursors, d.revoked]) {
+  for (const p of [d.root, d.agents, d.dm, d.delivered, d.broadcast, d.groups, d.tombstones, d.poolState, d.index, d.cursors, d.revoked, d.artifacts, d.lessons]) {
     if (!p) continue;
     fs.mkdirSync(p, { recursive: true });
   }

@@ -50,6 +50,7 @@ import { assertGitCheckout, bootRespawnedWorker, bootWorker, buildCrewContext, b
 import { appendChainRecord, auditHmacKey, boardTotalBytes, chainFilePath, countChannels, dirSize, doExportToFile, enforceAgentQuota, enforceBytesQuota, enforceChannelQuota, holdActive, holdDocPath, holdRefusal, parseQuotaBytes, parseQuotaCount, readBackupInner, readBoardQuotas, readChainRecords, readHold, readSnapshotSchedule, resolveBackupKeyMaterial, setAuditForward, snapshotStamp, startAuditForwarder, verifyChainRecords, collectBoardFiles, encryptBackupPayload, decryptBackupPayload, rawKeyFromMaterial, deriveBackupKey, toAuditExport, spoolAuditEvent, postAuditEvent, auditSpoolDir, drainAuditSpool, enqueueAuditForward, signAuditRecord, chainRecordHash, AUDIT_FORWARD_URL, AUDIT_FORWARD_KEY } from "./lib/export.js";
 import { ackedIds, checkSendRateLimit, deliverDMs, enforceMaxChars, filterDigest, findDuplicateSend, findMessageById, heartbeat, isVerified, loadManifest, manifestPath, msgTimeMs, parseRecipients, printDigest, printMsg, readDMs, readVisible, recordBroadcastManifest, requireFanoutConfirm, resolveFwdDepth, runVerifier, verifyMessageSig, isHigh, signMessage, untrustedEnvelope, relTime, rateFilePath, broadcastTargets, readBroadcastsFor, formatTo, msgHeader, readAckMarker, splitCommand, readRecipientsFile } from "./lib/mail.js";
 import { batchReplyIds, collectBatch, contributingGroups, expandGroups, expandGroupsOrFail, gatherTelemetry, groupTelemetryData, heuristicSenderType, readGroup, ensureGroupCreatedAt, readResultRecord, writeResultRecord, findFirstVerifiedReply } from "./lib/groups.js";
+import { publishArtifact, adoptArtifact, verifyArtifact, readArtifactById, listArtifacts, listLessons, postLesson, selectLessons, renderWorkbenchBlock, workbenchMetrics, cleanArtifactId, cleanLessonScope, parseArtifactDeps } from "./lib/workbench.js";
 import { appendChannelPost, channelLogPath, groupChannelName, lockAlive, lockPath, mergeChannelText, mirrorToGroupChannels, printChannelPost, readChannelPosts, readLock, summarizePosts, writeChannelCursor, SUMMARY_STOP, channelCursorPath, readChannelCursor, lockHash, acquireLockDoc, releaseLockDoc, tailChannelPosts, listLocks, parseChannelText } from "./lib/channels.js";
 import { boardSnapshot, cmdWeb, escapeHtml, fleetSnapshot, channelsSnapshot, resultsSnapshot, auditSnapshot, handleApiAck, renderBoardHtml, handleApiKill, handleApiLaunch, handleWebDashboardRoute } from "./lib/web.js";
 import { LAUNCH_DRIVER_FALLBACK, PAIR_SCOPES, advertiseEnv, buildPairUrl, detectHarnessBinaries, formatHarnessMenu, isBodyFileRef, launchDrivers, parseCountChoice, parseHarnessChoice, parsePermissionChoice, parseYesNo, probeBinary, validateLaunchPlan, HARNESS_MODELS, getDiscoveredModels, refreshDiscoveredModels } from "./lib/launch.js";
@@ -2720,6 +2721,15 @@ function cmdSend(args) {
   const priority = cleanPriority(getFlag(args, "--priority"));
   const checkpoint = args.includes("--checkpoint");
   const alsoChannel = args.includes("--also-channel");
+  // Needs-by (L4 handoff): a deadline the sender stamps on the DM, so a
+  // blocked peer can triage with inbox --overdue instead of re-polling.
+  const needsByRaw = getFlag(args, "--needs-by");
+  let needsBy;
+  if (needsByRaw !== undefined) {
+    const ms = parseDuration(needsByRaw);
+    if (!(ms > 0)) fail("--needs-by must be a positive duration (e.g. 30m, 2h)");
+    needsBy = new Date(Date.now() + ms).toISOString();
+  }
   const toGroupRaw = getFlag(args, "--to-group");
   if (alsoChannel && (!toGroupRaw || !String(toGroupRaw).trim())) fail("--also-channel needs --to-group <g,...> (it mirrors the brief into each group's channel)");
   const groupNames = String(toGroupRaw || "").split(",").map((s) => String(s).trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "-").slice(0, 40)).filter(Boolean);
@@ -2752,7 +2762,7 @@ function cmdSend(args) {
   const rev = gitRevForBoard(root);
   const at = new Date().toISOString();
   const forceBroadcast = args.includes("--broadcast");
-  const res = deliverDMs(d, { from, recipients, body: body.trim(), subject, replyTo, artifact, priority, checkpoint, senderType, fwd, rev, at, forceBroadcast });
+  const res = deliverDMs(d, { from, recipients, body: body.trim(), subject, replyTo, artifact, priority, checkpoint, senderType, fwd, rev, at, forceBroadcast, needsBy });
   appendChainRecord(d, from, "send", { to: recipients.slice(0, 20), count: recipients.length, batch: res.batch });
   const mirrored = alsoChannel
     ? mirrorToGroupChannels(d, { groups: groupNames, from, body: body.trim(), subject, replyTo, batch: res.batch || (res.items[0] && res.items[0].id), priority, rev, at })
@@ -2921,6 +2931,24 @@ function cmdSpawn(args) {
     if (!(ms > 0)) fail("--timeout must be a positive duration (e.g. 10m)");
     deadlineAt = new Date(Date.now() + ms).toISOString();
   }
+  // Needs-by (L4 handoff): deadline stamped on the brief DMs, so leads can
+  // spot unclaimed/overdue briefs with inbox --overdue --unacked.
+  const needsByRaw = getFlag(args, "--needs-by");
+  let needsBy;
+  if (needsByRaw !== undefined) {
+    const ms = parseDuration(needsByRaw);
+    if (!(ms > 0)) fail("--needs-by must be a positive duration (e.g. 30m, 2h)");
+    needsBy = new Date(Date.now() + ms).toISOString();
+  }
+  // Workbench (L2/L3): lessons scoped to this spawn's groups (+global) and
+  // the newest board artifacts, rendered once per worker so the brief
+  // carries prior output instead of re-deriving it.
+  const wbFor = (to) =>
+    renderWorkbenchBlock({
+      lessons: selectLessons(d, { scopes: groupNames, limit: 8 }),
+      artifacts: listArtifacts(d, { limit: 6 }),
+      me: to,
+    });
   const isolateInfo = maybeIsolate(args, d.root);
   if ((worktreePrefix !== undefined || branchPrefix !== undefined) && !dry) assertGitCheckout(cwd);
   const minted = ensureSender(d, from, resolveToken(args));
@@ -2939,17 +2967,17 @@ function cmdSpawn(args) {
       const driver = harnesses[i % harnesses.length];
       const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok") ? 50 : undefined);
       const itemSpawnOpts = { ...spawnOpts, harness: driver, maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
-      const previewPrompt = buildSpawnPrompt({ name: to, from, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(to) });
+      const previewPrompt = buildSpawnPrompt({ name: to, from, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(to), workbench: wbFor(to) });
       const t = buildSpawnTarget({ ...itemSpawnOpts, name: to, promptPath: `<logs>/${to}-<stamp>.prompt.md`, prompt: previewPrompt });
       const wtNote = worktreePrefix !== undefined ? ` worktree ../${to}-<stamp> (branch ${worktreePrefix}/${to}-<stamp>)` : branchPrefix !== undefined ? ` branch ${branchPrefix}/${to}-<stamp>` : "";
       console.log(`would spawn ${to} [${driver}] (${lifetime}) cwd ${cwd}${wtNote} cmd: ${formatSpawnCmd(t)} [board ${d.root}]`);
     });
-    console.log(`--- prompt (first worker) ---\n${buildSpawnPrompt({ name: recipients[0], from, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(recipients[0]) })}`);
+    console.log(`--- prompt (first worker) ---\n${buildSpawnPrompt({ name: recipients[0], from, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(recipients[0]), workbench: wbFor(recipients[0]) })}`);
     return;
   }
   // Direct (N-copy) path is forced here (every worker needs its own message
   // id to thread the reply against) — --broadcast is not accepted by spawn.
-  const res = deliverDMs(d, { from, recipients, body: body.trim(), subject, replyTo, priority, senderType, fwd, rev, at, forceBroadcast: false, forceDirect: true });
+  const res = deliverDMs(d, { from, recipients, body: body.trim(), subject, replyTo, priority, senderType, fwd, rev, at, forceBroadcast: false, forceDirect: true, needsBy });
   if (res.mode !== "direct") fail("spawn: internal error — expected direct delivery");
   appendChainRecord(d, from, "spawn", { to: recipients.slice(), harness, harnesses, auto, cwd, isolate: isolateInfo.isolated || false, budgetTokens, budgetMinutes, deadlineAt });
   if (alsoChannel) {
@@ -2978,7 +3006,7 @@ function cmdSpawn(args) {
       } else if (branchPrefix !== undefined) {
         workerBranch = provisionBranch(cwd, branchPrefix, to).branch;
       }
-      const r = bootWorker(d, { ...itemSpawnOpts, cwd: workerCwd }, { to, id, from, subject, body: body.trim(), rev, logDir, budgetTokens, budgetMinutes, deadlineAt, spawnedWorktree: workerWorktree, spawnedBranch: workerBranch, spawnedLifetime: lifetime, crew: crewFor(to) });
+      const r = bootWorker(d, { ...itemSpawnOpts, cwd: workerCwd }, { to, id, from, subject, body: body.trim(), rev, logDir, budgetTokens, budgetMinutes, deadlineAt, spawnedWorktree: workerWorktree, spawnedBranch: workerBranch, spawnedLifetime: lifetime, crew: crewFor(to), workbench: wbFor(to) });
       const where = workerWorktree ? ` worktree ${workerWorktree}` : workerBranch ? ` branch ${workerBranch}` : "";
       console.log(`spawned ${to} pid ${r.pid} [${driver}] (${lifetime}) log ${r.logPath} reply ${id}${where} [board ${d.root}]`);
     } catch (e) {
@@ -3501,13 +3529,136 @@ function cmdGather(args) {
   if (!res) fail(`unknown batch "${batch}" (check send echoes / inbox batch lines)`);
   const groups = contributingGroups(d, res.items);
   const tele = gatherTelemetry(res.items);
+  // Workbench metrics: did any downstream message consume an upstream
+  // artifact (feed-forward edge), and how much of it held up (adopted/
+  // verified). This is the multiplicative-discovery measure — additive
+  // crews score 0 across the board.
+  const wb = workbenchMetrics(res.items, (id) => readArtifactById(d, id));
   if (json) {
-    console.log(JSON.stringify({ ...res, contributingGroups: groups, telemetry: tele }, null, 2));
+    console.log(JSON.stringify({ ...res, contributingGroups: groups, telemetry: tele, workbench: wb }, null, 2));
     return;
   }
   console.log(`batch ${batch}: ${res.briefs} brief(s), ${res.replies} replies [board ${d.root}]\n`);
   for (const m of res.items) printMsg(m, true, false);
   console.log(`-- telemetry: ${tele.messages} msgs, ~${tele.tokensEst} tokens (chars/4), contributing groups: ${groups.join(",") || "none"} --`);
+  if (wb.artifactRefs > 0) {
+    console.log(`-- workbench: ${wb.artifactRefs} artifact(s) referenced, ${wb.feedForward} feed-forward edge(s), ${wb.adopted} adopted, ${wb.verified} verified --`);
+  } else {
+    console.log(`-- workbench: no artifacts referenced (additive shape; publish with: crewbus artifact publish --path <p>) --`);
+  }
+}
+
+// artifact: board objects for worker output that should outlive the DM
+// thread (L2). publish|list|show|adopt|verify — adoption + verification
+// land ON the object, so a later crew can see what was reused and what
+// held up instead of re-deriving it from prose.
+function cmdArtifact(args) {
+  const root = boardDir(args);
+  refuseDriveRootBoard(root, args);
+  const d = requireBoard(root);
+  const json = args.includes("--json");
+  const sub = String(args[0] || "").toLowerCase();
+  const rest = args.slice(1);
+  const token = resolveToken(rest);
+  const ensureWriter = () => {
+    const from = resolveAgent(rest, "sender");
+    ensureSender(d, from, token);
+    authorize(d, from, "artifact-write", {});
+    return from;
+  };
+  if (sub === "publish") {
+    const from = ensureWriter();
+    const deps = parseArtifactDeps(getFlag(rest, "--deps"));
+    const doc = publishArtifact(d, { from, ref: getFlag(rest, "--path"), summary: getFlag(rest, "--summary"), deps, at: new Date().toISOString() });
+    appendChainRecord(d, from, "artifact-publish", { id: doc.id });
+    console.log(`published artifact ${doc.id} (${doc.path})${doc.deps.length ? ` deps: ${doc.deps.join(",")}` : ""} [board ${d.root}]`);
+    return;
+  }
+  if (sub === "adopt" || sub === "verify") {
+    const from = ensureWriter();
+    const id = cleanArtifactId(getFlag(rest, "--id"));
+    const at = new Date().toISOString();
+    const note = getFlag(rest, "--note");
+    const doc = sub === "adopt" ? adoptArtifact(d, { id, from, at, note }) : verifyArtifact(d, { id, from, at, note });
+    appendChainRecord(d, from, sub === "adopt" ? "artifact-adopt" : "artifact-verify", { id });
+    const n = sub === "adopt" ? doc.adoptedBy.length : doc.verifiedBy.length;
+    console.log(`${sub === "adopt" ? "adopted" : "verified"} ${id} by ${from} (${n} total) [board ${d.root}]`);
+    return;
+  }
+  if (sub === "show") {
+    const id = cleanArtifactId(getFlag(rest, "--id"));
+    const a = readArtifactById(d, id);
+    if (!a) fail(`unknown artifact ${id} [board ${d.root}]`);
+    if (json) {
+      console.log(JSON.stringify(a, null, 2));
+      return;
+    }
+    console.log(`artifact ${a.id}`);
+    console.log(`  path: ${a.path}`);
+    if (a.summary) console.log(`  summary: ${a.summary}`);
+    console.log(`  producer: ${a.from} @ ${a.at}`);
+    if (a.deps.length) console.log(`  deps: ${a.deps.join(", ")}`);
+    console.log(`  adopted by: ${a.adoptedBy.map((e) => e.by).join(", ") || "(nobody)"}`);
+    console.log(`  verified by: ${a.verifiedBy.map((e) => e.by).join(", ") || "(nobody)"}`);
+    return;
+  }
+  if (sub === "list" || sub === "") {
+    const all = listArtifacts(d);
+    if (json) {
+      console.log(JSON.stringify(all, null, 2));
+      return;
+    }
+    if (all.length === 0) {
+      console.log(`no artifacts [board ${d.root}]`);
+      return;
+    }
+    for (const a of all) {
+      const state = [];
+      if (a.adoptedBy.length) state.push(`adopted x${a.adoptedBy.length}`);
+      if (a.verifiedBy.length) state.push("verified");
+      console.log(`${a.id}  ${a.path}${state.length ? `  (${state.join(", ")})` : ""}`);
+    }
+    return;
+  }
+  fail(`unknown artifact subcommand "${sub}" (want publish|list|show|adopt|verify)`);
+}
+
+// lesson: one-or-two-line learnings scoped to a group/task; post|list.
+// New spawn briefs with a matching scope (or global) auto-inject the
+// latest lessons, so a lesson learned once is paid forward (L3).
+function cmdLesson(args) {
+  const root = boardDir(args);
+  refuseDriveRootBoard(root, args);
+  const d = requireBoard(root);
+  const json = args.includes("--json");
+  const sub = String(args[0] || "").toLowerCase();
+  const rest = args.slice(1);
+  const token = resolveToken(rest);
+  if (sub === "post") {
+    const from = resolveAgent(rest, "sender");
+    ensureSender(d, from, token);
+    authorize(d, from, "lesson-write", {});
+    const doc = postLesson(d, { from, scope: getFlag(rest, "--scope"), text: getFlag(rest, "--text"), at: new Date().toISOString() });
+    appendChainRecord(d, from, "lesson-post", { id: doc.id, scope: doc.scope });
+    console.log(`lesson ${doc.id} [${doc.scope}] (later spawns in scope ${doc.scope} get it injected) [board ${d.root}]`);
+    return;
+  }
+  if (sub === "list" || sub === "") {
+    const scopeRaw = getFlag(args, "--scope");
+    const scope = scopeRaw !== undefined ? cleanLessonScope(scopeRaw) : undefined;
+    const items = listLessons(d, { scope });
+    if (json) {
+      console.log(JSON.stringify(items, null, 2));
+      return;
+    }
+    if (items.length === 0) {
+      console.log(`no lessons${scope ? ` scoped ${scope}` : ""} [board ${d.root}]`);
+      return;
+    }
+    for (const l of items) console.log(`${l.id}  [${l.scope}] ${l.text}`);
+    return;
+  }
+  fail(`unknown lesson subcommand "${sub}" (want post|list)`);
 }
 
 function cmdInbox(args) {
@@ -3520,6 +3671,7 @@ function cmdInbox(args) {
   const json = args.includes("--json");
   let items;
   let showTo = false;
+  let acked = null;
   if (showAll) {
     items = [];
     let subs = [];
@@ -3554,7 +3706,7 @@ function cmdInbox(args) {
     authorize(d, agent, "inbox"); // reads allow all roles (auditor read-ok)
     heartbeat(d, agent, 0); // reading your mail proves you're alive
     items = readVisible(d, agent);
-    const acked = ackedIds(d, agent);
+    acked = ackedIds(d, agent);
     if (json) {
       items = items.map((m) => (acked.has(m.id) ? { ...m, acked: true } : m));
     }
@@ -3562,6 +3714,12 @@ function cmdInbox(args) {
       // Progress checkpoints are not work awaiting acceptance.
       items = items.filter((m) => !acked.has(m.id) && m.checkpoint !== true);
     }
+  }
+  // Overdue triage (L4): messages whose --needs-by deadline passed and that
+  // are still open work (not acked, not checkpoints). In --all mode there is
+  // no ack state to consult — deadline alone decides.
+  if (args.includes("--overdue")) {
+    items = items.filter((m) => m.checkpoint !== true && (m.needsBy && !Number.isNaN(Date.parse(m.needsBy)) && Date.parse(m.needsBy) < Date.now()) && (showAll || !acked.has(m.id)));
   }
   if (after) {
     const idx = items.findIndex((m) => m.id === after);
@@ -6350,7 +6508,7 @@ Identity (first claim wins, token after that):
      the CLI, not local file tampering — separate boards per trust zone.)
 
 Messaging (primitive — just a tool call, whenever you want):
-  crewbus send --from <you> --to <peer> --body "..." [--subject "..."] [--reply <msg-id>] [--artifact <path-or-url>] [--priority high|normal] [--checkpoint] [--session <id>] [--to-file <path>] [--broadcast] [--also-channel] [--sender-type human|lead|peer] [--fwd <n>] [--yes] [--no-rate-limit]
+  crewbus send --from <you> --to <peer> --body "..." [--subject "..."] [--reply <msg-id>] [--artifact <path-or-url>] [--priority high|normal] [--checkpoint] [--needs-by 30m] [--session <id>] [--to-file <path>] [--broadcast] [--also-channel] [--sender-type human|lead|peer] [--fwd <n>] [--yes] [--no-rate-limit]
     (--to accepts a comma list for broadcast: --to alice,bob,carol — one DM
      each, same brief, shared batch id, up to 10000 recipients; --to-file reads
      the list from a file for large fan-outs; --to @all reaches every
@@ -6360,6 +6518,8 @@ Messaging (primitive — just a tool call, whenever you want):
      addresses named groups (same thing in spawn); unknown groups fail loudly.
       --priority high flags urgent mail (inbox --priority filters it).
       --checkpoint marks a progress note on a thread (labeled in transcripts, skipped by --unacked and spawn-status reply detection — never needs ack).
+      --needs-by stamps a handoff deadline on the DM (inbox --overdue lists
+      it once the deadline passes, so open work is never silently stale).
      --also-channel (with --to-group) also appends the brief to each group's
      channel, stamped with the DM batch id so gather picks it up.)
   crewbus channel create|post|tail|search|summarize|list <name> [--body "..."] [--from <you>] [--limit 20] [--cursor <msg-id>] [--grep <pattern>] [--priority high|normal] [--max-chars <n>] [--digest] [--json]
@@ -6402,13 +6562,29 @@ Messaging (primitive — just a tool call, whenever you want):
   crewbus gather --batch <batch-id> [--json]
     (the reduce step: the brief(s) plus every reply, across inboxes, oldest
      first — one transcript to aggregate, summarize, or feed a reducer agent.
-     Footer shows telemetry + contributing groups; attribution is reply→batch→groups.
+     Footer shows telemetry + contributing groups, plus workbench metrics
+     (artifacts referenced, feed-forward edges, adopted/verified counts) —
+     additive crews score 0, feed-forward crews score >0.
      Group-channel mirrors (send --also-channel) carrying the batch join as briefs.)
-  crewbus inbox --from <you> [--limit 20] [--after <msg-id>] [--all] [--unacked] [--older-than 10m] [--grep <pattern>] [--priority high|normal] [--max-chars <n>] [--digest] [--verify] [--json]
+  crewbus artifact publish|list|show|adopt|verify [--path <path-or-url>] [--summary "..."] [--deps <id,id>] [--id <artifact-id>] [--note "..."] [--from <you>] [--json]
+    (board objects for worker output that should outlive the DM thread:
+     publish a path/url + one-line summary, chain pieces with --deps,
+     adopt when you reuse one, verify when you checked it holds up.
+     adoption/verification record ON the object; later spawn briefs list
+     the newest artifacts, so prior output compounds instead of being
+     re-derived. publish/adopt/verify need your token; reads are open.)
+  crewbus lesson post|list [--scope <group-or-task>] [--text "..."] [--from <you>] [--json]
+    (scoped one-or-two-line learnings: what happened + what to do
+     differently. Later spawn briefs whose groups (or --scope-less/global)
+     match auto-inject the latest lessons, so a lesson learned once is
+     paid forward. post needs your token; list is open.)
+  crewbus inbox --from <you> [--limit 20] [--after <msg-id>] [--all] [--unacked] [--overdue] [--older-than 10m] [--grep <pattern>] [--priority high|normal] [--max-chars <n>] [--digest] [--verify] [--json]
     (--older-than keeps only messages older than the window: inbox --unacked
      --older-than 10m lists briefs nobody picked up (retry via redeliver or
-     re-send). --grep filters subject+body, --priority filters urgency,
-     --max-chars fair-share truncates bodies with [truncated], --digest prints
+     re-send). --overdue lists still-open briefs whose --needs-by deadline
+     passed (skip in --all mode where ack state doesn't apply). --grep
+     filters subject+body, --priority filters urgency, --max-chars
+     fair-share truncates bodies with [truncated], --digest prints
      one line per message.)
   crewbus ack --from <you> (--id <msg-id> | --all) [--verify "<command>"] [--timeout <dur>]
     ("handled it" — orthogonal to delivery; leads ack workers' replies;
@@ -6427,7 +6603,7 @@ Messaging (primitive — just a tool call, whenever you want):
     (recover mail a dead watcher consumed: clears delivered markers and
      rewinds the cursor so the next poll/push treats it as fresh;
      use after re-registering with the live session)
-  crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--harness opencode|claude|codex|grok|antigravity|cursor|generic] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
+  crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|generic] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
    (workers boot with cloud/AI credential vars scrubbed from their environment by default (lead's keys never leak into briefs); pass --keep-env to inherit everything or --allow-env <prefix,...> to keep listed names. CREWBUS_TOKEN is never inherited — workers claim their own identity.)
     (brief N workers AND boot them detached: the DM lands first so the brief
      waits even if a launch fails. opencode: \`run\` + brief via --file;
@@ -6435,6 +6611,9 @@ Messaging (primitive — just a tool call, whenever you want):
      file; grok: headless via --prompt-file; antigravity: \`--print\` with the
      brief inline; cursor: headless via \`-p --force --trust\` pointing at the
      brief file; generic: --cmd with CREWBUS_DIR + CREWBUS_AGENT set.
+     Briefs auto-inject the latest scoped lessons + newest board artifacts
+     (the Workbench block) so prior output compounds; --needs-by stamps a
+     handoff deadline on the brief DMs.
      Logs to .crewbus/logs/<name>.log, pid recorded on the agent. Caps at
      20/call by default (--max-spawn overrides, needs the compute) — bigger
      crews get a broadcast DM. --worktree is recommended for write tasks (one
@@ -7464,6 +7643,8 @@ async function main() {
     case "agents": return cmdAgents(rest);
     case "send": return cmdSend(rest);
     case "channel": return cmdChannel(rest);
+    case "artifact": return cmdArtifact(rest);
+    case "lesson": return cmdLesson(rest);
     case "lock": return cmdLock(rest);
     case "group": return cmdGroup(rest);
     case "gather": return cmdGather(rest);
