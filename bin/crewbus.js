@@ -46,7 +46,7 @@ import { VALID_ROLES, agentTokenMatches, assertMintWon, authorize, authorizeChec
 import { saveTokenFile } from "./lib/tokenfile.js";
 import { CLIENT_TLS, SYNC_LWW, cleanSyncRel, clientInsecureFromArgs, crewSurvey, httpJson, readPemFlag, readSyncState, readTombstones, relayAuthEntries, relayCredFor, relayCredHeaders, setupClientTls, splitByWeight, syncRound, syncWalk, warnInsecureOnce, writeSyncState, writeTombstone, SYNC_SUBS, SYNC_UNION, RELAY_CAPS, SUB_CAP, SUB_CAP_NOTE, tombstoneIdForRel, readSyncDoc } from "./lib/sync.js";
 import { devicePath, isLoopbackHost, newDeviceCred, newPairToken, pairingPath, parseDeviceCred, readDevice, readRelayState, relaySecretFromArgs, remoteSpawn, requireRelayClientCert, requireRelaySecret, requireScope, tryAcquireFence, verifyOidcJwt, writeRelayState, relayStatePath, bearerFromReq, getOidcConfig, getOidcJwks, b64urlDecode, b64urlJson, jwsRawToDer, oidcGetJson, OIDC_SKEW_SEC, OIDC_JWKS_TTL_MS, OIDC_ALG_HASH, OIDC_EC_SIZE, deviceFromReq } from "./lib/relay.js";
-import { assertGitCheckout, bootRespawnedWorker, bootWorker, buildCrewContext, buildRespawnBrief, buildRespawnTarget, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, isPidStale, killWorkers, maybeIsolate, opencodeStorageStatus, parseAllowEnv, pidAlive, provisionBranch, provisionWorktree, readWorkerSession, requireAutoConfirm, resolveOpencodeExe, sandboxPresent, scrubChildEnv, syncWorkerSession, workerStatus, worktreeStamp, defaultMaxTurnsFor, ensureBoardCliShim, installCliToUserPath } from "./lib/spawn.js";
+import { assertGitCheckout, bootRespawnedWorker, bootWorker, buildCoordinatorPrompt, buildCrewContext, buildRespawnBrief, buildRespawnTarget, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, isPidStale, killWorkers, LEAD_NAME, maybeIsolate, opencodeStorageStatus, parseAllowEnv, pidAlive, provisionAutoLead, provisionBranch, provisionWorktree, readWorkerSession, requireAutoConfirm, resolveOpencodeExe, sandboxPresent, scrubChildEnv, syncWorkerSession, workerStatus, worktreeStamp, defaultMaxTurnsFor, ensureBoardCliShim, installCliToUserPath } from "./lib/spawn.js";
 import { appendChainRecord, auditHmacKey, boardTotalBytes, chainFilePath, countChannels, dirSize, doExportToFile, enforceAgentQuota, enforceBytesQuota, enforceChannelQuota, holdActive, holdDocPath, holdRefusal, parseQuotaBytes, parseQuotaCount, readBackupInner, readBoardQuotas, readChainRecords, readHold, readSnapshotSchedule, resolveBackupKeyMaterial, setAuditForward, snapshotStamp, startAuditForwarder, verifyChainRecords, collectBoardFiles, encryptBackupPayload, decryptBackupPayload, rawKeyFromMaterial, deriveBackupKey, toAuditExport, spoolAuditEvent, postAuditEvent, auditSpoolDir, drainAuditSpool, enqueueAuditForward, signAuditRecord, chainRecordHash, AUDIT_FORWARD_URL, AUDIT_FORWARD_KEY } from "./lib/export.js";
 import { ackedIds, checkSendRateLimit, deliverDMs, enforceMaxChars, filterDigest, findDuplicateSend, findMessageById, heartbeat, isVerified, loadManifest, manifestPath, msgTimeMs, parseRecipients, printDigest, printMsg, readDMs, readVisible, recordBroadcastManifest, requireFanoutConfirm, resolveFwdDepth, runVerifier, verifyMessageSig, isHigh, signMessage, untrustedEnvelope, relTime, rateFilePath, broadcastTargets, readBroadcastsFor, formatTo, msgHeader, readAckMarker, splitCommand, readRecipientsFile } from "./lib/mail.js";
 import { batchReplyIds, collectBatch, contributingGroups, expandGroups, expandGroupsOrFail, gatherTelemetry, groupTelemetryData, heuristicSenderType, readGroup, ensureGroupCreatedAt, readResultRecord, writeResultRecord, findFirstVerifiedReply } from "./lib/groups.js";
@@ -2893,7 +2893,30 @@ function cmdSpawn(args) {
   rosterGroups.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   const taskGroups = rosterGroups.filter((g) => groupNames.includes(g.name));
   const offTask = rosterGroups.length - taskGroups.length;
-  const crewFor = (to) => buildCrewContext({ name: to, from, subject, groups: taskGroups, myGroups: taskGroups.filter((g) => g.members.includes(to)).map((g) => g.name), offTask });
+  const crewFor = (to, leadTarget) => buildCrewContext({ name: to, from, lead: leadTarget, subject, groups: taskGroups, myGroups: taskGroups.filter((g) => g.members.includes(to)).map((g) => g.name), offTask });
+  // Lead auto-assignment (§auto-lead): `--lead auto|board|none` (default: auto).
+  // Under `board` (or `auto` with a coding harness), spawn and lead are
+  // separated: workers pin replies to the board's standing 'lead' lane and a
+  // detached persistent coordinator is provisioned after the crew boots; the
+  // spawner stays boss (reads, milestone DMs). `--lead none` (or `auto` with
+  // purely generic harnesses) is the legacy star topology: replies pin to the
+  // spawner, nothing else is provisioned.
+  const leadFlagRaw = getFlag(args, "--lead");
+  const hasCodingHarness = harnesses.some((h) => h !== "generic");
+  let leadMode;
+  if (leadFlagRaw === undefined) {
+    leadMode = hasCodingHarness ? "board" : "none";
+  } else {
+    leadMode = String(leadFlagRaw).trim().toLowerCase();
+    if (leadMode === "auto") {
+      leadMode = hasCodingHarness ? "board" : "none";
+    }
+  }
+  if (!["board", "none"].includes(leadMode)) fail(`invalid --lead "${leadFlagRaw}" (want auto|board|none)`);
+  if (leadMode === "board" && !hasCodingHarness) {
+    fail('--lead board needs a coding harness for the auto-coordinator (add --harness opencode, or pass --lead none under --harness generic)');
+  }
+  const leadTarget = leadMode === "board" ? "lead" : from;
   const model = getFlag(args, "--model");
   const auto = args.includes("--auto");
   requireAutoConfirm(args);
@@ -2967,12 +2990,29 @@ function cmdSpawn(args) {
       const driver = harnesses[i % harnesses.length];
       const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok") ? 50 : undefined);
       const itemSpawnOpts = { ...spawnOpts, harness: driver, maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
-      const previewPrompt = buildSpawnPrompt({ name: to, from, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(to), workbench: wbFor(to) });
+      const previewPrompt = buildSpawnPrompt({ name: to, from, lead: leadTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(to, leadTarget), workbench: wbFor(to) });
       const t = buildSpawnTarget({ ...itemSpawnOpts, name: to, promptPath: `<logs>/${to}-<stamp>.prompt.md`, prompt: previewPrompt });
       const wtNote = worktreePrefix !== undefined ? ` worktree ../${to}-<stamp> (branch ${worktreePrefix}/${to}-<stamp>)` : branchPrefix !== undefined ? ` branch ${branchPrefix}/${to}-<stamp>` : "";
       console.log(`would spawn ${to} [${driver}] (${lifetime}) cwd ${cwd}${wtNote} cmd: ${formatSpawnCmd(t)} [board ${d.root}]`);
     });
-    console.log(`--- prompt (first worker) ---\n${buildSpawnPrompt({ name: recipients[0], from, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(recipients[0]), workbench: wbFor(recipients[0]) })}`);
+    console.log(`--- prompt (first worker) ---\n${buildSpawnPrompt({ name: recipients[0], from, lead: leadTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]) })}`);
+    if (leadMode === "board") {
+      const existingLead = readAgent(d, "lead");
+      const standing = existingLead && typeof existingLead.spawnedPid === "number" && pidAlive(existingLead.spawnedPid);
+      if (standing) {
+        console.log(`--- lead ---\na live coordinator already runs on the 'lead' lane (pid ${existingLead.spawnedPid}) — reused, not duplicated [board ${d.root}]`);
+      } else if (existingLead && existingLead.offboarded) {
+        console.log(`--- lead ---\nlane "lead" is offboarded: provision would be SKIPPED (re-onboard it, or pass --lead none) [board ${d.root}]`);
+      } else {
+        const coordPreview = buildCoordinatorPrompt({
+          name: "lead", from, subject, body: body.trim(), batch: previewBatch,
+          workers: recipients.map((name, i) => ({ name, id: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", harness: harnesses[i % harnesses.length] })),
+          crew: crewFor(recipients[0], leadTarget), cwd, root, auto, workbench: wbFor(recipients[0]),
+        });
+        console.log(`--- lead ---\nwould spawn lead [${harnesses[0]}] (persistent — auto-provisioned lead, owner of this crew) cwd ${cwd} [board ${d.root}]`);
+        console.log(`--- coordinator prompt (preview) ---\n${coordPreview}`);
+      }
+    }
     return;
   }
   // Direct (N-copy) path is forced here (every worker needs its own message
@@ -3006,11 +3046,36 @@ function cmdSpawn(args) {
       } else if (branchPrefix !== undefined) {
         workerBranch = provisionBranch(cwd, branchPrefix, to).branch;
       }
-      const r = bootWorker(d, { ...itemSpawnOpts, cwd: workerCwd }, { to, id, from, subject, body: body.trim(), rev, logDir, budgetTokens, budgetMinutes, deadlineAt, spawnedWorktree: workerWorktree, spawnedBranch: workerBranch, spawnedLifetime: lifetime, crew: crewFor(to), workbench: wbFor(to) });
+      const r = bootWorker(d, { ...itemSpawnOpts, cwd: workerCwd }, { to, id, from, lead: leadTarget, subject, body: body.trim(), rev, logDir, budgetTokens, budgetMinutes, deadlineAt, spawnedWorktree: workerWorktree, spawnedBranch: workerBranch, spawnedLifetime: lifetime, crew: crewFor(to, leadTarget), workbench: wbFor(to) });
       const where = workerWorktree ? ` worktree ${workerWorktree}` : workerBranch ? ` branch ${workerBranch}` : "";
       console.log(`spawned ${to} pid ${r.pid} [${driver}] (${lifetime}) log ${r.logPath} reply ${id}${where} [board ${d.root}]`);
     } catch (e) {
       console.log(`spawn FAILED ${to}: ${e.message} (brief ${id} still waits on the board) [board ${d.root}]`);
+    }
+  }
+  // Auto-provisioned lead: runs after the crew boots so the coordinator's
+  // roster carries the real brief ids, and so a lead boot failure can never
+  // block worker boots.
+  if (leadMode === "board") {
+    const coordHarness = [  // first coding harness wins; generic is excluded above
+      ...harnesses.filter((h) => h !== "generic"),
+    ][0] || "opencode";
+    const provision = provisionAutoLead(d, {
+      spawnOpts: { ...spawnOpts, harness: coordHarness, maxTurns: undefined, allowTools: undefined },
+      from, subject, body: body.trim(), rev, logDir,
+      workers: res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })),
+      batch: res.batch, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]), auto,
+    });
+    if (provision.action === "minted" && provision.pid) {
+      console.log(`auto-lead provisioned: minted lane '${provision.leadName}' (role lead — owns this crew), coordinator pid ${provision.pid} (persistent, ${coordHarness}) log ${provision.logPath} [board ${d.root}]`);
+      if (provision.token) console.log(`lead token (set CREWBUS_TOKEN=${provision.token} to act as '${provision.leadName}'): also saved to logs/lead.token`);
+    } else if (provision.action === "minted") {
+      console.log(`auto-lead provisioned with a caveat: ${provision.reason} [board ${d.root}]`);
+    } else if (provision.action === "reused") {
+      const standing = provision.pid ? `coordinator pid ${provision.pid} (standing)` : `claimed, no live coordinator — boot with: spawn --from ${from} --to ${provision.leadName} --persistent --body "you are the lead, read your crew"`;
+      console.log(`auto-lead reused: '${provision.leadName}' lane (${standing}); this crew transferred to it (${provision.transferred} worker(s)) [board ${d.root}]`);
+    } else {
+      console.log(`auto-lead SKIPPED: ${provision.reason || "no reason recorded"} [board ${d.root}]`);
     }
   }
 }
