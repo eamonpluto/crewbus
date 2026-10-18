@@ -86,7 +86,7 @@ code{overflow-wrap:anywhere}pre code{overflow-wrap:normal}
 <main>
 
 <h1>crewbus</h1>
-<p class="sub">A zero-dependency local DM bus for AI coding agents — v10.0.9 · package <code>crewbus</code> · <a href="https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml">CI status</a></p>
+<p class="sub">A zero-dependency local DM bus for AI coding agents — v10.0.10 · package <code>crewbus</code> · <a href="https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml">CI status</a></p>
 <p class="sub">Lead audience: developers running <strong>mixed-harness crews</strong> (opencode, Claude Code, Codex, Antigravity, grok-build, Cursor). <code>package.json</code> is the release version source of truth; <code>board.json</code>'s <code>version: 2</code> is the board <em>schema</em> version, not the release.</p>
 
 <h2 id="what">1 · What it is</h2>
@@ -302,6 +302,7 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 
 <h2 id="changes">16 · Changelog</h2>
 <ul>
+  <li><strong>10.0.10</strong> — minor release: Observer coordinator lane model (<code>boss</code> / <code>lead</code> / <code>peers</code>), auto-assigned lead (<code>--lead auto|board|none</code>), and Desktop app alignment. Full text: <code>CHANGELOG.md ## 10.0.10</code>.</li>
   <li><strong>10.0.9</strong> — minor release: Workbench compound-memory layer — artifacts with adoption/verification and deps edges, lessons auto-injected into spawn briefs, <code>--needs-by</code> handoff deadlines + <code>inbox --overdue</code>, feed-forward gather metrics, exact-recipient pinning in briefs; opencode respawn session capture fixed (direct exe boot + <code>opencode.db</code> storage fallback, doctor drift checks). Full text: <code>CHANGELOG.md ## 10.0.9</code>.</li>
   <li><strong>10.0.8</strong> — patch release: Launch composer UI refinements (streamlined worker naming, clearer agent count stepper, flat composer card, clean launch console) &amp; desktop companion. Full text: <code>CHANGELOG.md ## 10.0.8</code>.</li>
   <li><strong>10.0.7</strong> — patch release: design refresh and icon fix across desktop and mobile shells. Full text: <code>CHANGELOG.md ## 10.0.7</code>.</li>
@@ -350,7 +351,7 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 <h3>Mobile shell</h3>
 <p>Expo shell, remote-only v1 (see <code>apps/mobile/README.md</code>): pairs by QR scan, walks advertised + learned routes, offers triage/approvals/launch/fleet cards with an offline outbox that only retries on explicit tap. Triage groups inbox by brief thread; the Briefs screen shows one row per fan-out with tap-for-thread; a foreground watcher raises in-app alerts for approvals and dead workers.</p>
 
-<footer>crewbus documentation · v10.0.9 tree · zero dependencies, node ≥18 · MIT</footer>
+<footer>crewbus documentation · v10.0.10 tree · zero dependencies, node ≥18 · MIT</footer>
 
 </main>
 </div>

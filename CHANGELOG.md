@@ -1,5 +1,15 @@
 # Changelog
 
+## 10.0.10 (2026-10-18)
+
+MINOR RELEASE: Observer coordinator lane model (`boss` / `lead` / `peers`), auto-assigned lead (`--lead auto|board|none`), and Desktop app alignment. No board-schema change (`board.json` stays v2).
+
+- **Auto-assigned Lead & Observer Lane Model (`--lead auto|board|none`)**: Separates spawn authority from acting lead. `spawn` bursts now auto-provision a persistent background coordinator (`lead`, role: `lead`) that monitors worker health, answers approval requests, runs respawn loops, and sends aggregate reports back to the spawner (`boss`). Workers pin all checkpoints, approvals, and completions `--to lead`.
+- **Peer-to-Peer Lane Structure**: Establishes 3 explicit lanes: `boss` (human operator / board admin), `lead` (autonomous Observer coordinator), and `peers` (workers executing tasks). Workers coordinate with each other directly via peer-DMs and report to `lead` only for approvals and milestones.
+- **Desktop App & Sidecar Alignment**: Desktop loopback server auto-provisions `boss` as the human operator (with transparent fallback for existing `lead` boards). Launch Studio composer adds a Coordinator selector (`auto` | `none`), surfaces live coordinator status, and displays role badges in the agent roster. Approvals view surfaces pending unacked approvals sent to `lead` for supervisor review.
+- **Contract & Validation**: `packages/contracts/launch.json` and `validateLaunchPlan` updated with `lead` mode options and `coordinator` response payload.
+- New tests: `test/crewbus.lead-assign.mjs` (33 checks) + expanded `test/crewbus.web-launch.mjs`.
+
 ## 10.0.9 (2026-10-17)
 
 MINOR RELEASE: Workbench compound-memory layer (artifacts, lessons, needs-by) + opencode respawn capture fix. No board-schema change (`board.json` stays v2); the additive `artifacts/` and `lessons/` directories appear on first write — old boards pick them up lazily, nothing to migrate.
