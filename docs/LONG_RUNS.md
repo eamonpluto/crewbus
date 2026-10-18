@@ -41,7 +41,8 @@ the board.
 
 | Symptom | Fix |
 |---|---|
-| Post-compaction amnesia | Read the identity card (auto-injected); re-read token file → env; `inbox --unacked --digest` |
+| Post-compaction amnesia | Identity card is auto-injected (hook compact / opencode plugin); unknown who you are? run `crewbus recover` — read-only candidate ranking (session binding → token-file↔tokenHash → cwd), then follow the printed resume script |
+| Landed as "unknown" | Sentinel names ("unknown"/"me"/"you") never mint (register/send refuse them). Run `crewbus recover [--session <id>]` to re-find your real identity; only then re-register your true name |
 | Token lost entirely | Lead `token revoke --target`, worker re-registers |
 | Worker silent | `spawn-status`: no reply → read its log; re-brief or `respawn` |
 | Supervisor gone | `pool-resume --id`; stale locks expire via TTL |

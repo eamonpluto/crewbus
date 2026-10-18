@@ -42,8 +42,8 @@ import { execFileSync, spawn } from "node:child_process";
 // at top level so the import graph (store <- everyone; identity <- sync/spawn/
 // mail/groups/channels/web/relay/export) has no evaluation-order hazards.
 import { BOARD_VERSION, BROADCAST_AFTER, MAX_BODY_CHARS, MAX_RECIPIENTS, MAX_SPAWN, VALUE_FLAGS, boardDir, chmodAgentFile, cleanArtifact, cleanBranchPrefix, cleanChannelName, cleanGroupName, cleanPriority, cleanReply, cleanSenderType, cleanSubject, cleanWebName, dirs, ensureBoard, fail, findBoardUpward, getFlag, gitRevForBoard, listJson, newId, optionalAgent, parseDuration, readBoardMeta, readJson, refuseDriveRootBoard, requireBoard, resolveAgent, restArgs, sanitizeName, writeBoardMeta, writeExclusiveJson, writeJson, nextHlc, stampSyncDoc, hlcCompare, SEND_RATE_CAP, SEND_RATE_WINDOW_MS, MAX_FWD_DEPTH, DEDUPE_WINDOW_MS, webErr } from "./lib/store.js";
-import { VALID_ROLES, agentTokenMatches, assertMintWon, authorize, authorizeCheck, checkToken, cleanRole, countAgentRecords, defaultRoleForNew, ensureLoopbackOperator, ensureSender, hashToken, isHashRevoked, mergeAgentDoc, mergeSyncedAgent, mintToken, newSalt, readAgent, readBoardAcl, resolveToken, revokedPathForHash, roleOfRecord, sanitizeAgentForSync, stripAgentSecrets, timingSafeEqualStr, touchAgent, writeAgentFile, writeBoardAcl, isBoardFrozen } from "./lib/identity.js";
-import { saveTokenFile } from "./lib/tokenfile.js";
+import { VALID_ROLES, agentTokenMatches, assertMintWon, authorize, authorizeCheck, checkToken, cleanRole, countAgentRecords, defaultRoleForNew, ensureLoopbackOperator, ensureSender, hashToken, isHashRevoked, mergeAgentDoc, mergeSyncedAgent, mintToken, newSalt, readAgent, readBoardAcl, recoverIdentity, reservedNameReason, resolveToken, revokedPathForHash, roleOfRecord, sanitizeAgentForSync, stripAgentSecrets, timingSafeEqualStr, touchAgent, writeAgentFile, writeBoardAcl, isBoardFrozen } from "./lib/identity.js";
+import { saveTokenFile, loadTokenFile } from "./lib/tokenfile.js";
 import { CLIENT_TLS, SYNC_LWW, cleanSyncRel, clientInsecureFromArgs, crewSurvey, httpJson, readPemFlag, readSyncState, readTombstones, relayAuthEntries, relayCredFor, relayCredHeaders, setupClientTls, splitByWeight, syncRound, syncWalk, warnInsecureOnce, writeSyncState, writeTombstone, SYNC_SUBS, SYNC_UNION, RELAY_CAPS, SUB_CAP, SUB_CAP_NOTE, tombstoneIdForRel, readSyncDoc } from "./lib/sync.js";
 import { devicePath, isLoopbackHost, newDeviceCred, newPairToken, pairingPath, parseDeviceCred, readDevice, readRelayState, relaySecretFromArgs, remoteSpawn, requireRelayClientCert, requireRelaySecret, requireScope, tryAcquireFence, verifyOidcJwt, writeRelayState, relayStatePath, bearerFromReq, getOidcConfig, getOidcJwks, b64urlDecode, b64urlJson, jwsRawToDer, oidcGetJson, OIDC_SKEW_SEC, OIDC_JWKS_TTL_MS, OIDC_ALG_HASH, OIDC_EC_SIZE, deviceFromReq } from "./lib/relay.js";
 import { assertGitCheckout, bootRespawnedWorker, bootWorker, buildCoordinatorPrompt, buildCrewContext, buildRespawnBrief, buildRespawnTarget, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, isPidStale, killWorkers, LEAD_NAME, maybeIsolate, opencodeStorageStatus, parseAllowEnv, pidAlive, provisionAutoLead, provisionBranch, provisionWorktree, readWorkerSession, requireAutoConfirm, resolveOpencodeExe, sandboxPresent, scrubChildEnv, syncWorkerSession, workerStatus, worktreeStamp, defaultMaxTurnsFor, ensureBoardCliShim, installCliToUserPath } from "./lib/spawn.js";
@@ -1106,23 +1106,85 @@ export const DmWatchPlugin = async ({ client, directory }) => {
   }, POLL_MS);
   poll().catch(() => {});
 
+  // C1 lite recovery (self-contained: no bin/lib imports — the plugin ships
+  // standalone). Same scoring spirit as \`crewbus recover\`, minus the
+  // token-hash cross-check: session binding +4, token file +1, cwd match +1.
+  // Returns [{ name, role, score, proven, why }] best-first.
+  function recoverCandidatesLite(sessionID) {
+    const cands = [];
+    try {
+      const agentsDir = path.join(root, "agents");
+      const logsDir = path.join(root, "logs");
+      const tokenNames = new Set();
+      try {
+        for (const f of fs.readdirSync(logsDir)) if (f.endsWith(".token")) tokenNames.add(f.slice(0, -6).toLowerCase());
+      } catch {}
+      const cwd = String(process.cwd() || "").replace(/\\\\/g, "/").toLowerCase();
+      for (const f of fs.readdirSync(agentsDir)) {
+        if (!f.endsWith(".json")) continue;
+        const doc = readJsonSafe(path.join(agentsDir, f));
+        if (!doc || !doc.name || doc.offboarded) continue;
+        let score = 0;
+        const why = [];
+        if (sessionID && doc.sessionId && String(doc.sessionId) === String(sessionID)) {
+          score += 4;
+          why.push("session id matches register binding");
+        }
+        if (tokenNames.has(String(doc.name).toLowerCase())) {
+          score += 1;
+          why.push("token file exists for this name");
+        }
+        if (doc.lastDir && cwd && String(doc.lastDir).replace(/\\\\/g, "/").toLowerCase() === cwd) {
+          score += 1;
+          why.push("worked from this directory");
+        }
+        if (score <= 0) continue;
+        cands.push({ name: doc.name, role: doc.role || "peer", score, proven: false, why: why.join("; ") });
+      }
+    } catch {}
+    cands.sort((a, b) => b.score - a.score || String(a.name).localeCompare(String(b.name)));
+    return cands;
+  }
+
   return {
     // Compaction rehydration: opencode summarizes this session, so the agent
     // wakes up forgetting its name, board, and token. Push the same identity
-    // card \`crewbus-hook compact\` prints into the summary prompt.
+    // card \`crewbus-hook compact\` prints into the summary prompt. When the
+    // session↔agent map misses, try board-side recovery BEFORE calling the
+    // agent "unknown" (post-compaction rehydration: C1):
+    //   1. register --session <id> binding stored on the agent doc
+    //   2. CREWBUS_AGENT env (set when the session boots via launch)
+    //   3. token-file + cwd evidence (agents roster ∩ logs/*.token)
+    // A resolved candidate drives the card; an unresolved one prints the
+    // crewbus recover path instead — never suggest re-registering a thrown
+    // "unknown" (those sentinel names refuse to mint, and for good reason).
     "experimental.session.compacting": async (input, output) => {
       try {
         if (!output || !Array.isArray(output.context)) return;
         refreshAgentMap();
         let agent = null;
         for (const [name, sid] of agentToSession) if (sid === (input && input.sessionID)) agent = name;
-        const who = agent || "unknown";
-        output.context.push(\`crewbus: context refreshed after compaction. You are '\${who}' on board \${root}.\`);
-        output.context.push(\`Token: read \${path.join(root, "logs", who + ".token")} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask your lead/admin to revoke it, then re-register for a fresh one.\`);
-        output.context.push(\`Then: crewbus inbox --from \${who} --unacked --digest (escalate to full reads on hits).\`);
-        const doc = agent ? readJsonSafe(path.join(root, "agents", agent + ".json")) : null;
-        const ws = doc && doc.briefId ? readJsonSafe(path.join(root, "worker-sessions", agent + ".json")) : null;
-        if (ws && (ws.promptPath || ws.origPromptPath)) output.context.push(\`Your brief: re-read \${ws.promptPath || ws.origPromptPath} from worker-sessions if present.\`);
+        let proven = false;
+        if (!agent) agent = (process.env.CREWBUS_AGENT || "").trim() || null;
+        if (!agent) {
+          const cands = recoverCandidatesLite(input && input.sessionID);
+          if (cands[0] && cands[0].score >= 2) {
+            agent = cands[0].name;
+            proven = cands[0].proven || cands[0].score >= 3;
+          }
+        }
+        if (agent) {
+          output.context.push(\`crewbus: context refreshed after compaction. You are '\${agent}' on board \${root}\${proven ? " (identity cross-checked)" : ""}.\`);
+          output.context.push(\`Token: read \${path.join(root, "logs", agent + ".token")} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask your lead/admin to revoke it, then re-register for a fresh one.\`);
+          output.context.push(\`Then: crewbus inbox --from \${agent} --unacked --digest (escalate to full reads on hits).\`);
+          const doc = readJsonSafe(path.join(root, "agents", agent + ".json"));
+          const ws = doc && doc.briefId ? readJsonSafe(path.join(root, "worker-sessions", agent + ".json")) : null;
+          if (ws && (ws.promptPath || ws.origPromptPath)) output.context.push(\`Your brief: re-read \${ws.promptPath || ws.origPromptPath} from worker-sessions if present.\`);
+        } else {
+          output.context.push(\`crewbus: context refreshed after compaction, but THIS session's agent could not be identified on board \${root}.\`);
+          output.context.push(\`Recover (read-only, never mints): crewbus recover\${input && input.sessionID ? \` --session \${input.sessionID}\` : ""} — it ranks candidate identities from the board (register session binding, token files, cwd history) and prints exact resume commands.\`);
+          output.context.push(\`NEVER re-register as 'unknown'/'me'/'you' — those sentinel names are reserved and refuse to mint; recover your real identity instead.\`);
+        }
       } catch {}
     },
     dispose: async () => {
@@ -1906,6 +1968,49 @@ function cmdInit(args) {
 // Durations for prune --older-than: 30, 90s, 15m, 24h, 7d, 2w (bare = seconds).
 
 
+// recover: read-only identity triage after compaction/restart amnesia.
+// Never writes, never mints — prints candidate identities with evidence and
+// the exact commands to resume. Read-side: refuses to plant a board.
+function cmdRecover(args) {
+  const root = boardDir(args);
+  refuseDriveRootBoard(root, args);
+  const d = requireBoard(root);
+  const opts = {
+    sessionID: getFlag(args, "--session"),
+    cwd: getFlag(args, "--cwd") || process.cwd(),
+    hashToken,
+    loadTokenFile,
+  };
+  const cands = recoverIdentity(d, opts);
+  if (cands.length === 0) {
+    console.log(`no identity candidates on [board ${d.root}] — if the name predates tokens, ask an admin: register --from <admin> --for <name>; otherwise re-register your real name`);
+    return;
+  }
+  const top = cands[0];
+  for (const c of cands) {
+    const tag = c.proven ? "proven" : "hint";
+    console.log(`${tag.padEnd(6)} ${c.name} (role ${c.role}, score ${c.score}) — ${c.why}`);
+  }
+  const tokPath = path.join(d.root, "logs", `${top.name}.token`);
+  console.log(`\nresume as '${top.name}':`);
+  if (!top.proven) console.log(`  0. cross-check yourself first (the token file may be stale): open ${tokPath} and verify it is YOUR token`);
+  console.log(resumeScriptLines(top, d));
+  console.log(`then: crewbus inbox --from ${top.name} --unacked --digest (escalate to full reads on hits)`);
+}
+
+// One shared resume script for the top candidate (recover output only).
+function resumeScriptLines(top, d) {
+  const tokPath = path.join(d.root, "logs", `${top.name}.token`);
+  const lines = [];
+  lines.push(`  1. set CREWBUS_AGENT=${top.name} (so future hooks/push know you)`);
+  const ps = process.platform === "win32";
+  lines.push(ps
+    ? `  2. $env:CREWBUS_TOKEN = Get-Content "${tokPath}" (0600 file written at register/mint)`
+    : `  2. export CREWBUS_TOKEN="$(cat ${tokPath})" (0600 file written at register/mint)`);
+  lines.push(`  3. brief/resume context: worker-sessions/${top.name}.json holds your promptPath (re-read it if you were a spawned worker)`);
+  return lines.join("\n");
+}
+
 function cmdRegister(args) {
   const root = boardDir(args);
   refuseDriveRootBoard(root, args);
@@ -1943,6 +2048,8 @@ function cmdRegister(args) {
     // (this is register, so --target here means grant). Bare --for without
     // --role just touches/creates the target.
     const target = sanitizeName(forTargetRaw, "agent");
+    const targetSentinel = reservedNameReason(target);
+    if (targetSentinel) fail(targetSentinel);
     const admin = resolveAgent(args, "agent");
     checkToken(d, admin, resolveToken(args));
     authorize(d, admin, "role-grant");
@@ -2018,7 +2125,12 @@ function cmdRegister(args) {
       console.log(`granted ${target} role ${wantRole} [board ${d.root}]`);
       return;
     }
-    const doc = touchAgent(d, target, { sessionId: getFlag(args, "--session") || undefined, lastDir: process.cwd() });
+    // NB: touchAgent on an EXISTING grant: --session only when given, else a
+    // sessionless admin touch must not wipe the register-time binding (C1).
+    const iSession = getFlag(args, "--session");
+    const adminTouch = { lastDir: process.cwd() };
+    if (iSession) adminTouch.sessionId = iSession;
+    const doc = touchAgent(d, target, adminTouch);
     if (doc.offboarded !== undefined) { delete doc.offboarded; writeAgentFile(d, target, doc); }
     console.log(`registered ${target} [board ${d.root}]`);
     return;
@@ -2027,8 +2139,15 @@ function cmdRegister(args) {
   const serviceRaw = getFlag(args, "--service");
   const serviceFlag = serviceRaw !== undefined || args.includes("--service");
   const agent = serviceRaw !== undefined && serviceRaw !== "" ? sanitizeName(serviceRaw, "agent") : resolveAgent(args, "agent");
+  const agentSentinel = reservedNameReason(agent);
+  if (agentSentinel) fail(agentSentinel);
   const session = getFlag(args, "--session");
   const token = resolveToken(args);
+  // mergeAgentDoc deletes patch keys whose value is undefined — so the
+  // register binding must be added ONLY when a session is actually given,
+  // else every sessionless re-register would wipe the binding (C1).
+  const extra = { lastDir: process.cwd() };
+  if (session) extra.sessionId = session;
   const expiresRaw = getFlag(args, "--expires-in");
   const expiresAt = expiresRaw !== undefined ? new Date(Date.now() + parseDuration(expiresRaw)).toISOString() : undefined;
   const prev = readAgent(d, agent);
@@ -2092,7 +2211,8 @@ function cmdRegister(args) {
     delete prev.token;
     writeAgentFile(d, agent, prev);
   }
-  const extra = { sessionId: session || undefined, lastDir: process.cwd() };
+  // `extra` (built right after --session parsing above) has sessionId only
+  // when given, so sessionless re-registers keep the prior binding.
   if (expiresRaw !== undefined) extra.expiresAt = expiresAt;
   if (serviceFlag) extra.service = true;
   const selfRoleWant = getFlag(args, "--role");
@@ -2743,7 +2863,11 @@ function cmdSend(args) {
   if (recipients.length === 1 && !replyTo) {
     const dup = findDuplicateSend(d, from, recipients[0], body.trim());
     if (dup) {
-      touchAgent(d, from, { sessionId: session || undefined, lastDir: process.cwd() });
+      // NB: sessionId only when given — mergeAgentDoc deletes undefined keys,
+      // so a sessionless send must NOT wipe a register-time session binding.
+      const dupExtra = { lastDir: process.cwd() };
+      if (session) dupExtra.sessionId = session;
+      touchAgent(d, from, dupExtra);
       console.log(`sent ${dup.id} -> ${recipients[0]} [board ${d.root}] (deduped: same body within 10s)`);
       return;
     }
@@ -2757,7 +2881,10 @@ function cmdSend(args) {
     const mirrorExtra = alsoChannel ? groupNames.length * (bodyLen + 1000) : 0;
     enforceBytesQuota(d, nFiles * (bodyLen + 1500) + mirrorExtra);
   }
-  touchAgent(d, from, { sessionId: session || undefined, lastDir: process.cwd() });
+  // Same sentinel-wipe guard as above: sessionless sends keep bindings.
+  const touchExtra = { lastDir: process.cwd() };
+  if (session) touchExtra.sessionId = session;
+  touchAgent(d, from, touchExtra);
   const tokenHint = minted.created ? ` identity '${from}' claimed, token ${minted.token} (set CREWBUS_TOKEN=${minted.token})` : "";
   const rev = gitRevForBoard(root);
   const at = new Date().toISOString();
@@ -6603,6 +6730,12 @@ Setup:
 Identity (first claim wins, token after that):
   crewbus register --from <you> [--session <opencode-session-id>] [--token <t>] [--expires-in <dur>] [--service]
   crewbus register --service <name> | register --offboard <name> --from <admin>
+  crewbus recover [--session <id>] [--cwd <dir>]
+    (compaction/restart amnesia triage: lists candidate identities with
+     evidence (register session binding, token-file↔tokenHash cross-check,
+     cwd history) and prints the exact resume commands. Read-only, never
+     mints. Reserved sentinel names ("unknown", "me", "you") refuse to
+     register/send — they exist only for tools that forget who they are.)
   crewbus agents [--json] [--active] [--window <sec>] [--include-services]
     (--active lists only agents seen within the window, default 300s;
      every inbox/listen/send heartbeats your presence.
@@ -7747,6 +7880,7 @@ async function main() {
     case "install-cli": return cmdInstallCli();
     case "update": return cmdUpdate(rest);
     case "register": return cmdRegister(rest);
+    case "recover": return cmdRecover(rest);
     case "acl": return cmdAcl(rest);
     case "agents": return cmdAgents(rest);
     case "send": return cmdSend(rest);

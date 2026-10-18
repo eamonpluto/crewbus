@@ -128,3 +128,39 @@ long-running agent persists its token to a file it can re-read.
   `.crewbus/logs/<name>.token`), then `CREWBUS_TOKEN` env. Re-register
   is **impossible** for claimed names (first-claim-wins rejects it), so there
   is no third option — protect the file.
+
+## Post-compaction identity recovery (`crewbus recover`)
+
+Compaction amnesia used to mint throwaway identities (`unknown` on the board,
+`logs/unknown.token` nobody owns). Two layers now stop that:
+
+- **Sentinel names never mint:** `unknown`, `me`, `you` are reserved —
+  `register` and `send` refuse them loudly (`ensureSender` guards them, so
+  every write path is covered). They exist only for tools that forgot who
+  they are, to force the recovery path instead of a silent identity loss.
+- **Read-only candidate ranking:** `crewbus recover [--session <id>]
+  [--cwd <dir>]` scans `agents/*.json` ∩ `logs/*.token` and prints scored
+  candidates (best first): session-id register binding +4, token-file
+  cross-check against the stored `tokenHash`/`salt` +3 (proof), token file
+  exists +1, `lastDir` cwd match +1. It never writes or mints; it prints the
+  exact resume commands (CREWBUS_AGENT, token-file path, `inbox --unacked
+  --digest`). Offboarded agents are excluded for privacy-critical boards.
+
+  ```
+  crewbus: triage on [board …/sandbox-1/.crewbus]
+  proven pilg (role worker, score 9) — session id matches register binding;
+      token file cross-checks the stored hash; worked from this directory
+  resume as 'pilg': …
+  ```
+
+- **Rehydrators resolve before naming "unknown":** the compaction card
+  (opencode plugin + `crewbus-hook compact`) first checks its session↔agent
+  map, then `CREWBUS_AGENT`, then a lite board-side score (binding + token
+  file + cwd, no hash cross-check in the standalone copies). Only when all
+  miss does it print the `crewbus recover` instruction — never a "you are
+  unknown" blessing.
+- **Bindings survive daily traffic:** register stores `sessionId`; later
+  sessionless sends/re-registers/admin touches must NOT wipe it
+  (`mergeAgentDoc` deletes undefined patch keys — callers add `sessionId`
+  to the patch only when given). Heartbeats merge field-by-field and never
+  touch unrelated fields.

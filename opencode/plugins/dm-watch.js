@@ -431,23 +431,85 @@ export const DmWatchPlugin = async ({ client, directory }) => {
   }, POLL_MS);
   poll().catch(() => {});
 
+  // C1 lite recovery (self-contained: no bin/lib imports — the plugin ships
+  // standalone). Same scoring spirit as `crewbus recover`, minus the
+  // token-hash cross-check: session binding +4, token file +1, cwd match +1.
+  // Returns [{ name, role, score, proven, why }] best-first.
+  function recoverCandidatesLite(sessionID) {
+    const cands = [];
+    try {
+      const agentsDir = path.join(root, "agents");
+      const logsDir = path.join(root, "logs");
+      const tokenNames = new Set();
+      try {
+        for (const f of fs.readdirSync(logsDir)) if (f.endsWith(".token")) tokenNames.add(f.slice(0, -6).toLowerCase());
+      } catch {}
+      const cwd = String(process.cwd() || "").replace(/\\/g, "/").toLowerCase();
+      for (const f of fs.readdirSync(agentsDir)) {
+        if (!f.endsWith(".json")) continue;
+        const doc = readJsonSafe(path.join(agentsDir, f));
+        if (!doc || !doc.name || doc.offboarded) continue;
+        let score = 0;
+        const why = [];
+        if (sessionID && doc.sessionId && String(doc.sessionId) === String(sessionID)) {
+          score += 4;
+          why.push("session id matches register binding");
+        }
+        if (tokenNames.has(String(doc.name).toLowerCase())) {
+          score += 1;
+          why.push("token file exists for this name");
+        }
+        if (doc.lastDir && cwd && String(doc.lastDir).replace(/\\/g, "/").toLowerCase() === cwd) {
+          score += 1;
+          why.push("worked from this directory");
+        }
+        if (score <= 0) continue;
+        cands.push({ name: doc.name, role: doc.role || "peer", score, proven: false, why: why.join("; ") });
+      }
+    } catch {}
+    cands.sort((a, b) => b.score - a.score || String(a.name).localeCompare(String(b.name)));
+    return cands;
+  }
+
   return {
     // Compaction rehydration: opencode summarizes this session, so the agent
     // wakes up forgetting its name, board, and token. Push the same identity
-    // card `crewbus-hook compact` prints into the summary prompt.
+    // card `crewbus-hook compact` prints into the summary prompt. When the
+    // session↔agent map misses, try board-side recovery BEFORE calling the
+    // agent "unknown" (post-compaction rehydration: C1):
+    //   1. register --session <id> binding stored on the agent doc
+    //   2. CREWBUS_AGENT env (set when the session boots via launch)
+    //   3. token-file + cwd evidence (agents roster ∩ logs/*.token)
+    // A resolved candidate drives the card; an unresolved one prints the
+    // crewbus recover path instead — never suggest re-registering a thrown
+    // "unknown" (those sentinel names refuse to mint, and for good reason).
     "experimental.session.compacting": async (input, output) => {
       try {
         if (!output || !Array.isArray(output.context)) return;
         refreshAgentMap();
         let agent = null;
         for (const [name, sid] of agentToSession) if (sid === (input && input.sessionID)) agent = name;
-        const who = agent || "unknown";
-        output.context.push(`crewbus: context refreshed after compaction. You are '${who}' on board ${root}.`);
-        output.context.push(`Token: read ${path.join(root, "logs", who + ".token")} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask your lead/admin to revoke it, then re-register for a fresh one.`);
-        output.context.push(`Then: crewbus inbox --from ${who} --unacked --digest (escalate to full reads on hits).`);
-        const doc = agent ? readJsonSafe(path.join(root, "agents", agent + ".json")) : null;
-        const ws = doc && doc.briefId ? readJsonSafe(path.join(root, "worker-sessions", agent + ".json")) : null;
-        if (ws && (ws.promptPath || ws.origPromptPath)) output.context.push(`Your brief: re-read ${ws.promptPath || ws.origPromptPath} from worker-sessions if present.`);
+        let proven = false;
+        if (!agent) agent = (process.env.CREWBUS_AGENT || "").trim() || null;
+        if (!agent) {
+          const cands = recoverCandidatesLite(input && input.sessionID);
+          if (cands[0] && cands[0].score >= 2) {
+            agent = cands[0].name;
+            proven = cands[0].proven || cands[0].score >= 3;
+          }
+        }
+        if (agent) {
+          output.context.push(`crewbus: context refreshed after compaction. You are '${agent}' on board ${root}${proven ? " (identity cross-checked)" : ""}.`);
+          output.context.push(`Token: read ${path.join(root, "logs", agent + ".token")} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask your lead/admin to revoke it, then re-register for a fresh one.`);
+          output.context.push(`Then: crewbus inbox --from ${agent} --unacked --digest (escalate to full reads on hits).`);
+          const doc = readJsonSafe(path.join(root, "agents", agent + ".json"));
+          const ws = doc && doc.briefId ? readJsonSafe(path.join(root, "worker-sessions", agent + ".json")) : null;
+          if (ws && (ws.promptPath || ws.origPromptPath)) output.context.push(`Your brief: re-read ${ws.promptPath || ws.origPromptPath} from worker-sessions if present.`);
+        } else {
+          output.context.push(`crewbus: context refreshed after compaction, but THIS session's agent could not be identified on board ${root}.`);
+          output.context.push(`Recover (read-only, never mints): crewbus recover${input && input.sessionID ? ` --session ${input.sessionID}` : ""} — it ranks candidate identities from the board (register session binding, token files, cwd history) and prints exact resume commands.`);
+          output.context.push(`NEVER re-register as 'unknown'/'me'/'you' — those sentinel names are reserved and refuse to mint; recover your real identity instead.`);
+        }
       } catch {}
     },
     dispose: async () => {

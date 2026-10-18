@@ -114,6 +114,46 @@ function resolveAgent(args, what) {
   return cleanName(getFlag(args, "--from") || process.env.CREWBUS_AGENT, what);
 }
 
+// C1 lite recovery (self-contained: no bin/lib imports — the hook ships
+// standalone). Same scoring spirit as `crewbus recover`, minus the
+// token-hash cross-check: session binding +4, token file +1, cwd match +1.
+// Returns [{ name, role, score, proven, why }] best-first.
+function recoverCandidatesLite(root, opts = {}) {
+  const cands = [];
+  try {
+    const agentsDir = path.join(root, "agents");
+    const logsDir = path.join(root, "logs");
+    const tokenNames = new Set();
+    try {
+      for (const f of fs.readdirSync(logsDir)) if (f.endsWith(".token")) tokenNames.add(f.slice(0, -6).toLowerCase());
+    } catch {}
+    const cwd = String(opts.cwd || "").replace(/\\/g, "/").toLowerCase();
+    for (const f of fs.readdirSync(agentsDir)) {
+      if (!f.endsWith(".json")) continue;
+      const doc = readJsonSafe(path.join(agentsDir, f));
+      if (!doc || !doc.name || doc.offboarded) continue;
+      let score = 0;
+      const why = [];
+      if (opts.sessionID && doc.sessionId && String(doc.sessionId) === String(opts.sessionID)) {
+        score += 4;
+        why.push("session id matches register binding");
+      }
+      if (tokenNames.has(String(doc.name).toLowerCase())) {
+        score += 1;
+        why.push("token file exists for this name");
+      }
+      if (doc.lastDir && cwd && String(doc.lastDir).replace(/\\/g, "/").toLowerCase() === cwd) {
+        score += 1;
+        why.push("worked from this directory");
+      }
+      if (score <= 0) continue;
+      cands.push({ name: doc.name, role: doc.role || "peer", score, proven: false, why: why.join("; ") });
+    }
+  } catch {}
+  cands.sort((a, b) => b.score - a.score || String(a.name).localeCompare(String(b.name)));
+  return cands;
+}
+
 function readJsonSafe(p) {
   try {
     return JSON.parse(fs.readFileSync(p, "utf8"));
@@ -466,10 +506,25 @@ async function cmdMonitor(args) {
 
 async function cmdCompact(args) {
   const root = boardDir(args);
-  const agent = resolveAgent(args, "agent");
+  const agent0 = resolveAgent(args, "agent");
+  const sessionID = getFlag(args, "--session");
   // Best-effort reads only: a compaction hook must never break its harness,
   // so missing boards/docs degrade to "what is known", never a loud failure.
+  // When the invoked name is an amnesia sentinel ("unknown"), try board-side
+  // recovery BEFORE blessing it (post-compaction rehydration: C1).
+  let agent = agent0;
+  const RES = ["unknown", "me", "you"];
+  if (RES.includes(agent)) {
+    const cands = recoverCandidatesLite(root, { sessionID, cwd: process.cwd() });
+    if (cands[0] && cands[0].score >= 2) agent = cands[0].name;
+  }
   const doc = readJsonSafe(path.join(root, "agents", `${agent}.json`));
+  if (RES.includes(agent)) {
+    console.log(`crewbus: context refreshed after compaction, but this hook could not identify '${agent0}' on board ${root}.`);
+    console.log(`Recover (read-only, never mints): crewbus recover${sessionID ? ` --session ${sessionID}` : ""} — it ranks candidate identities (register session binding, token files, cwd history) and prints exact resume commands.`);
+    console.log(`NEVER re-register as 'unknown'/'me'/'you' — those sentinel names are reserved and refuse to mint; recover your real identity instead.`);
+    return;
+  }
   console.log(`crewbus: context refreshed after compaction. You are '${agent}' on board ${root}.`);
   console.log(`Token: read ${path.join(root, "logs", `${agent}.token`)} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask your lead/admin to revoke it, then re-register for a fresh one.`);
   console.log(`Then: crewbus inbox --from ${agent} --unacked --digest (escalate to full reads on hits).`);
@@ -509,7 +564,7 @@ async function main() {
           "  crewbus-hook monitor --from <you> [--timeout <sec>] [--interval <sec>] [--board <path>]\n" +
           "    (blocking event stream for grok-build's monitor tool: prints each new batch to stdout on arrival,\n" +
           "     silent otherwise. Defaults: 0s timeout (run until killed), 1s interval.)\n" +
-          "  crewbus-hook compact --from <you> [--board <path>]\n" +
+          "  crewbus-hook compact --from <you> [--session <id>] [--board <path>]\n" +
           "    (post-compaction identity card: who/where/token-path plus the inbox\n" +
           "     next step; spawned workers also get their brief promptPath. Never\n" +
           "     fails on missing files — prints what is known.)"

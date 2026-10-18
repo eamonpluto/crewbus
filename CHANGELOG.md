@@ -2,6 +2,15 @@
 
 ## 10.0.11 (unreleased)
 
+Post-compaction identity recovery (engine hardening batch 2).
+
+- **Sentinel names never mint**: `"unknown"`, `"me"`, `"you"` are reserved — register/self-claim, admin `--for` grants, and send (`ensureSender`, hence every write path incl. relay auto-mint) refuse them loudly. They exist so amnesia-throwaway identities surface instead of silently locking a board (`logs/unknown.token` owned by nobody).
+- **`crewbus recover [--session <id>] [--cwd <dir>]`**: new read-only triage command (never mints, never writes). Scans `agents/*.json` ∩ `logs/*.token` and prints scored candidates best-first — session-id register binding +4, token-file↔stored-hash cross-check +3 (proven), token file exists +1, `lastDir` cwd match +1 — plus the exact resume script (CREWBUS_AGENT, token-file path, `crewbus inbox --from <you> --unacked --digest`). Offboarded agents excluded.
+- **Rehydrators resolve before blessing "unknown"**: the compaction identity card (opencode plugin template + repo plugin + `crewbus-hook compact`) now tries the session↔agent map → `CREWBUS_AGENT` → board-side lite scoring (no hash cross-check in the standalone copies) before printing a whoami card; when nothing sticks it prints the `crewbus recover` instruction and the never-re-register-unknown warning.
+- **Bug fixed — sessionless traffic wiped register bindings**: `mergeAgentDoc` treats undefined patch keys as deletions, so `touchAgent(…, { sessionId: undefined })` inside sessionless send/re-register/admin-grant erased the `--session` binding stamped at register (v-bumped docs, `sessionId` silently dropped). Sessionid is now only added to touch patches when actually provided.
+- New tests: `test/crewbus.recover.mjs` (32 checks: recoverIdentity scoring incl. forged-token never-proven + legacy no-hash handling, sentinel CLI guards, recover resume script, `crewbus-hook compact` sentinel resolution).
+- Docs: `docs/LONG_RUNS.md` recovery ladder rows, `docs/IDENTITY.md` "Post-compaction identity recovery" section.
+
 DEP0190-free child spawning (engine hardening batch 1).
 
 - **DEP0190-free child spawning**: Node >=22 deprecates `spawn(exe, args, { shell: true })` when `args` is non-empty (a hard error on a future Node). New standalone module `bin/lib/kidproc.js` converts shell-needing targets (npm `.cmd` shims: claude/codex/cursor; the `where opencode` probe; binary probes via `probeBinary`) into an explicit shell argv0 (`cmd.exe /d /s /c "<ms-quoted line>"` with `windowsVerbatimArguments`, `/bin/sh -c` on POSIX) with **correct** quoting — the old wire passed args unescaped (space splitting, quote eating, bare `& | ^` command injection). Worker-prompt delivery is now argv-identity round-trip safe (`bin/crewbus.js: `launchWorkerProcess`/`probeBinary`/`resolveOpencodeExe` migrated; real-exe `shell:false` targets like resolved opencode pass through untouched so the spawned pid stays the harness process). Argv identity is asserted by round-trip through the real cmd parser. Known cmd limitation documented: a matched `%VAR%` pattern inside a quoted token still expands at the cmd layer (unmatched `%` passes intact).

@@ -175,6 +175,8 @@ export function checkToken(d, agent, token) { // line 361
 // as register, zero extra round-trip). Returns { created } so callers can
 // print the token exactly once — it is never shown again via send.
 export function ensureSender(d, agent, token) { // line 387
+  const sentinel = reservedNameReason(agent);
+  if (sentinel) fail(sentinel);
   const rec = readAgent(d, agent);
   if (!rec) {
     if (isBoardFrozen(d)) fail(`board is frozen — new registrations refused (ask an admin to register --from <admin> --for ${agent})`);
@@ -226,6 +228,128 @@ export function ensureSender(d, agent, token) { // line 387
   if (tokenExpired(rec)) fail(`token for "${agent}" expired at ${rec.expiresAt} — re-register to renew: register --from ${agent} --token <old-or-new> --expires-in <dur>`);
   if (rec.revokedAt || (rec.tokenHash && isHashRevoked(d, rec.tokenHash))) fail(`token for "${agent}" is revoked — re-register to mint a fresh one: register --from ${agent}`);
   return { created: false };
+}
+
+// ---------------------------------------------------------------------------
+// Identity recovery (C1): an agent that survives compaction/restart amnesia
+// loses its name. The compaction hooks rehydrate from a session map; when
+// even that is lost the harness texts used to mint throwaway identities
+// (logs/unknown.token) that nobody owns. Two fixes: reserved sentinel names
+// never mint, and a read-only recovery cross-check finds the real identity
+// from what the board still knows.
+// ---------------------------------------------------------------------------
+
+// Scan logs/<name>.token: { name -> token | null } (best-effort; a missing
+// or unreadable file is just "no evidence").
+function listTokenFiles(d) {
+  const out = new Map();
+  try {
+    for (const f of fs.readdirSync(path.join(d.root, "logs"))) {
+      const m = /^([A-Za-z0-9_-]+)\.token$/.exec(f);
+      if (!m) continue;
+      try {
+        const t = fs.readFileSync(path.join(d.root, "logs", f), "utf8").trim();
+        if (t) out.set(m[1], t);
+      } catch {}
+    }
+  } catch {}
+  return out;
+}
+
+// { name, role, sessionId, lastDir, lastSeen, tokenHash, salt } for the scan.
+function findAgentRecords(d) {
+  const records = [];
+  try {
+    for (const f of fs.readdirSync(d.agents)) {
+      if (!f.endsWith(".json")) continue;
+      try {
+        const doc = readJson(path.join(d.agents, f));
+        if (!doc || !doc.name || doc.offboarded) continue;
+        records.push({
+          name: String(doc.name),
+          role: roleOfRecord(doc),
+          sessionId: doc.sessionId || undefined,
+          lastDir: doc.lastDir || undefined,
+          lastSeen: doc.lastSeen || undefined,
+          tokenHash: doc.tokenHash || undefined,
+          salt: doc.salt || undefined,
+        });
+      } catch {}
+    }
+  } catch {}
+  return records;
+}
+
+// Rank identity candidates for an amnesiac agent. Read-only, never throws.
+// opts: { sessionID, cwd, hashToken?, loadTokenFile? } (injectors let the
+// CLI do the token-file↔tokenHash cross-check; plugin copies ship a lite
+// variant without hash-verify).
+// Returns [{ name, role, score, proven, why }] best-first.
+export function recoverIdentity(d, opts = {}) {
+  const records = findAgentRecords(d);
+  const tokens = listTokenFiles(d);
+  const cwd = opts.cwd ? String(opts.cwd) : undefined;
+  const sessionID = opts.sessionID ? String(opts.sessionID) : undefined;
+  const canVerify = typeof opts.hashToken === "function" && typeof opts.loadTokenFile === "function";
+  const cands = [];
+  for (const rec of records) {
+    let score = 0;
+    let proven = false;
+    const why = [];
+    // Register-time session binding (register --session <id>) is the
+    // strongest cross-check: it names THIS harness session explicitly.
+    if (sessionID && rec.sessionId && rec.sessionId === sessionID) {
+      score += 4;
+      why.push("session id matches register binding");
+    }
+    // Token-file evidence: existence is a hint; a real cross-check against
+    // the stored hash is proof (hashToken(token, salt) === tokenHash).
+    if (tokens.has(rec.name)) {
+      score += 1;
+      why.push("token file exists for this name");
+      if (canVerify && rec.tokenHash && rec.salt) {
+        try {
+          const t = opts.loadTokenFile(d.root, rec.name);
+          if (t && opts.hashToken(t, rec.salt) === rec.tokenHash) {
+            proven = true;
+            score += 3;
+            why.push("token file cross-checks the stored hash");
+          }
+        } catch {}
+      }
+    }
+    if (cwd && rec.lastDir && arePathsSameDir(rec.lastDir, cwd)) {
+      score += 1;
+      why.push("worked from this directory");
+    }
+    if (score <= 0) continue;
+    cands.push({ name: rec.name, role: rec.role, score, proven, why: why.join("; ") });
+  }
+  cands.sort((a, b) => b.score - a.score || String(a.name).localeCompare(String(b.name)));
+  return cands;
+}
+
+// Case-insensitive directory comparison for Windows case-insensitivity +
+// symlink noise tolerance (best-effort: trailing slashes, backslashes).
+function arePathsSameDir(a, b) {
+  const norm = (p) => String(p).replace(/[\\/]+$/, "").toLowerCase();
+  if (norm(a) === norm(b)) return true;
+  // Partial tolerance: a registered cwd may be a subpath of the board root.
+  const aN = norm(a).split(/[\\/]/);
+  const bN = norm(b).split(/[\\/]/);
+  return aN.length !== bN.length && (aN.join("/").includes(bN.join("/")) || bN.join("/").includes(aN.join("/")));
+}
+
+// Reserved sentinel names never mint — they come from amnesia bugs, and
+// minting them loses real identity data forever (the 10.0.9-run "lead"
+// lockout came from exactly this).
+export const RESERVED_SENTINELS = ["unknown", "me", "you"];
+
+export function reservedNameReason(agent) {
+  const s = String(agent || "").trim().toLowerCase();
+  return RESERVED_SENTINELS.includes(s)
+    ? `"${agent}" is a reserved sentinel name (amnesia-throwaway) — identity lost? run: crewbus recover, then re-register/claim your real name`
+    : null;
 }
 
 // ---------------------------------------------------------------------------
