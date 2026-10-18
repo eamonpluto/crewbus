@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, readBoardMeta, writeBoardMeta, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS } from "./store.js";
 import { readAgent, agentTokenMatches, authorizeCheck, ensureLoopbackOperator, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
 import { readDMs, readVisible, ackedIds, ackedIdSet, findMessageById, deliverDMs, parseRecipients } from "./mail.js";
-import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim } from "./spawn.js";
+import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim, buildCoordinatorPrompt, provisionAutoLead, LEAD_NAME } from "./spawn.js";
 import { groupTelemetryData, collectBatch, gatherTelemetry, listBatches } from "./groups.js";
 import { httpJson } from "./sync.js";
 import { readChainRecords, verifyChainRecords, appendChainRecord, readHold, readBoardQuotas } from "./export.js";
@@ -782,7 +782,12 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
               <button type="button" data-perm="auto">auto</button>
               <button type="button" data-perm="full">full</button>
             </span>
-            <label class="dim" style="cursor:pointer"><input id="launch-dry" type="checkbox" checked> Dry-run</label>
+            <span class="dim" style="margin-left:8px">Coordinator:</span>
+            <select id="launch-lead" style="background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-size:12px" title="Observer coordinator lane: auto provisions a persistent background coordinator (lead) to triage workers and report to you">
+              <option value="auto">auto (Observer coordinator)</option>
+              <option value="none">none (direct to me)</option>
+            </select>
+            <label class="dim" style="cursor:pointer;margin-left:6px"><input id="launch-dry" type="checkbox" checked> Dry-run</label>
           </div>
 
           <div class="composer-cwd-row" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px">
@@ -801,7 +806,7 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
 
           <div class="composer-bottom">
             <div class="launch-identity" title="Desktop launches as the board owner (auto-provisioned) — no token step needed">
-              <span class="dim">launching as <b id="launch-as">lead</b> (auto)</span>
+              <span class="dim">launching as <b id="launch-as">boss</b> (auto)</span>
               <input id="launch-from" type="hidden" value="">
               <input id="launch-token" type="password" style="display:none" value="">
             </div>
@@ -1152,7 +1157,8 @@ async function refresh(){
     }).join('')||'<tr><td colspan="7" class="dim">no spawned workers</td></tr>';
     Array.prototype.forEach.call(document.querySelectorAll('[data-kill]'),function(b){b.onclick=function(){kill([b.getAttribute('data-kill')]);};});
     document.getElementById('agents').innerHTML=s.agents.map(function(a){
-      return '<tr><td><b>'+esc(a.name)+'</b></td><td>'+(a.active?DOT_SVG+' active':RING_SVG+' stale')+'</td><td title="'+esc(a.lastSeen||'?')+'">'+esc(ago(a.lastSeen))+'</td><td>'+esc(a.sessionId||'—')+'</td><td>'+a.dmCount+'</td><td>'+a.unacked+'</td></tr>';
+      var roleBadge = a.role ? ' <span class="dim" style="font-size:11px">['+esc(a.role)+']</span>' : '';
+      return '<tr><td><b>'+esc(a.name)+'</b>'+roleBadge+'</td><td>'+(a.active?DOT_SVG+' active':RING_SVG+' stale')+'</td><td title="'+esc(a.lastSeen||'?')+'">'+esc(ago(a.lastSeen))+'</td><td>'+esc(a.sessionId||'—')+'</td><td>'+a.dmCount+'</td><td>'+a.unacked+'</td></tr>';
     }).join('')||'<tr><td colspan="6" class="dim">no agents yet</td></tr>';
     document.getElementById('bcast').innerHTML=s.broadcasts.map(function(b){
       var to=Array.isArray(b.to)?b.to.join(','):String(b.to||'');
@@ -1204,8 +1210,22 @@ async function refresh(){
           return '<tr><td>'+esc(m.id)+'</td><td>'+esc(m.from)+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(m.head)+'</td><td><button data-ack="'+esc(m.id)+'">ack</button></td></tr>';
         }).join('')||'<tr><td colspan="4" class="dim">inbox zero for '+esc(c.from)+'</td></tr>';
         var ap=(tj.items||[]).filter(function(m){return m.subject&&m.subject.indexOf('approval: ')===0;});
+        if(c.from!=='lead'){
+          try{
+            var lr=await fetch('/api/inbox?agent=lead&unacked=1&limit=50',{cache:'no-store'});
+            if(lr.ok){
+              var lj=await lr.json();
+              var lap=(lj.items||[]).filter(function(m){return m.subject&&m.subject.indexOf('approval: ')===0;});
+              for(var k=0;k<lap.length;k++){
+                lap[k]._forLead=true;
+                if(!ap.some(function(x){return x.id===lap[k].id;})) ap.push(lap[k]);
+              }
+            }
+          }catch(_){}
+        }
         document.getElementById('approvals').innerHTML=ap.map(function(m){
-          return '<tr><td>'+esc(m.id)+'</td><td>'+esc(m.from)+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(m.head)+'</td><td><input data-reason="'+esc(m.id)+'" maxlength="500" size="18" placeholder="optional reason"></td><td><button data-approve="'+esc(m.id)+'">approve</button> <button class="danger" data-deny="'+esc(m.id)+'">deny</button></td></tr>';
+          var tag=m._forLead?' <span class="badge" style="font-size:10px;background:var(--panel);border:1px solid var(--line);padding:1px 4px;border-radius:3px">to lead</span>':'';
+          return '<tr><td>'+esc(m.id)+tag+'</td><td>'+esc(m.from)+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(m.head)+'</td><td><input data-reason="'+esc(m.id)+'" maxlength="500" size="18" placeholder="optional reason"></td><td><button data-approve="'+esc(m.id)+'">approve</button> <button class="danger" data-deny="'+esc(m.id)+'">deny</button></td></tr>';
         }).join('')||'<tr><td colspan="5" class="dim">no approval requests for '+esc(c.from)+'</td></tr>';
       }else{
         document.getElementById('triage').innerHTML='<tr><td colspan="4" class="dim">set identity above to triage</td></tr>';
@@ -1466,12 +1486,15 @@ async function doLaunch(dry){
   }
   var cwdEl=document.getElementById('launch-cwd');
   var cwdVal=cwdEl?cwdEl.value.trim():'';
+  var leadEl=document.getElementById('launch-lead');
+  var leadVal=leadEl?leadEl.value.trim():'auto';
   var payload={
     from:lf, token:lt,
     harness:selectedHarnesses.join(','),
     harnesses:selectedHarnesses,
     body:document.getElementById('launch-brief').value,
     permission:document.getElementById('launch-permission').value,
+    lead:leadVal,
     dryRun:dry
   };
   if(cwdVal){
@@ -1488,11 +1511,22 @@ async function doLaunch(dry){
     if(j.dryRun){
       var warn=(j.warnings||[]).length?('warnings: '+j.warnings.join('; ')+'\\n'):'';
       var cwdNotice=j.cwd?('target directory (cwd): '+j.cwd+'\\n'):'';
-      try{renderLaunchDiff(j);}catch(_){}out.textContent=warn+cwdNotice+(j.commands||[]).map(function(c){return c.to+' ['+(c.harness||'')+']: '+c.command;}).join('\\n')+'\\n(dry-run — booted nothing)';
+      var coordNotice=j.coordinator?('\\ncoordinator ('+j.coordinator.name+'): '+(j.coordinator.action==='reused'?('reused standing pid '+j.coordinator.pid):(j.coordinator.action==='minted'?'would auto-provision':'skipped ('+(j.coordinator.reason||'')+')'))):'';
+      try{renderLaunchDiff(j);}catch(_){}out.textContent=warn+cwdNotice+(j.commands||[]).map(function(c){return c.to+' ['+(c.harness||'')+']: '+c.command;}).join('\\n')+coordNotice+'\\n(dry-run — booted nothing)';
     }else{
       try{showUndoToast((j.workers||[]).map(function(w){return w.name;}));}catch(_){}
       var cwdNotice=j.cwd?(' [cwd: '+j.cwd+']'):'';
-      out.textContent='launched: '+(j.workers||[]).map(function(w){return w.name+' ['+(w.driver||'')+']'+(w.pid?(' (pid '+w.pid+')'):'')+(w.error?(' ERROR '+w.error):'');}).join(', ')+cwdNotice;
+      var coordNotice='';
+      if(j.coordinator){
+        if(j.coordinator.action==='minted'&&j.coordinator.pid){
+          coordNotice=' · coordinator: lead (pid '+j.coordinator.pid+')';
+        }else if(j.coordinator.action==='reused'){
+          coordNotice=' · coordinator: lead (reused'+(j.coordinator.pid?' pid '+j.coordinator.pid:'')+')';
+        }else if(j.coordinator.reason){
+          coordNotice=' · coordinator: skipped ('+j.coordinator.reason+')';
+        }
+      }
+      out.textContent='launched: '+(j.workers||[]).map(function(w){return w.name+' ['+(w.driver||'')+']'+(w.pid?(' (pid '+w.pid+')'):'')+(w.error?(' ERROR '+w.error):'');}).join(', ')+coordNotice+cwdNotice;
     }
   }catch(e){out.textContent='launch failed: '+e.message;}
   refresh();
@@ -2220,23 +2254,25 @@ export async function handleWebDashboardRoute(req, res, url, d) {
       res.end(JSON.stringify({ error: "loopback only" }));
       return true;
     }
-    const tokenFile = path.join(d.root, "logs", "lead.token");
-    let tok = "";
-    try { tok = fs.readFileSync(tokenFile, "utf8").trim(); } catch {}
-    // Verify the file token still matches the agent record: a stale file
-    // (revoked/rotated lead) must not prefill a dead token.
-    if (tok) {
-      try {
-        const rec = readAgent(d, "lead");
-        if (rec && agentTokenMatches(rec, tok)) {
-          res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-          res.end(JSON.stringify({ ok: true, from: "lead", token: tok }));
-          return true;
-        }
-      } catch {}
+    for (const name of ["boss", "lead"]) {
+      const tokenFile = path.join(d.root, "logs", `${name}.token`);
+      let tok = "";
+      try { tok = fs.readFileSync(tokenFile, "utf8").trim(); } catch {}
+      // Verify the file token still matches the agent record: a stale file
+      // (revoked/rotated operator) must not prefill a dead token.
+      if (tok) {
+        try {
+          const rec = readAgent(d, name);
+          if (rec && agentTokenMatches(rec, tok)) {
+            res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+            res.end(JSON.stringify({ ok: true, from: name, token: tok }));
+            return true;
+          }
+        } catch {}
+      }
     }
     res.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-    res.end(JSON.stringify({ ok: false, error: "no lead.token found" }));
+    res.end(JSON.stringify({ ok: false, error: "no operator token found" }));
     return true;
   }
   // Workspace memory (server-side, survives the random-port origin wipe):
@@ -2525,6 +2561,15 @@ export async function handleApiLaunch(d, body) {
   if (!v.ok) return { status: 400, payload: { error: "launch plan invalid", errors: v.errors, warnings: v.warnings } };
   const p = v.plan;
   const harnesses = Array.isArray(p.harnesses) && p.harnesses.length > 0 ? p.harnesses : [p.harness || "opencode"];
+  const hasCodingHarness = harnesses.some((h) => h !== "generic");
+  let leadMode = p.lead || "auto";
+  if (leadMode === "auto") {
+    leadMode = hasCodingHarness ? "board" : "none";
+  }
+  if (leadMode === "board" && !hasCodingHarness) {
+    return { status: 400, payload: { error: 'lead "board" needs a coding harness for the auto-coordinator (add a harness like opencode, or use lead "none")' } };
+  }
+  const leadTarget = leadMode === "board" ? LEAD_NAME : from;
   const names = p.to ? String(p.to).split(",").map((s) => cleanWebName(s)).filter(Boolean)
     : Array.from({ length: p.count }, (_, i) => `${cleanWebName(p.prefix || "w") || "w"}-${i + 1}`);
   if (names.length === 0) return { status: 400, payload: { error: "no worker names (pass to or count)" } };
@@ -2537,9 +2582,10 @@ export async function handleApiLaunch(d, body) {
     return { status: 400, payload: { error: 'generic harness needs cmd "..."' } };
   }
   if (v.plan.dryRun) {
+    const previewBatch = names.length > 1 ? newId("batch") : undefined;
     const rows = names.map((to, i) => {
       const driver = harnesses[i % harnesses.length];
-      const previewPrompt = buildSpawnPrompt({ name: to, from, subject: p.subject, body: p.body.trim(), replyId: "msg-<id>", rev, cwd, root: d.root });
+      const previewPrompt = buildSpawnPrompt({ name: to, from, lead: leadTarget, subject: p.subject, body: p.body.trim(), replyId: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", rev, cwd, root: d.root });
       const t = buildSpawnTarget({
         harness: driver, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model,
         auto: p.permission === "auto" || p.permission === "full" ? true : undefined,
@@ -2548,7 +2594,28 @@ export async function handleApiLaunch(d, body) {
       });
       return { to, harness: driver, command: formatSpawnCmd(t) };
     });
-    return { status: 200, payload: { ok: true, dryRun: true, plan: p, cwd, warnings: v.warnings, commands: rows } };
+    let coordinator = undefined;
+    if (leadMode === "board") {
+      const existingLead = readAgent(d, LEAD_NAME);
+      const standing = existingLead && typeof existingLead.spawnedPid === "number" && pidAlive(existingLead.spawnedPid);
+      if (standing) {
+        coordinator = { name: LEAD_NAME, action: "reused", pid: existingLead.spawnedPid, note: "live coordinator already running" };
+      } else if (existingLead && existingLead.offboarded) {
+        coordinator = { name: LEAD_NAME, action: "skipped", reason: "lane is offboarded" };
+      } else {
+        const coordDriver = harnesses.find((h) => h !== "generic") || "opencode";
+        const previewCoordPrompt = buildCoordinatorPrompt({
+          name: LEAD_NAME, from, subject: p.subject, body: p.body.trim(), batch: previewBatch,
+          workers: names.map((name, i) => ({ name, id: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", harness: harnesses[i % harnesses.length] })),
+          cwd, root: d.root, auto: p.permission === "auto" || p.permission === "full",
+        });
+        coordinator = {
+          name: LEAD_NAME, action: "minted", harness: coordDriver, wouldProvision: true,
+          promptPreview: previewCoordPrompt.slice(0, 400),
+        };
+      }
+    }
+    return { status: 200, payload: { ok: true, dryRun: true, plan: p, cwd, warnings: v.warnings, commands: rows, coordinator } };
   }
   const auto = p.permission === "auto" || p.permission === "full" ? true : undefined;
   const at = new Date().toISOString();
@@ -2567,11 +2634,26 @@ export async function handleApiLaunch(d, body) {
     const driver = harnesses[i % harnesses.length];
     const spawnOpts = { harness: driver, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model, auto, maxTurns: p.maxTurns, allowTools: p.allowTools, cwd, root: d.root, prompt: null };
     try {
-      const r = bootWorker(d, spawnOpts, { to, id, from, subject: p.subject, body: p.body.trim(), rev, logDir });
+      const r = bootWorker(d, spawnOpts, { to, id, from, lead: leadTarget, subject: p.subject, body: p.body.trim(), rev, logDir });
       workers.push({ name: to, pid: r.pid, replyId: id, log: r.logPath, driver });
     } catch (e) {
       workers.push({ name: to, replyId: id, driver, error: String((e && e.message) || e) });
     }
   }
-  return { status: 200, payload: { ok: true, cwd, workers, warnings: v.warnings } };
+  let coordinator = undefined;
+  if (leadMode === "board") {
+    const coordHarness = harnesses.find((h) => h !== "generic") || "opencode";
+    const coordSpawnOpts = { harness: coordHarness, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model, auto, cwd, root: d.root, prompt: null };
+    try {
+      coordinator = provisionAutoLead(d, {
+        spawnOpts: coordSpawnOpts,
+        from, subject: p.subject, body: p.body.trim(), rev, logDir,
+        workers: res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })),
+        batch: res.batch, auto,
+      });
+    } catch (e) {
+      coordinator = { action: "skipped", reason: `coordinator boot error: ${String((e && e.message) || e)}`, leadName: LEAD_NAME };
+    }
+  }
+  return { status: 200, payload: { ok: true, cwd, workers, coordinator, warnings: v.warnings } };
 }

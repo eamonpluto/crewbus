@@ -86,6 +86,8 @@ fn ensure_board_dir(root: &std::path::Path) -> std::io::Result<()> {
         "cursors",
         "revoked",
         "holds",
+        "artifacts",
+        "lessons",
         "logs",
     ] {
         std::fs::create_dir_all(root.join(sub))?;

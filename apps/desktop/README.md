@@ -13,11 +13,14 @@ adds only: sidecar lifecycle, connection dot, `Local environment` toggle,
 board switching, and the pair-QR window.
 
 Plug-and-play identity (no terminal): every loopback `serve`/`web` boot
-auto-provisions a `lead` operator (see `ensureLoopbackOperator` in
-`bin/lib/identity.js`) — first boot mints `agents/lead.json` +
-`logs/lead.token`, later boots are noops. The dashboard launches as
-`lead (auto)` with the token in hidden fields; `from+token` inputs moved to
-an `advanced` disclosure for manual override only.
+auto-provisions an operator identity (see `ensureLoopbackOperator` in
+`bin/lib/identity.js`). In the 3-lane model (boss / lead / peers), fresh boards
+mint `boss` (`agents/boss.json` + `logs/boss.token`), leaving the `lead` lane
+open to be auto-provisioned as the autonomous Observer coordinator during
+crew bursts. Legacy boards that already claimed `lead` remain fully supported.
+The dashboard launches as `boss (auto)` (or `lead (auto)`) with the token in
+hidden fields; `from+token` inputs moved to an `advanced` disclosure for manual
+override only.
 
 Board switching (Phase-2): header `Switch Board…` button (shell) + project
 popover `Switch Board…` / `Use Default Board` (dashboard) restart the

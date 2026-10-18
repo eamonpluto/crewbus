@@ -85,6 +85,13 @@ check("web: GET /api/models 200 catalog", models.status === 200 && !!models.json
 
 const dry = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "audit scope", dryRun: true });
 check("web: POST /api/launch dry-run previews", dry.status === 200 && dry.json && dry.json.dryRun === true && Array.isArray(dry.json.commands) && dry.json.commands.length === 1);
+check("web: POST /api/launch dry-run auto-lead previews coordinator", dry.json && dry.json.coordinator && dry.json.coordinator.name === "lead" && dry.json.coordinator.wouldProvision === true);
+
+const dryNone = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", lead: "none", body: "audit scope", dryRun: true });
+check("web: POST /api/launch lead=none omits coordinator", dryNone.status === 200 && dryNone.json && dryNone.json.coordinator === undefined);
+
+const badLeadGen = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "generic", cmd: "echo ok", lead: "board", body: "x", dryRun: true });
+check("web: POST /api/launch lead=board + generic 400", badLeadGen.status === 400 && (badLeadGen.json.error || "").includes("needs a coding harness"));
 
 const customCwd = fs.mkdtempSync(path.join(os.tmpdir(), "cb-custom-cwd-"));
 const dryWithCwd = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "audit scope", dryRun: true, cwd: customCwd });
@@ -99,7 +106,23 @@ check("web: POST /api/launch bad token 403", badTok.status === 403);
 
 const live = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "generic", cmd: 'node -e "process.exit(0)"', to: "ww1", body: "quick check" });
 check("web: POST /api/launch live boots (workers)", live.status === 200 && live.json && Array.isArray(live.json.workers) && live.json.workers.length === 1 && typeof live.json.workers[0].pid === "number");
+check("web: POST /api/launch generic harness omits coordinator", live.json && live.json.coordinator === undefined);
 run(["spawn-kill", "--from", "lead", "--token", leadTok, "--to", "ww1"]);
+
+// ---- loopback operator auto-provision & /api/operator-creds ----
+const boardLoop = fs.mkdtempSync(path.join(os.tmpdir(), "cb-loopback-"));
+try {
+  run(["init", "--board", boardLoop]);
+  const loopSrv = startServer(["serve", "--port", "0", "--board", boardLoop]);
+  const loopAt = await loopSrv.waitFor(/crewbus serve at http:\/\/(\S+)/);
+  const loopBase = `http://${loopAt[1]}`;
+  const creds = await httpCall(loopBase, "GET", "/api/operator-creds");
+  check("loopback: fresh board auto-provisions boss operator", creds.status === 200 && creds.json && creds.json.ok === true && creds.json.from === "boss" && typeof creds.json.token === "string" && creds.json.token.startsWith("abt-"));
+  check("loopback: boss token file persisted", fs.existsSync(path.join(boardLoop, "logs", "boss.token")));
+  loopSrv.kill();
+} finally {
+  fs.rmSync(boardLoop, { recursive: true, force: true });
+}
 
 // ---- CLI worker shims & standalone installer ----
 const boardBin = path.join(board, "bin");

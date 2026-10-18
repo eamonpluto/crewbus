@@ -405,26 +405,32 @@ export function mergeAgentDoc(prev, patch) {
 }
 
 // Loopback operator auto-provision (desktop plug-and-play):
-// `serve`/`web` on 127.0.0.1 auto-creates a `lead` identity on first boot so
+// `serve`/`web` on 127.0.0.1 auto-creates an operator identity on first boot so
 // the dashboard can launch without any terminal step. First agent on the
 // board becomes admin (see defaultRoleForNew), so this is the board owner.
-// CLI boards are untouched: this only fires when `lead` is missing AND the
+// Under the 3-lane model (boss / lead / peers), fresh boards mint `boss` as the
+// desktop human operator, allowing crew bursts to auto-provision `lead` as the
+// autonomous coordinator. Existing boards that already claimed `lead` (or `boss`)
+// are kept without disruption.
+// CLI boards are untouched: this only fires when operator is missing AND the
 // bind is loopback. Returns { from, token } or null when not applicable.
 export function ensureLoopbackOperator(d, host) {
   const loop = String(host || "127.0.0.1");
   if (loop !== "127.0.0.1" && loop !== "localhost" && loop !== "::1") return null;
-  let rec = null;
-  try { rec = readAgent(d, "lead"); } catch { rec = null; }
-  if (rec && (rec.tokenHash || rec.token)) return null; // already provisioned
+  let recBoss = null, recLead = null;
+  try { recBoss = readAgent(d, "boss"); } catch { recBoss = null; }
+  try { recLead = readAgent(d, "lead"); } catch { recLead = null; }
+  if (recBoss && (recBoss.tokenHash || recBoss.token)) return null; // already provisioned
+  if (recLead && (recLead.tokenHash || recLead.token)) return null; // already provisioned (legacy board)
   if (countAgentRecords(d) > 0) return null; // board already has registered agents
   const fresh = mintToken();
   const salt = newSalt();
   const now = new Date().toISOString();
   let prev = null;
-  try { prev = readJson(path.join(d.agents, "lead.json")); } catch { prev = null; }
+  try { prev = readJson(path.join(d.agents, "boss.json")); } catch { prev = null; }
   const { v, hlc } = stampSyncDoc(prev);
   const doc = mergeAgentDoc(prev, {
-    name: "lead",
+    name: "boss",
     firstSeen: (prev && prev.firstSeen) || now,
     lastSeen: now,
     tokenHash: hashToken(fresh, salt),
@@ -438,9 +444,9 @@ export function ensureLoopbackOperator(d, host) {
   let won = false;
   try {
     if (!prev) {
-      won = writeExclusiveJson(path.join(d.agents, "lead.json"), doc);
+      won = writeExclusiveJson(path.join(d.agents, "boss.json"), doc);
     } else {
-      writeAgentFile(d, "lead", doc);
+      writeAgentFile(d, "boss", doc);
       won = true;
     }
   } catch { won = false; }
@@ -449,14 +455,14 @@ export function ensureLoopbackOperator(d, host) {
     return null;
   }
   if (won) {
-    try { chmodAgentFile(path.join(d.agents, "lead.json")); } catch {}
+    try { chmodAgentFile(path.join(d.agents, "boss.json")); } catch {}
     try {
       fs.mkdirSync(path.join(d.root, "logs"), { recursive: true });
-      fs.writeFileSync(path.join(d.root, "logs", "lead.token"), fresh + "\n", "utf8");
-      try { fs.chmodSync(path.join(d.root, "logs", "lead.token"), 0o600); } catch {}
+      fs.writeFileSync(path.join(d.root, "logs", "boss.token"), fresh + "\n", "utf8");
+      try { fs.chmodSync(path.join(d.root, "logs", "boss.token"), 0o600); } catch {}
     } catch {}
   }
-  return won ? { from: "lead", token: fresh } : null;
+  return won ? { from: "boss", token: fresh } : null;
 }
 
 export function touchAgent(d, name, extra) { // line 2647
