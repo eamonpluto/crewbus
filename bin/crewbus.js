@@ -3879,7 +3879,69 @@ function cmdLesson(args) {
   fail(`unknown lesson subcommand "${sub}" (want post|list)`);
 }
 
+// inbox archive (C6 lead-lane hygiene): move ACKED direct DMs (and checkpoints,
+// which are progress-not-work) out of dm/<agent>/ into dm-archive/<agent>/.
+// Self-scoped bookkeeping (authenticated owner, ack-level authorization):
+// unacked work NEVER archives implicitly — a scope is mandatory (--all, or
+// --before <dur> for rows older than the window). Broadcasts are NOT moved
+// (they are single board-level files shared by all recipients) — pruning
+// those is an admin `prune` concern. Id collisions (the archive already has
+// the file) keep the original in place rather than double-mutating.
+function cmdInboxArchive(args) {
+  const root = boardDir(args);
+  refuseDriveRootBoard(root, args);
+  const d = requireBoard(root);
+  const agent = resolveAgent(args, "reader");
+  checkToken(d, agent, resolveToken(args));
+  authorize(d, agent, "ack"); // own inbox only, never reads others'
+  const wantAll = args.includes("--all");
+  const before = getFlag(args, "--before");
+  if (!wantAll && before === undefined) {
+    fail("inbox archive needs a scope: --all (move everything acked/checkpointed), or --before <dur> (only rows older than the window, e.g. --before 7d); unacked work never archives implicitly");
+  }
+  let cutoff = 0;
+  if (before !== undefined) {
+    const ms = parseDuration(before);
+    if (!(ms > 0)) fail("--before must be a positive duration (e.g. 7d, 30m)");
+    cutoff = Date.now() - ms;
+  }
+  const acked = ackedIds(d, agent);
+  const src = path.join(d.dm, agent);
+  const dst = path.join(path.dirname(d.dm), "dm-archive", agent);
+  let files = [];
+  try { files = fs.readdirSync(src).filter((f) => f.endsWith(".json")); } catch {}
+  let moved = 0;
+  let kept = 0;
+  for (const f of files) {
+    const srcP = path.join(src, f);
+    let m = null;
+    try { m = readJson(srcP); } catch { kept++; continue; }
+    if (!m || !m.id) { kept++; continue; }
+    const isAcked = acked.has(m.id);
+    const isCkpt = m.checkpoint === true;
+    if (!isAcked && !isCkpt) { kept++; continue; }
+    if (!wantAll) {
+      const t = Date.parse(m.at || "");
+      if (Number.isNaN(t) || t >= cutoff) { kept++; continue; }
+    }
+    fs.mkdirSync(dst, { recursive: true });
+    const dstP = path.join(dst, f);
+    if (fs.existsSync(dstP)) { kept++; continue; }
+    fs.renameSync(srcP, dstP);
+    moved++;
+  }
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ agent, moved, kept, archive: dst }));
+    return;
+  }
+  console.log(`archived ${moved} message(s) for ${agent} -> dm-archive/${agent}/ (kept ${kept}${wantAll ? "" : ", --before window"}) [board ${d.root}]`);
+  if (kept === moved && moved === 0) console.log(`nothing scoped to archive — unacked work stays put (ack it or pass --all)`);
+}
+
 function cmdInbox(args) {
+  if (args[0] === "archive") return cmdInboxArchive(args.slice(1));
+  const archivedView = args.includes("--archived");
+  args = archivedView ? args.filter((a) => a !== "--archived") : args;
   const root = boardDir(args);
   refuseDriveRootBoard(root, args);
   const d = requireBoard(root);
@@ -3923,7 +3985,16 @@ function cmdInbox(args) {
     checkToken(d, agent, resolveToken(args)); // your inbox is addressed to you — prove it
     authorize(d, agent, "inbox"); // reads allow all roles (auditor read-ok)
     heartbeat(d, agent, 0); // reading your mail proves you're alive
-    items = readVisible(d, agent);
+    // --archived (C6): opt-in view of dm-archive/<agent>/ (moved by
+    // `crewbus inbox archive`). Direct DMs only; ack state shown from the
+    // live ack dir. --unacked on an archive is naturally empty.
+    if (archivedView) {
+      const dAr = { ...d, dm: path.join(path.dirname(d.dm), "dm-archive") };
+      items = readDMs(dAr, agent);
+      items.sort((a, b) => String(a.at).localeCompare(String(b.at)) || String(a.id).localeCompare(String(b.id)));
+    } else {
+      items = readVisible(d, agent);
+    }
     acked = ackedIds(d, agent);
     if (json) {
       items = items.map((m) => (acked.has(m.id) ? { ...m, acked: true } : m));
@@ -6838,7 +6909,12 @@ Messaging (primitive — just a tool call, whenever you want):
      differently. Later spawn briefs whose groups (or --scope-less/global)
      match auto-inject the latest lessons, so a lesson learned once is
      paid forward. post needs your token; list is open.)
-  crewbus inbox --from <you> [--limit 20] [--after <msg-id>] [--all] [--unacked] [--overdue] [--older-than 10m] [--grep <pattern>] [--priority high|normal] [--max-chars <n>] [--digest] [--verify] [--json]
+  crewbus inbox archive --from <you> (--all | --before <dur>) [--json]
+    (inbox hygiene: move acked direct DMs + checkpoints from dm/<you>/ into
+     dm-archive/<you>/ — unacked work NEVER archives implicitly (a scope is
+     mandatory). Broadcasts are board-level files and stay (prune territory:
+     only admin). Read them back with 'crewbus inbox --from <you> --archived'.)
+  crewbus inbox --from <you> [--limit 20] [--after <msg-id>] [--all] [--unacked] [--overdue] [--older-than 10m] [--grep <pattern>] [--priority high|normal] [--max-chars <n>] [--digest] [--verify] [--json] [--archived]
     (--older-than keeps only messages older than the window: inbox --unacked
      --older-than 10m lists briefs nobody picked up (retry via redeliver or
      re-send). --overdue lists still-open briefs whose --needs-by deadline
