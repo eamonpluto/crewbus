@@ -130,6 +130,19 @@ const senderIsLead = provisionAutoLead(dUnit, {
 });
 check("provision: sender==lead skips into bootstrap mode", senderIsLead.action === "skipped" && /sender IS the lead/.test(senderIsLead.reason));
 
+// Lead-revive (C9): an EMPTY roster still provisions/boots the coordinator
+// (that is exactly what `spawn --count 0` exercises end-to-end).
+const dirRevive = fs.mkdtempSync(path.join(os.tmpdir(), "cb-leadrevive-"));
+const dRevive = ensureBoard(path.join(dirRevive, ".crewbus"));
+const provRevive = provisionAutoLead(dRevive, {
+  spawnOpts: { harness: "generic", cmd: "node -e \"process.exit(0)\"", root: dRevive.root, cwd: dirRevive },
+  from: "boss-r", subject: "revive", body: "REVIVE MISSION", workers: [], batch: undefined, logDir: path.join(dRevive.root, "logs"),
+});
+check("revive: empty roster still mints + boots the coordinator", provRevive.action === "minted" && typeof provRevive.pid === "number" && provRevive.pid > 0);
+check("revive: nothing to transfer", provRevive.transferred === 0);
+const coordFileR = fs.readdirSync(path.join(dRevive.root, "logs")).find((f) => f.startsWith("lead-") && f.endsWith(".prompt.md"));
+check("revive: coordinator prompt carries the mission text", !!coordFileR && fs.readFileSync(path.join(dRevive.root, "logs", coordFileR), "utf8").includes("REVIVE MISSION"));
+
 // offboarded lane refuses silent resurrection
 fs.copyFileSync(path.join(dUnit.agents, "lead.json"), path.join(dUnit.agents, "lead.json.bak"));
 const docOff = JSON.parse(fs.readFileSync(path.join(dUnit.agents, "lead.json"), "utf8"));
@@ -190,6 +203,25 @@ if (!hasOc) {
   // Second burst on the same board reuses the standing coordinator.
   const out2 = run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "1", "--prefix", "sec3", "--harness", "opencode", "--auto", "--i-understand-danger", "--body", "second burst for the same lane"]);
   check("e2e: second burst reuses the lead lane", out2.includes("auto-lead reused") && out2.includes("crew transferred"));
+
+  // ---- Lead-revive (C9) CLI guards (deterministic, no boots) ----
+  const gRevTo = (() => { try { run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "0", "--to", "wx", "--body", "m"]); return { ok: true, out: "" }; } catch (e) { return { ok: false, out: String((e && e.stderr) || "") }; } })();
+  check("revive: --count 0 refuses worker operands", !gRevTo.ok && /revives ONLY the auto-coordinator/.test(gRevTo.out));
+  const gRevNone = (() => { try { run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "0", "--lead", "none", "--harness", "generic", "--cmd", "node -e \"process.exit(0)\"", "--body", "m"]); return { ok: true, out: "" }; } catch (e) { return { ok: false, out: String((e && e.stderr) || "") }; } })();
+  check("revive: --count 0 refuses --lead none", !gRevNone.ok && /lead-revive path/.test(gRevNone.out));
+  const gRevNeg = (() => { try { run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "-1", "--body", "m"]); return { ok: true, out: "" }; } catch (e) { return { ok: false, out: String((e && e.stderr) || "") }; } })();
+  check("revive: negative --count still refuses", !gRevNeg.ok && /--count must be >= 0/.test(gRevNeg.out));
+  const dryRevive = run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "0", "--dry-run", "--body", "REVIVE THE COORDINATOR AFTER THE REBOOT"]);
+  check("revive: dry-run preview mentions no workers", dryRevive.includes("lead-revive:") && dryRevive.includes("0 workers") && !dryRevive.includes("would spawn "));
+  check("revive: dry-run preview notes the standing coordinator", dryRevive.includes("reused, not duplicated"));
+
+  // ---- Lead-revive live (real coordinator boot, no worker boots) ----
+  const preWorkers = fs.existsSync(path.join(boardE2E, "agents")) ? fs.readdirSync(path.join(boardE2E, "agents")).filter((f) => f.startsWith("sec")).length : 0;
+  const outRevive = run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "0", "--body", "revive: the coordinator died after a reboot; re-read your crew and come back"]);
+  check("revive: live run boots no worker pids", !/\bspawned \w+\b/.test(outRevive));
+  check("revive: live run provisions or reuses the coordinator", outRevive.includes("auto-lead provisioned") || outRevive.includes("auto-lead reused"));
+  const postWorkers = fs.readdirSync(path.join(boardE2E, "agents")).filter((f) => /^sec/.test(f)).length;
+  check("revive: no new worker lanes created", postWorkers === preWorkers);
 
   // Cleanup: admin may kill everything incl. the coordinator lane.
   let killOut = "";

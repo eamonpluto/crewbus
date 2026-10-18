@@ -1,8 +1,8 @@
 # Changelog
 
-## 10.0.11 (unreleased)
+## 10.0.11
 
-Post-compaction identity recovery + stale-pid guards + coordinator budgets + member-scoped channels + inbox archive (engine hardening batches 2-5).
+Post-compaction identity recovery + stale-pid guards + coordinator budgets + member-scoped channels + inbox archive + lead revive (engine hardening batches 2-5, 9).
 
 - **Member-scoped channel posting (C4, default-on)**: channel post is no longer lead|admin-only for everyone — workers (default role) may post to `grp-<group>` channels of groups they are a MEMBER of; lead/admin keep board-wide posting. Every refusal stays loud: board channels and foreign group channels refuse workers with the reason (`authorizeCheck` gains a `channel-post` scoped branch; MCP mirror `dm_channel_post` + `authorizeMcp` updated identically). `--also-channel` brief mirrors become member-gated per group: the DM always delivers, only unauthorized channel mirrors are skipped with a visible `[channel mirror skipped, members-only: <g>]` note (CLI `send`/`spawn` + MCP `dm_send`). `docs/RBAC.md` matrix updated.
 
@@ -17,6 +17,9 @@ Post-compaction identity recovery + stale-pid guards + coordinator budgets + mem
 - Test suite hygiene: `crewbus.workbench.mjs` strips leaked operator identity too.
 - **Stale-pid guards everywhere (C2)**: `isPidStale` (a live pid that provably postdates the spawn record = OS pid reuse after a reboot, i.e. an unrelated process) is now wired into every standing/liveness decision, not just `spawn-status`: auto-lead reuse (`provisionAutoLead`), dry-run lead previews (CLI `spawn` + desktop launch + relay spawn API), the spawn live-name refusal, `respawn`'s still-running gate, group telemetry "running", relay `/healthz` worker counts, the web roster `aliveByName`, and — safety-critical — `killWorkers` refuses to `taskkill`/`signal` a pid-stale record (new `pid-stale` result; killing an unrelated recycled process would have been possible before).
 - Docs: `docs/LONG_RUNS.md` recovery ladder rows, `docs/IDENTITY.md` "Post-compaction identity recovery" section.
+- **Lead revive (`crewbus spawn --count 0`)**: a crashed/rebooted coordinator can be brought back without touching the crew — boots nothing except the auto-coordinator lane (zero worker boots, zero DMs delivered; the passed mission text becomes the coordinator's reminder of what the crew was on about, worker briefs/threads live on the board). Requires `--lead board` and refuses worker operands (`--to`/`--to-file`/`--to-group`) and negative counts; a standing coordinator is reused, never duplicated; `--dry-run` previews the lead-only plan. `docs/LEAD_ASSIGN.md` §3.5 + `docs/LONG_RUNS.md` reboot row.
+- CI: new `lead-e2e` lane (ubuntu, Node 22) installs the real `opencode-ai` CLI and runs the harness-backed E2E suites that local `npm test` skips when opencode is absent — kidproc, lead-assign (incl. lead revive) and lead-budget.
+- Docs: `docs/GROUPS.md` channel-post wording updated to member-scoped semantics; `docs/TROUBLESHOOTING.md` gains the post-compaction "unknown" trap row (`crewbus recover`).
 
 DEP0190-free child spawning (engine hardening batch 1).
 

@@ -2952,15 +2952,28 @@ function cmdSpawn(args) {
   const d = ensureBoard(root);
   const from = resolveAgent(args, "sender");
   const countRaw = getFlag(args, "--count");
+  // Lead-revive (C9): `--count 0` boots NOTHING except the auto-coordinator
+  // lane — for when the lead died (crash/reboot) and the crew needs its
+  // coordinator back without re-briefing or re-booting any worker. Rows stay
+  // put: no DMs are delivered, no worker pids are touched. Conflicting
+  // worker selectors are refused (this path has no worker operands).
+  let revive = false;
   let autoNames = [];
   if (countRaw !== undefined) {
     const n = Number(countRaw);
-    if (!Number.isInteger(n) || n <= 0) fail("--count must be a positive integer");
-    const prefix = String(getFlag(args, "--prefix") || "worker").trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "-").slice(0, 30);
-    if (!prefix) fail("invalid --prefix");
-    for (let i = 1; i <= n; i++) autoNames.push(`${prefix}-${i}`);
+    if (!Number.isInteger(n) || n < 0) fail("--count must be >= 0 (0 = revive ONLY the auto-coordinator lane, no workers; workers want a positive --count)");
+    if (n === 0) {
+      revive = true;
+      if (getFlag(args, "--to") !== undefined || getFlag(args, "--to-file") !== undefined || getFlag(args, "--to-group") !== undefined) {
+        fail("--count 0 revives ONLY the auto-coordinator lane (no workers): drop --to/--to-file/--to-group, or pass a positive --count to spawn workers");
+      }
+    } else {
+      const prefix = String(getFlag(args, "--prefix") || "worker").trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "-").slice(0, 30);
+      if (!prefix) fail("invalid --prefix");
+      for (let i = 1; i <= n; i++) autoNames.push(`${prefix}-${i}`);
+    }
   }
-  const recipients = parseRecipients(getFlag(args, "--to"), getFlag(args, "--to-file"), expandGroupsOrFail(d, getFlag(args, "--to-group")).concat(autoNames));
+  const recipients = revive ? [] : parseRecipients(getFlag(args, "--to"), getFlag(args, "--to-file"), expandGroupsOrFail(d, getFlag(args, "--to-group")).concat(autoNames));
   if (recipients.includes("@all")) fail("spawn --to @all is refused: @all membership is dynamic (late joiners included) — name the workers explicitly");
   const maxSpawnRaw = getFlag(args, "--max-spawn");
   const maxSpawn = maxSpawnRaw === undefined ? MAX_SPAWN : Number(maxSpawnRaw);
@@ -3047,6 +3060,9 @@ function cmdSpawn(args) {
   if (leadMode === "board" && !hasCodingHarness) {
     fail('--lead board needs a coding harness for the auto-coordinator (add --harness opencode, or pass --lead none under --harness generic)');
   }
+  if (revive && leadMode !== "board") {
+    fail("--count 0 is the lead-revive path: it needs the auto-coordinator (--lead board — the default when a coding harness is present)");
+  }
   const leadTarget = leadMode === "board" ? "lead" : from;
   const model = getFlag(args, "--model");
   const auto = args.includes("--auto");
@@ -3125,17 +3141,21 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
   const spawnOpts = { harness, cmd, model, auto, maxTurns: maxTurnsNum, allowTools, cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
   if (dry) {
     // Preview only: nothing touches the board (ids below are illustrative).
-    const previewBatch = recipients.length > 1 ? newId("batch") : undefined;
-    recipients.forEach((to, i) => {
-      const driver = harnesses[i % harnesses.length];
-      const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok") ? 50 : undefined);
-      const itemSpawnOpts = { ...spawnOpts, harness: driver, maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
-      const previewPrompt = buildSpawnPrompt({ name: to, from, lead: leadTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(to, leadTarget), workbench: wbFor(to) });
-      const t = buildSpawnTarget({ ...itemSpawnOpts, name: to, promptPath: `<logs>/${to}-<stamp>.prompt.md`, prompt: previewPrompt });
-      const wtNote = worktreePrefix !== undefined ? ` worktree ../${to}-<stamp> (branch ${worktreePrefix}/${to}-<stamp>)` : branchPrefix !== undefined ? ` branch ${branchPrefix}/${to}-<stamp>` : "";
-      console.log(`would spawn ${to} [${driver}] (${lifetime}) cwd ${cwd}${wtNote} cmd: ${formatSpawnCmd(t)} [board ${d.root}]`);
-    });
-    console.log(`--- prompt (first worker) ---\n${buildSpawnPrompt({ name: recipients[0], from, lead: leadTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]) })}`);
+    const previewBatch = !revive && recipients.length > 1 ? newId("batch") : undefined;
+    if (!revive) {
+      recipients.forEach((to, i) => {
+        const driver = harnesses[i % harnesses.length];
+        const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok") ? 50 : undefined);
+        const itemSpawnOpts = { ...spawnOpts, harness: driver, maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
+        const previewPrompt = buildSpawnPrompt({ name: to, from, lead: leadTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(to, leadTarget), workbench: wbFor(to) });
+        const t = buildSpawnTarget({ ...itemSpawnOpts, name: to, promptPath: `<logs>/${to}-<stamp>.prompt.md`, prompt: previewPrompt });
+        const wtNote = worktreePrefix !== undefined ? ` worktree ../${to}-<stamp> (branch ${worktreePrefix}/${to}-<stamp>)` : branchPrefix !== undefined ? ` branch ${branchPrefix}/${to}-<stamp>` : "";
+        console.log(`would spawn ${to} [${driver}] (${lifetime}) cwd ${cwd}${wtNote} cmd: ${formatSpawnCmd(t)} [board ${d.root}]`);
+      });
+      console.log(`--- prompt (first worker) ---\n${buildSpawnPrompt({ name: recipients[0], from, lead: leadTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]) })}`);
+    } else {
+      console.log(`lead-revive: would ONLY provision/reuse the auto-coordinator on the '${leadTarget}' lane (0 workers, no DMs delivered) [board ${d.root}]`);
+    }
     if (leadMode === "board") {
       const existingLead = readAgent(d, "lead");
       // Stale-pid guard (C2): preview says "fresh provision" when the pid
@@ -3148,7 +3168,7 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
       } else {
         const coordPreview = buildCoordinatorPrompt({
           name: "lead", from, subject, body: body.trim(), batch: previewBatch,
-          workers: recipients.map((name, i) => ({ name, id: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", harness: harnesses[i % harnesses.length] })),
+          workers: revive ? [] : recipients.map((name, i) => ({ name, id: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", harness: harnesses[i % harnesses.length] })),
           crew: crewFor(recipients[0], leadTarget), cwd, root, auto, workbench: wbFor(recipients[0]),
         });
         console.log(`--- lead ---\nwould spawn lead [${harnesses[0]}] (persistent — auto-provisioned lead, owner of this crew) cwd ${cwd} [board ${d.root}]`);
@@ -3159,9 +3179,15 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
   }
   // Direct (N-copy) path is forced here (every worker needs its own message
   // id to thread the reply against) — --broadcast is not accepted by spawn.
-  const res = deliverDMs(d, { from, recipients, body: body.trim(), subject, replyTo, priority, senderType, fwd, rev, at, forceBroadcast: false, forceDirect: true, needsBy });
-  if (res.mode !== "direct") fail("spawn: internal error — expected direct delivery");
-  appendChainRecord(d, from, "spawn", { to: recipients.slice(), harness, harnesses, auto, cwd, isolate: isolateInfo.isolated || false, budgetTokens, budgetMinutes, deadlineAt });
+  // Lead-revive (C9) skips all of it: zero workers, zero DMs — the mission
+  // text feeds the coordinator prompt directly.
+  let res = null;
+  if (!revive) {
+    res = deliverDMs(d, { from, recipients, body: body.trim(), subject, replyTo, priority, senderType, fwd, rev, at, forceBroadcast: false, forceDirect: true, needsBy });
+    if (res.mode !== "direct") fail("spawn: internal error — expected direct delivery");
+  }
+  appendChainRecord(d, from, "spawn", { to: recipients.slice(), harness, harnesses, auto, cwd, isolate: isolateInfo.isolated || false, budgetTokens, budgetMinutes, deadlineAt, ...(revive ? { revive: true } : {}) });
+  if (!revive) {
   let chanMirrorNote = "";
   if (alsoChannel) {
     const m = mirrorToGroupChannels(d, { groups: groupNames, from, body: body.trim(), subject, replyTo, batch: res.batch || (res.items[0] && res.items[0].id), priority, rev, at });
@@ -3198,10 +3224,13 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
     } catch (e) {
       console.log(`spawn FAILED ${to}: ${e.message} (brief ${id} still waits on the board) [board ${d.root}]`);
     }
+    }
   }
   // Auto-provisioned lead: runs after the crew boots so the coordinator's
   // roster carries the real brief ids, and so a lead boot failure can never
-  // block worker boots.
+  // block worker boots. Lead-revive (C9): also runs here with an EMPTY
+  // roster — the revive mission text becomes the coordinator's reminder of
+  // what the crew was on about (worker threads/scope live on the board).
   if (leadMode === "board") {
     const coordHarness = [  // first coding harness wins; generic is excluded above
       ...harnesses.filter((h) => h !== "generic"),
@@ -3209,8 +3238,8 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
     const provision = provisionAutoLead(d, {
       spawnOpts: { ...spawnOpts, harness: coordHarness, maxTurns: undefined, allowTools: undefined },
       from, subject, body: body.trim(), rev, logDir,
-      workers: res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })),
-      batch: res.batch, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]), auto,
+      workers: res ? res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })) : [],
+      batch: res ? res.batch : undefined, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]), auto,
       budgetTokens: leadBudgetTokens, budgetMinutes: leadBudgetMinutes,
     });
     if (provision.action === "minted" && provision.pid) {
@@ -6939,7 +6968,7 @@ Messaging (primitive — just a tool call, whenever you want):
     (recover mail a dead watcher consumed: clears delivered markers and
      rewinds the cursor so the next poll/push treats it as fresh;
      use after re-registering with the live session)
-  crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|generic] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
+    crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|generic] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
    (--budget-* cap the WORKERS; --lead-budget-* cap the auto-provisioned coordinator lane — same semantics, e.g. a 400k-token lead that posts its aggregate and exits. Unset = persistent boss-supervised coordinator (default). A standing coordinator keeps its boot-time budget; the flags cannot change it mid-flight.)
    (workers boot with cloud/AI credential vars scrubbed from their environment by default (lead's keys never leak into briefs); pass --keep-env to inherit everything or --allow-env <prefix,...> to keep listed names. CREWBUS_TOKEN is never inherited — workers claim their own identity.)
     (brief N workers AND boot them detached: the DM lands first so the brief
@@ -6960,7 +6989,9 @@ Messaging (primitive — just a tool call, whenever you want):
      receive mail — their replies wait on the board for pull (inbox/gather).
      --auto maps to each harness's
      unattended mode (dangerous); --dry-run prints the exact command without
-     touching the board.)
+     touching the board. --count 0 is the LEAD REVIVE path: boots nothing
+     except the auto-coordinator lane (no workers, no DMs) — for bringing the
+     coordinator back after a crash/reboot without re-briefing the crew.)
   crewbus spawn-status --to <worker> [--lines 10] [--json] | --all
     (is it running? did the reply land? pid liveness via kill-0 plus process
      start-time validation — reboot-recycled pids read dead (stale pid) instead

@@ -46,7 +46,7 @@ the board.
 | Token lost entirely | Lead `token revoke --target`, worker re-registers |
 | Worker silent | `spawn-status`: no reply → read its log; re-brief or `respawn` |
 | Supervisor gone | `pool-resume --id`; stale locks expire via TTL |
-| Reboot | `doctor` → `spawn-status --all` (stale pids read dead, not running) → `respawn`/`pool-resume` |
+| Reboot | `doctor` → `spawn-status --all` (stale pids read dead, not running) → `respawn`/`pool-resume`; dead coordinator: `crewbus spawn --count 0 --body "<what the crew was on>"` (C9 lead revive, workers untouched) |
 | Primary relay down | `relay promote` on the standby (see `docs/HA.md`) |
 
 ## Bottom line

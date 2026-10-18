@@ -60,6 +60,16 @@ crewbus spawn --from boss --count 3 --harness generic --lead none --body "Run te
    - If the `lead` lane has been marked `offboarded: true` (deliberate teardown), auto-provisioning is skipped with a loud warning.
 4. **Boss Detachment**:
    - If `from === "lead"`, auto-provisioning skips into self-bootstrap mode to prevent recursion.
+5. **Lead Revive (`crewbus spawn --count 0`)**:
+   - When the coordinator died (crash, reboot, budget reap), the crew still has
+     its briefs/threads on the board — but nobody triaging. `--count 0` boots
+     NOTHING except the auto-coordinator lane: zero worker boots, zero DMs
+     delivered; the mission text you pass becomes the coordinator's reminder
+     of what the crew was on about (worker threads and scope live on the board).
+   - Requires `--lead board` (the default under a coding harness); worker
+     operands (`--to`/`--to-file`/`--to-group`) are refused — this path has no
+     worker operands. A standing coordinator is reused, never duplicated;
+     an offboarded lane skips with a loud warning, same as any burst.
 
 ---
 

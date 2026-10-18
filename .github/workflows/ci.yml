@@ -30,3 +30,28 @@ jobs:
         run: npm run bench
         env:
           AB_BENCH_N: 50
+
+  lead-e2e:
+    # Boot a REAL headless opencode and run the lead-assign E2E (lane
+    # auto-provision, coordinator reuse, kill/respawn contract). CI-only job:
+    # local `npm test` keeps skipping those E2Es when opencode isn't
+    # installed, so this lane is the only place they run in automation.
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # npm i -g installs the real shim the DEP0190 changes migrate
+      # (`opencode` is probed with `where`/`which` and booted via buildSpawnTarget).
+      - name: install opencode (headless cli)
+        run: npm install -g opencode-ai
+      - name: run the harness-backed lead E2E suites
+        run: |
+          node test/crewbus.kidproc.mjs
+          node test/crewbus.lead-assign.mjs
+          node test/crewbus.lead-budget.mjs

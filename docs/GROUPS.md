@@ -95,8 +95,10 @@ block assumes:
   for approvals (`--priority high`) and scope disputes only.
 - **Channels are the shared read surface.** `crewbus channel tail
   grp-<group>` shows a group's briefs + mirrored progress; reads need
-  no token. Channel *posting* is lead|admin-only, so workers write
-  via DMs, never via `channel post`.
+  no token. Channel *posting* is member-scoped (default-on, no flag):
+  a worker may post to `grp-<group>` only when it is a MEMBER of that
+  group — board channels and foreign groups stay lead|admin-only
+  (see docs/RBAC.md).
 - **Boot habit.** `crewbus agents` + `crewbus group list` once at
   start, so a worker knows who else is here. A worker that never runs
   a discovery command will work star-topology through the lead — that
