@@ -9,6 +9,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(new URL("../bin/crewbus.js", import.meta.url));
 const HOOK = fileURLToPath(new URL("../bin/crewbus-hook.js", import.meta.url));
 const MCP = fileURLToPath(new URL("../bin/crewbus-mcp.js", import.meta.url));
+// Test env hygiene: strip operator identity leaks (CREWBUS_TOKEN/AGENT) so
+// fresh tmp-board identities always mint their own tokens.
+delete process.env.CREWBUS_TOKEN;
+delete process.env.CREWBUS_AGENT;
 import { buildSpawnTarget, buildSpawnPrompt, buildCrewContext, buildRespawnTarget, buildRespawnBrief, extractHarnessSessionId, isPidStale, readWorkerSession, syncWorkerSession, workerStatus, bootWorker, pidStartTime, parsePsEtime, probeOpencodeStorage, resolveOpencodeExe } from "../bin/lib/spawn.js";
 import { mergeAgentDoc } from "../bin/lib/identity.js";
 import { boardSnapshot } from "../bin/lib/web.js";

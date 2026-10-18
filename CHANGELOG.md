@@ -1,5 +1,14 @@
 # Changelog
 
+## 10.0.11 (unreleased)
+
+DEP0190-free child spawning (engine hardening batch 1).
+
+- **DEP0190-free child spawning**: Node >=22 deprecates `spawn(exe, args, { shell: true })` when `args` is non-empty (a hard error on a future Node). New standalone module `bin/lib/kidproc.js` converts shell-needing targets (npm `.cmd` shims: claude/codex/cursor; the `where opencode` probe; binary probes via `probeBinary`) into an explicit shell argv0 (`cmd.exe /d /s /c "<ms-quoted line>"` with `windowsVerbatimArguments`, `/bin/sh -c` on POSIX) with **correct** quoting — the old wire passed args unescaped (space splitting, quote eating, bare `& | ^` command injection). Worker-prompt delivery is now argv-identity round-trip safe (`bin/crewbus.js: `launchWorkerProcess`/`probeBinary`/`resolveOpencodeExe` migrated; real-exe `shell:false` targets like resolved opencode pass through untouched so the spawned pid stays the harness process). Argv identity is asserted by round-trip through the real cmd parser. Known cmd limitation documented: a matched `%VAR%` pattern inside a quoted token still expands at the cmd layer (unmatched `%` passes intact).
+- **Escape hatch**: `CREWBUS_SHELL_LEGACY=1` restores the pre-refactor `shell: true` behavior for exactly one release.
+- Test env hygiene: suites strip operator identity leaks (`CREWBUS_TOKEN`/`CREWBUS_AGENT`) so fresh tmp-board identities always mint their own tokens.
+- New tests: `test/crewbus.kidproc.mjs` (32 checks: MS/POSIX quoting vectors, cmd round-trip identity, resolveShellShot migration shape, legacy hatch pin).
+
 ## 10.0.10 (2026-10-18)
 
 MINOR RELEASE: Observer coordinator lane model (`boss` / `lead` / `peers`), auto-assigned lead (`--lead auto|board|none`), and Desktop app alignment. No board-schema change (`board.json` stays v2).

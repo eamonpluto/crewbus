@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { shellChildSpec, shellChildOptions } from "./kidproc.js";
 
 export const LAUNCH_PERMISSIONS = ["supervised", "autoEdits", "auto", "full"];
 export const LAUNCH_LIFETIMES = ["oneshot", "persistent"];
@@ -42,14 +43,18 @@ export function launchDrivers() {
 
 // Probe one binary for presence + version. Never throws: missing binaries
 // report { found: false } ("not installed", not failure).
-// On Windows, global npm CLIs are batch scripts (.cmd) which require shell: true.
+// On Windows, global npm CLIs are batch scripts (.cmd) which require a shell;
+// the legacy spawn(exe, args, {shell:true}) shape is DEP0190 on modern Node —
+// run cmd.exe as an explicit argv0 with the same wire format (bin/lib/kidproc.js).
 export function probeBinary(binary, probeArgs) {
   if (!binary) return { found: false, version: null, detail: "operator-supplied --cmd" };
   try {
     const isWin = process.platform === "win32";
-    const out = execFileSync(binary, probeArgs && probeArgs.length > 0 ? probeArgs : ["--version"], {
-      stdio: ["ignore", "pipe", "pipe"], timeout: 8000, shell: isWin,
-    });
+    const args = probeArgs && probeArgs.length > 0 ? probeArgs : ["--version"];
+    const spec = isWin ? shellChildSpec(binary, args) : { exe: binary, args };
+    const opts = { stdio: ["ignore", "pipe", "pipe"], timeout: 8000 };
+    if (isWin) Object.assign(opts, shellChildOptions());
+    const out = execFileSync(spec.exe, spec.args, opts);
     const first = String(out || "").split("\n")[0].trim().slice(0, 80);
     return { found: true, version: first || "installed", detail: null };
   } catch (e) {

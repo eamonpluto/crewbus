@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 const CLI = fileURLToPath(new URL("../bin/crewbus.js", import.meta.url));
 const board = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".smoke-test-board");
 fs.rmSync(board, { recursive: true, force: true });
+// Test env hygiene: strip operator identity leaks (CREWBUS_TOKEN/AGENT) so
+// fresh tmp-board identities always mint their own tokens.
+delete process.env.CREWBUS_TOKEN;
+delete process.env.CREWBUS_AGENT;
 const env = { ...process.env, CREWBUS_DIR: board };
 // Token-aware runner: injects the harvested CREWBUS_TOKEN for --from, and
 // harvests freshly minted tokens from register/send output (first claim).

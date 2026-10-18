@@ -28,6 +28,26 @@ import { fail, readJson, writeJson, writeExclusiveJson, cleanBranchPrefix } from
 import { touchAgent, readAgent, writeAgentFile, assertMintWon, mintToken, newSalt, hashToken } from "./identity.js";
 import { readVisible, isCheckpoint } from "./mail.js";
 import { saveTokenFile, loadTokenFile } from "./tokenfile.js";
+import { shellChildSpec, shellChildOptions } from "./kidproc.js";
+
+// DEP0190 escape hatch: process through the pre-refactor shell:true path for
+// exactly one release (see bin/lib/kidproc.js). Truthy string opts in.
+function legacyShellMode() {
+  return /^(1|true|yes)$/i.test(String(process.env.CREWBUS_SHELL_LEGACY || ""));
+}
+
+function resolveShellShot(exe, args, shell) {
+  // Converts shell-needing targets to an explicit shell argv0 (no DEP0190);
+  // shell:false targets (resolved real exes) pass through untouched — their
+  // spawned pid IS the harness process (kill semantics depend on it).
+  // Returns { exe, args, shell, extraOptions } for spawn().
+  if (shell && !legacyShellMode()) {
+    const spec = shellChildSpec(exe, args);
+    if (spec) return { ...spec, shell: false, extraOptions: shellChildOptions() };
+  }
+  return { exe, args, shell: !!shell, extraOptions: {} };
+}
+export { resolveShellShot };
 
 // cleanBranchPrefix lives in store.js (canonical home).
 
@@ -431,7 +451,10 @@ export function resolveOpencodeExe() {
   if (_opencodeExe !== undefined) return _opencodeExe;
   _opencodeExe = null;
   try {
-    const out = execFileSync(process.platform === "win32" ? "where" : "which", ["opencode"], { encoding: "utf8", shell: true, stdio: ["ignore", "pipe", "ignore"], timeout: 10000 });
+    // where/which are real binaries — no shell was ever needed for this
+    // probe (execFileSync + args + shell:true was DEP0190 on modern Node).
+    const probe = process.platform === "win32" ? "where" : "which";
+    const out = execFileSync(probe, ["opencode"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 10000 });
     for (const raw of String(out || "").split(/\r?\n/)) {
       const shim = raw.trim();
       if (!shim) continue;
@@ -947,17 +970,20 @@ export function syncWorkerSession(d, name, logPath, storageProbe) { // respawn s
 export function launchWorkerProcess({ exe, args, shell, cwd, env, logPath, stdinPath }) { // respawn slice 2
   const logFd = fs.openSync(logPath, "a");
   let inFd = null;
-  let child = null;
-  try {
-    // claude reads the brief from stdin; everyone else takes paths/args, so
-    // the long prompt never travels through shell quoting.
-    const stdio = ["ignore", logFd, logFd];
-    if (stdinPath) {
-      inFd = fs.openSync(stdinPath, "r");
-      stdio[0] = inFd;
-    }
-    child = spawn(exe, args, { cwd, env, detached: true, stdio, shell, windowsHide: true });
-  } catch (e) {
+    let child = null;
+    try {
+      // claude reads the brief from stdin; everyone else takes paths/args, so
+      // the long prompt never travels through shell quoting. shell:true with
+      // non-empty args is DEP0190 on modern Node — resolveShellShot keeps the
+      // old cmd/sh wire format while spawning the shell as an explicit argv0.
+      const stdio = ["ignore", logFd, logFd];
+      if (stdinPath) {
+        inFd = fs.openSync(stdinPath, "r");
+        stdio[0] = inFd;
+      }
+      const shot = resolveShellShot(exe, args || [], shell);
+      child = spawn(shot.exe, shot.args, { cwd, env, detached: true, stdio, shell: shot.shell, windowsHide: true, ...shot.extraOptions });
+    } catch (e) {
     try { fs.closeSync(logFd); } catch {}
     try { if (inFd !== null) fs.closeSync(inFd); } catch {}
     throw e;
