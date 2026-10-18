@@ -88,7 +88,9 @@ if (process.platform === "win32") {
     const r = spawnSync(spec.exe, spec.args, { shell: false, encoding: "utf8" });
     let got = null;
     try { got = JSON.parse(String(r.stdout).trim()); } catch {}
-    check(`sh round-trip identity: ${JSON.stringify(v).slice(0, 58)}`, eq(got, v));
+    const ok = eq(got, v);
+    if (!ok) console.log(`  [diag] vector=${JSON.stringify(v)} got=${typeof got === "string" || got ? JSON.stringify(got) : "null"} stdout=${JSON.stringify(String(r.stdout).trim())} status=${r.status} err=${JSON.stringify(String(r.stderr).trim().slice(0, 200))}`);
+    check(`sh round-trip identity: ${JSON.stringify(v).slice(0, 58)}`, ok);
   }
 }
 
