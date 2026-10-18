@@ -44,6 +44,7 @@ run(["register", "--from", "boss"]);
 const worker = "rb1";
 run([
   "spawn", "--from", "boss", "--to", worker,
+  "--lead", "none",
   "--harness", "opencode", "--cwd", board,
   "--auto", "--i-understand-danger", "--keep-env",
   "--body", "Reply to this brief with one short line, then stop.",
@@ -79,7 +80,7 @@ try {
   }
 } finally {
   // never leave a detached opencode worker behind
-  try { poll(["spawn-kill", "--from", "boss", "--to", worker]); } catch (e) {
+  try { poll(["spawn-kill", "--from", "boss", "--all"]); } catch (e) {
     console.error(`cleanup: spawn-kill failed (${String((e && e.message) || e).split("\n")[0].slice(0, 120)})`);
     try {
       const fallbackDoc = doc || JSON.parse(fs.readFileSync(docPath, "utf8"));
@@ -94,7 +95,7 @@ try {
     }
   }
   let removed = false;
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 20; i++) {
     try { fs.rmSync(path.dirname(board), { recursive: true, force: true }); removed = true; break; }
     catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300); }
   }

@@ -6,8 +6,8 @@
   "note": "Same validation as CLI launch wizard. Thin over bootWorker (local) or remoteSpawn (per relay). dryRun previews exact commands without booting.",
   "request": {
     "required": ["harness", "body"],
-    "optional": ["board", "count", "prefix", "to", "subject", "priority", "model", "maxTurns", "allowTools", "permission", "isolate", "worktree", "branch", "lifetime", "budgetTokens", "budgetMinutes", "timeout", "target", "dryRun"],
-    "defaults": { "count": 1, "permission": "supervised", "lifetime": "oneshot", "target": "local", "dryRun": false },
+    "optional": ["board", "count", "prefix", "to", "subject", "priority", "model", "maxTurns", "allowTools", "permission", "isolate", "worktree", "branch", "lifetime", "budgetTokens", "budgetMinutes", "timeout", "target", "dryRun", "lead"],
+    "defaults": { "count": 1, "permission": "supervised", "lifetime": "oneshot", "target": "local", "dryRun": false, "lead": "auto" },
     "constraints": {
       "harness": "one of harness.json drivers",
       "body": "max 8000 chars (MAX_BODY_CHARS)",
@@ -15,6 +15,7 @@
       "permission": "supervised|autoEdits|auto|full",
       "lifetime": "oneshot|persistent",
       "priority": "high|normal",
+      "lead": "auto|board|none",
       "target": "local | {relays:[{url,weight}]}"
     },
     "permissionMapping": {
@@ -26,7 +27,7 @@
   },
   "response": {
     "required": ["crewId", "batch", "workers"],
-    "optional": ["warnings"],
+    "optional": ["warnings", "coordinator"],
     "worker": ["name", "pid?", "replyId", "relay?"]
   }
 }
