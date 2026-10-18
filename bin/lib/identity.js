@@ -453,7 +453,7 @@ export function authorizeCheck(d, agent, action, scope) { // line 537
   const role = getRole(d, agent);
   const act = String(action || "");
   const ADMIN_ONLY = new Set(["prune", "acl-set", "role-grant", "offboard", "group-restrict", "serve-remote", "import", "snapshot-schedule", "quota-set", "hold-place", "hold-lift", "pairing"]);
-  const LEAD_PLUS = new Set(["spawn", "respawn", "pool", "group-manage", "channel-post", "result-record", "race-close"]);
+  const LEAD_PLUS = new Set(["spawn", "respawn", "pool", "group-manage", "result-record", "race-close"]);
   const WORKER_WRITES = new Set(["send", "ack", "redeliver", "lock", "artifact-write", "lesson-write"]);
   const EXPORT_ROLES = new Set(["admin", "auditor"]);
   if (act === "export") {
@@ -464,6 +464,26 @@ export function authorizeCheck(d, agent, action, scope) { // line 537
     return { ok: false, reason: `role "${role}" cannot ${act} (need admin)` };
   } else if (LEAD_PLUS.has(act)) {
     if (role !== "lead") return { ok: false, reason: `role "${role}" cannot ${act} (need lead|admin)` };
+  } else if (act === "channel-post") {
+    // Member-scoped channel posting (C4, default-on): workers may post to the
+    // channels of groups they are a MEMBER of (scope.channelGroup); lead/admin
+    // post anywhere (board channels + every group channel). Everyone else,
+    // and workers targeting a foreign group's channel or a board channel with
+    // no member mapping, are refused.
+    if (role === "admin" || role === "lead") {
+      // board-wide + group channels
+    } else if (role !== "worker") {
+      return { ok: false, reason: `role "${role}" cannot ${act} (member-posting is scoped to group members; need lead|admin)` };
+    } else {
+      const targetGroup = scope && scope.channelGroup ? String(scope.channelGroup) : undefined;
+      if (!targetGroup) {
+        return { ok: false, reason: `role "worker" may post only to a group channel it belongs to (${targetGroup === undefined ? "board channels are lead|admin" : "need lead|admin"})` };
+      }
+      const gdoc = readGroup(d, targetGroup);
+      if (!gdoc) return { ok: false, reason: `channel group "${targetGroup}" not found (groups register their channels — board channels are lead|admin)` };
+      const members = Array.isArray(gdoc.members) ? gdoc.members : [];
+      if (!members.includes(agent)) return { ok: false, reason: `group channel "${targetGroup}" — members only (member or lead|admin)` };
+    }
   } else if (act === "spawn-kill") {
     if (role !== "lead") return { ok: false, reason: `role "${role}" cannot spawn-kill (need lead|admin)` };
     const targets = (scope && Array.isArray(scope.targets)) ? scope.targets : [];

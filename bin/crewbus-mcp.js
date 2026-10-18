@@ -751,12 +751,24 @@ function authorizeMcp(d, agent, action, scope) {
   const role = getRoleMcp(d, agent);
   const act = String(action || "");
   const ADMIN_ONLY = new Set(["prune", "acl-set", "role-grant", "offboard", "group-restrict", "serve-remote"]);
-  const LEAD_PLUS = new Set(["spawn", "respawn", "pool", "group-manage", "channel-post", "result-record", "race-close"]);
+  const LEAD_PLUS = new Set(["spawn", "respawn", "pool", "group-manage", "result-record", "race-close"]);
   const WORKER_WRITES = new Set(["send", "ack", "redeliver", "lock"]);
   if (role !== "admin") {
     if (ADMIN_ONLY.has(act)) throw new Error(`role "${role}" cannot ${act} (need admin)`);
     if (LEAD_PLUS.has(act) && role !== "lead") throw new Error(`role "${role}" cannot ${act} (need lead|admin)`);
     if (act === "spawn-kill" && role !== "lead") throw new Error(`role "${role}" cannot spawn-kill (need lead|admin)`);
+    if (act === "channel-post" && role !== "lead") {
+      // Member-scoped channel posting (C4): members post to their group's
+      // channel; board channels + foreign groups stay lead|admin.
+      const targetGroup = scope && scope.channelGroup ? String(scope.channelGroup) : undefined;
+      if (!targetGroup) {
+        throw new Error(`role "${role}" may post only to a group channel it belongs to (board channels are lead|admin)`);
+      }
+      const gdoc = readGroupMcp(d, targetGroup);
+      if (!gdoc) throw new Error(`channel group "${targetGroup}" not found (groups register their channels — board channels are lead|admin)`);
+      const members = Array.isArray(gdoc.members) ? gdoc.members : [];
+      if (!members.includes(agent)) throw new Error(`group channel "${targetGroup}" — members only (member or lead|admin)`);
+    }
     if (WORKER_WRITES.has(act) && role !== "lead" && role !== "worker") {
       throw new Error(`role "${role}" cannot ${act} (auditor is read-only)`);
     }
@@ -1048,7 +1060,16 @@ function callTool(name, args) {
       const mirror = (batch) => {
         if (a.also_channel !== true) return "";
         const mirrored = [];
+        const skipped = [];
         for (const g of groupNames) {
+          // Member-scoped mirrors (C4): non-members' DMs deliver; the channel
+          // mirror is skipped with a visible note. Lead/admin pass trivially.
+          try {
+            authorizeMcp(d, from, "channel-post", { channelGroup: g });
+          } catch (err) {
+            skipped.push(g);
+            continue;
+          }
           const post = { id: newId("ch"), from, body, at };
           if (subject) post.subject = subject;
           if (replyTo) post.replyTo = replyTo;
@@ -1058,7 +1079,7 @@ function callTool(name, args) {
           appendChannelPostMcp(d, groupChannelNameMcp(g), post);
           mirrored.push(groupChannelNameMcp(g));
         }
-        return mirrored.length > 0 ? ` +channel ${mirrored.join(",")}` : "";
+        return (mirrored.length > 0 ? ` +channel ${mirrored.join(",")}` : "") + (skipped.length > 0 ? ` [channel mirror skipped, members-only: ${skipped.join(",")}]` : "");
       };
       const isAll = recipients.length === 1 && recipients[0] === "@all";
       if (isAll || recipients.length > BROADCAST_AFTER) {
@@ -1294,7 +1315,8 @@ function callTool(name, args) {
       const subject = a.subject === undefined || a.subject === null || String(a.subject).trim() === "" ? undefined : String(a.subject).trim().slice(0, 120);
       const priority = cleanPriorityMcp(a.priority);
       const minted = ensureSender(d, from, resolveToken(a));
-      authorizeMcp(d, from, "channel-post"); // lead|admin only (worker refused)
+      // Member-scoped posting (C4): grp-<g> channels admit members of <g>.
+      authorizeMcp(d, from, "channel-post", { channelGroup: chan.startsWith("grp-") ? chan.slice(4) : undefined });
       touchAgent(d, from);
       const tokenHint = minted.created ? ` identity '${from}' claimed, token ${minted.token} (set CREWBUS_TOKEN=${minted.token})` : "";
       const post = { id: newId("ch"), from, body, at: new Date().toISOString() };

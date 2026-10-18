@@ -22,7 +22,8 @@ Agent records carry `role` in `{admin, lead, worker, auditor}`.
 | action | admin | lead | worker | auditor |
 |---|---|---|---|---|
 | send / inbox / ack / redeliver / lock (scoped) | yes | yes | yes | read-only: inbox yes; send/ack/lock NO |
-| spawn / pool / spawn-kill (own crew) / group manage / channel post / result record / race close | yes | yes | NO | NO |
+| spawn / pool / spawn-kill (own crew) / group manage / result record / race close | yes | yes | NO | NO |
+| channel post | yes (anywhere) | yes (anywhere) | members-only: the channel's own group only (`grp-<group>` where the caller is a member) | NO |
 | launch (same RBAC + audit as spawn: `cmdLaunch` delegates to `cmdSpawn`; `handleApiLaunch` checks `spawn`) | yes | yes | NO | NO |
 | relay pair issue / devices / revoke (`pairing`: CLI gate + `POST /api/pair/*`, `GET /api/pair/devices`) | yes | NO | NO | NO |
 | prune / acl set / role-grant / offboard / group restrict / serve `--allow-remote-spawn` | yes | NO | NO | NO |
@@ -35,8 +36,11 @@ Notes:
   equal the caller (or the target was never spawned). Admins may kill any.
 - `lock release` still requires ownership even when acquire is allowed.
 - MCP twins: `dm_send`→send, `dm_inbox`→inbox, `dm_ack`→ack,
-  `dm_channel_post`→channel-post (lead|admin). `dm_gather` /
+  `dm_channel_post`→channel-post (member-scoped like the CLI: lead|admin post anywhere, members post only to their own group's channel). `dm_gather` /
   `dm_channel_tail` are identity-less reads (like CLI `gather`), default-allow.
+- Member-scoped channel posting (C4) is default-on with no flag (briefs sent
+  with `--also-channel` to a group the sender is not a member of still
+  deliver as DMs; only the channel mirror is skipped, with a visible note).
 - Relay: `POST /api/spawn`→spawn, `POST /api/launch`→spawn, `POST /api/kill`→spawn-kill (403 on denial); pair endpoints→`pairing` (admin): `POST /api/pair/issue|exchange|revoke`, `GET /api/pair/devices`.
 - Device-scope layer: transport credential scopes (`requireScope` in `bin/lib/relay.js`) compose UNDER role checks — a narrowed device can only further restrict, never widen, what the agent token's role allows.
 - `prune` and `group create/add/remove` keep the bare operator path (no

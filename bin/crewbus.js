@@ -2751,7 +2751,9 @@ function cmdChannel(args) {
     if (!body || !body.trim()) fail('missing message body (--body "...")');
     if (body.length > MAX_BODY_CHARS) fail(`message body too large (max ${MAX_BODY_CHARS} chars)`);
     const minted = ensureSender(d, from, resolveToken(rest));
-    authorize(d, from, "channel-post");
+    // Member-scoped posting (C4): grp-<g> channels admit members of <g>;
+    // board channels + foreign groups stay lead|admin (authorizeCheck).
+    authorize(d, from, "channel-post", { channelGroup: chan.startsWith("grp-") ? chan.slice(4) : undefined });
     enforceBytesQuota(d, Buffer.byteLength(body.trim(), "utf8") + 1500);
     touchAgent(d, from, { lastDir: process.cwd() });
     const tokenHint = minted.created ? ` identity '${from}' claimed, token ${minted.token} (set CREWBUS_TOKEN=${minted.token})` : "";
@@ -2893,8 +2895,9 @@ function cmdSend(args) {
   appendChainRecord(d, from, "send", { to: recipients.slice(0, 20), count: recipients.length, batch: res.batch });
   const mirrored = alsoChannel
     ? mirrorToGroupChannels(d, { groups: groupNames, from, body: body.trim(), subject, replyTo, batch: res.batch || (res.items[0] && res.items[0].id), priority, rev, at })
-    : [];
-  const chanNote = mirrored.length > 0 ? ` +channel ${mirrored.map((m) => m.channel).join(",")}` : "";
+    : { mirrored: [], skipped: [] };
+  const chanNote = (mirrored.mirrored.length > 0 ? ` +channel ${mirrored.mirrored.map((m) => m.channel).join(",")}` : "")
+    + (mirrored.skipped.length > 0 ? ` [channel mirror skipped, members-only: ${mirrored.skipped.map((s) => s.group).join(",")}]` : "");
   if (res.mode === "broadcast") {
     const who = res.isAll ? "@all" : `${recipients.length} recipients`;
     console.log(`sent ${res.isAll ? "@all" : recipients.length + " messages"} via broadcast ${res.batch} to ${who} [board ${d.root}]${chanNote}${tokenHint}`);
@@ -3159,8 +3162,12 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
   const res = deliverDMs(d, { from, recipients, body: body.trim(), subject, replyTo, priority, senderType, fwd, rev, at, forceBroadcast: false, forceDirect: true, needsBy });
   if (res.mode !== "direct") fail("spawn: internal error — expected direct delivery");
   appendChainRecord(d, from, "spawn", { to: recipients.slice(), harness, harnesses, auto, cwd, isolate: isolateInfo.isolated || false, budgetTokens, budgetMinutes, deadlineAt });
+  let chanMirrorNote = "";
   if (alsoChannel) {
-    mirrorToGroupChannels(d, { groups: groupNames, from, body: body.trim(), subject, replyTo, batch: res.batch || (res.items[0] && res.items[0].id), priority, rev, at });
+    const m = mirrorToGroupChannels(d, { groups: groupNames, from, body: body.trim(), subject, replyTo, batch: res.batch || (res.items[0] && res.items[0].id), priority, rev, at });
+    chanMirrorNote = (m.mirrored.length > 0 ? ` +channel ${m.mirrored.map((x) => x.channel).join(",")}` : "")
+      + (m.skipped.length > 0 ? ` [channel mirror skipped, members-only: ${m.skipped.map((s) => s.group).join(",")}]` : "");
+    process.stderr.write(`crewbus:${chanMirrorNote}\n`);
   }
   for (let i = 0; i < res.items.length; i++) {
     const { to, id } = res.items[i];

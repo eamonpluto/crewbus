@@ -11,6 +11,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = fileURLToPath(new URL("../bin/crewbus.js", import.meta.url));
+// Test hygiene (crewbus.lead-assign lesson): the operator's leaked token/agent
+// poisons fresh temp-board identities (mismatch → "bad token").
+delete process.env.CREWBUS_TOKEN;
+delete process.env.CREWBUS_AGENT;
 import { buildSpawnPrompt } from "../bin/lib/spawn.js";
 import { renderWorkbenchBlock, workbenchMetrics, selectLessons } from "../bin/lib/workbench.js";
 

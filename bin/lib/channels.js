@@ -9,6 +9,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { readJson, writeJson, newId, fail, cleanChannelName, listJson } from "./store.js";
 import { isHigh, relTime } from "./mail.js";
+import { authorizeCheck } from "./identity.js"; // member-scoped channel mirrors (C4; call-time use only — hoisted declarations tolerate the identity→groups→channels cycle)
 
 // cleanChannelName lives in store.js (canonical home for all clean* helpers).
 
@@ -103,7 +104,16 @@ export function summarizePosts(posts, limit) {
 
 export function mirrorToGroupChannels(d, { groups, from, body, subject, replyTo, batch, priority, rev, at }) {
   const mirrored = [];
+  const skipped = [];
   for (const g of groups || []) {
+    // Member-scoped mirrors (C4): a worker's brief lands on grp-<g> channel
+    // only if it is a member of <g> (or lead/admin). Non-members' DMs still
+    // deliver — the channel mirror is skipped with a visible note.
+    const gate = authorizeCheck(d, from, "channel-post", { channelGroup: g });
+    if (!gate || !gate.ok) {
+      skipped.push({ group: g, reason: (gate && gate.reason) || "member posting required" });
+      continue;
+    }
     const chan = groupChannelName(g);
     const post = { id: newId("ch"), from, body, at };
     if (subject) post.subject = subject;
@@ -114,7 +124,7 @@ export function mirrorToGroupChannels(d, { groups, from, body, subject, replyTo,
     appendChannelPost(d, chan, post);
     mirrored.push({ group: g, channel: chan, id: post.id });
   }
-  return mirrored;
+  return { mirrored, skipped };
 }
 
 export function lockHash(scope) {
