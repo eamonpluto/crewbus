@@ -4,6 +4,9 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// operator identity never leaks into temp-board identities
+function stripIdent() { const e = { ...process.env }; delete e.CREWBUS_TOKEN; delete e.CREWBUS_AGENT; delete e.OPENCODE_PID; return e; }
+
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(HERE, "..", "bin", "crewbus.js");
@@ -15,7 +18,7 @@ const check = (label, cond) => {
 };
 
 const board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-holds-quotas-"));
-const env = { ...process.env, CREWBUS_DIR: board };
+const env = { ...stripIdent(), CREWBUS_DIR: board };
 
 // Token-aware runner: injects the harvested CREWBUS_TOKEN for --from,
 // harvests freshly minted tokens (first claim wins).

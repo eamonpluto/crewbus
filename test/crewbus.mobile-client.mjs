@@ -182,6 +182,8 @@ let board = null;
 try {
   board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-mobile-client-"));
   const env = { ...process.env, CREWBUS_DIR: board };
+  delete env.CREWBUS_TOKEN; // operator identity never leaks into temp-board identities
+  delete env.CREWBUS_AGENT;
   const TOK = {};
   const run = (args) => {
     const merged = { ...env };

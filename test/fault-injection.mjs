@@ -6,6 +6,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+// operator identity never leaks into temp-board identities
+function stripIdent() { const e = { ...process.env }; delete e.CREWBUS_TOKEN; delete e.CREWBUS_AGENT; delete e.OPENCODE_PID; return e; }
+
 
 const execFileAsync = promisify(execFile);
 const CLI = fileURLToPath(new URL("../bin/crewbus.js", import.meta.url));
@@ -19,7 +22,7 @@ const check = (label, cond) => {
 // -- 1. crash mid-write: partial tmp file (killed writer: wrote half, never renamed)
 {
   const board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-fault-"));
-  const env = { ...process.env, CREWBUS_DIR: board };
+  const env = { ...stripIdent(), CREWBUS_DIR: board };
   const run = (args, extra) =>
     execFileSync("node", [CLI, ...args], { env: { ...env, ...(extra || {}) } }).toString();
   const TOK = {};
@@ -54,7 +57,7 @@ const check = (label, cond) => {
 // -- 2. concurrent claims: parallel register of the same name
 {
   const board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-race-"));
-  const env = { ...process.env, CREWBUS_DIR: board };
+  const env = { ...stripIdent(), CREWBUS_DIR: board };
   execFileSync("node", [CLI, "init", "--harness", "generic"], { env });
   const attempts = await Promise.all(
     Array.from({ length: 6 }, () =>
@@ -85,8 +88,8 @@ const check = (label, cond) => {
 {
   const boardA = fs.mkdtempSync(path.join(os.tmpdir(), "cb-partA-"));
   const boardB = fs.mkdtempSync(path.join(os.tmpdir(), "cb-partB-"));
-  const envA = { ...process.env, CREWBUS_DIR: boardA };
-  const envB = { ...process.env, CREWBUS_DIR: boardB };
+  const envA = { ...stripIdent(), CREWBUS_DIR: boardA };
+  const envB = { ...stripIdent(), CREWBUS_DIR: boardB };
   const TOKP = {};
   const cliP = (baseEnv, args) => {
     const merged = { ...baseEnv };

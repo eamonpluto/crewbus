@@ -20,6 +20,9 @@ if (probe.error || probe.status !== 0 || !String(probe.stdout || "").trim()) {
 }
 
 const env = { ...process.env, CREWBUS_DIR: board };
+delete env.CREWBUS_TOKEN; // operator identity never leaks into temp-board identities
+delete env.CREWBUS_AGENT;
+delete env.OPENCODE_PID;
 const TOK = {};
 const run = (args, extraEnv) => {
   const merged = { ...env, ...(extraEnv || {}) };
