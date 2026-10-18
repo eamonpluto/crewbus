@@ -63,8 +63,11 @@ function shQuote(s) {
   s = String(s);
   // A bare empty token would vanish outright (two words `a ''` parse to
   // [a, ""] — `a ` parses to [a] only), losing the operand.
+  // (note: `;` is deliberately NOT in the safe class — POSIX shells treat a
+  // bare `;` as a command separator; cmd tolerates it. cmd metacharacters
+  // (& | ^ < > %) never appear here — msQuote owns the win line.)
   if (s === "") return "''";
-  return /^[-#%+,.:;=?@_a-zA-Z0-9\/]*$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
+  return /^[-#%+,.:=?@_a-zA-Z0-9\/]*$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
 // { exe, args } one should hand to spawn(..., { shell: false }) to keep the
