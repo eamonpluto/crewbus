@@ -39,12 +39,13 @@ check("msQuote: benign token with metachar-free text bare", eq(msQuote("Read,Edi
 check("shQuote: safe token untouched", eq(shQuote("codex"), "codex"));
 check("shQuote: spaces single-quoted", eq(shQuote("a b"), "'a b'"));
 check("shQuote: inner quote spliced", eq(shQuote("it's"), "'it'\\''s'"));
+check("shQuote: empty stays an operand", eq(shQuote(""), "''"));
 
 // ---------------------------------------------------------------------------
 // shellChildSpec — wire shape per platform
 // ---------------------------------------------------------------------------
 check("spec: empty args -> null (no DEP0190 case anyway)", eq(shellChildSpec("node", []), null));
-const winSpec = shellChildSpec("claude", ["-p", "--output-format", "json"]);
+const winSpec = shellChildSpec("claude", ["-p", "--output-format", "json"], "win32");
 check("spec: win routes through cmd.exe (+ /d /s /c)", winSpec !== null && winSpec.exe === "cmd.exe" && eq(winSpec.args.slice(0, 3), ["/d", "/s", "/c"]));
 check("spec: win line keeps order", /claude\s+-p\s+--output-format\s+json\s*$/.test(String(winSpec.args[3]).replace(/"$/, "")));
 const uxSpec = shellChildSpec("claude", ["-p"], "linux");
@@ -77,8 +78,10 @@ if (process.platform === "win32") {
     check(`cmd round-trip identity: ${JSON.stringify(v).slice(0, 58)}`, eq(got, v));
   }
 } else {
-  // /bin/sh round-trip identity (posix lanes)
-  const inline = `console.log(JSON.stringify(process.argv.slice(process.argv[0]==='--'?process.argv.slice(1):process.argv.slice(0))))`;
+  // /bin/sh round-trip identity (posix lanes). Node <=22 KEEPS the `--`
+  // separator in the child's process.argv (node 23+ strips it — the new
+  // default), so the loader must tolerate both shapes.
+  const inline = `console.log(JSON.stringify(process.argv.slice(process.argv[1]==='--'?2:1)))`;
   const vectors = [["-p", "json"], ["arg one", ""], ["it's", 'has "quote"'], ["a&b|c^d"], ["--dash", "sem;i:col"]];
   for (const v of vectors) {
     const spec = shellChildSpec("node", ["-e", `console.log(JSON.stringify(process.argv.slice(1)))`, "--", ...v]);
@@ -97,8 +100,13 @@ if (process.platform === "win32") {
 // ---------------------------------------------------------------------------
 {
   const shot = resolveShellShot("claude", ["-p", "--output-format", "json"], true);
-  check("shot: shell target migrates to cmd.exe argv0", shot.exe === "cmd.exe" && shot.shell === false && shot.args[0] === "/d" && shot.args[1] === "/s" && shot.args[2] === "/c");
-  check("shot: verbatim option carried", shot.extraOptions.windowsVerbatimArguments === true);
+  if (process.platform === "win32") {
+    check("shot: shell target migrates to cmd.exe argv0", shot.exe === "cmd.exe" && shot.shell === false && shot.args[0] === "/d" && shot.args[1] === "/s" && shot.args[2] === "/c");
+    check("shot: verbatim option carried", shot.extraOptions.windowsVerbatimArguments === true);
+  } else {
+    check("shot: shell target migrates to /bin/sh argv0 (posix)", shot.exe === "/bin/sh" && shot.shell === false && shot.args[0] === "-c");
+    check("shot: no verbatim option on posix", shot.extraOptions.windowsVerbatimArguments === undefined);
+  }
   const untouched = resolveShellShot("C:\\tools\\opencode.exe", ["run"], false);
   check("shot: real-exe shell:false untouched (pid = harness process)", eq(untouched, { exe: "C:\\tools\\opencode.exe", args: ["run"], shell: false, extraOptions: {} }));
   const old = process.env.CREWBUS_SHELL_LEGACY;

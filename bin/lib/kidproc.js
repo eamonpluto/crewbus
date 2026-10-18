@@ -61,6 +61,9 @@ function msQuote(s) {
 // POSIX single-quote joining (' -> '\'').
 function shQuote(s) {
   s = String(s);
+  // A bare empty token would vanish outright (two words `a ''` parse to
+  // [a, ""] — `a ` parses to [a] only), losing the operand.
+  if (s === "") return "''";
   return /^[-#%+,.:;=?@_a-zA-Z0-9\/]*$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
