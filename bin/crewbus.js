@@ -123,7 +123,7 @@ import readline from "node:readline";
 // reads the same comma/newline-separated list from a file so large fan-outs
 // don't hit Windows argv limits (~8191 chars).
 // §4.4 value-taking flags (skipped with their value by restArgs).
-for (const _f of ["--sender-type", "--fwd", "--secret", "--device", "--pair-token", "--pair-label", "--label", "--ttl", "--id", "--allow-env", "--allow-cmd", "--workdir-root", "--budget-tokens", "--budget-minutes", "--tls-cert", "--tls-key", "--tls-ca", "--mtls-ca", "--mtls-cert", "--mtls-key", "--oidc-issuer", "--oidc-audience", "--issuer", "--client-id", "--bearer", "--oidc-token", "--expires-in", "--service", "--offboard", "--target", "--reason", "--role", "--for", "--default-role", "--freeze", "--unfreeze", "--out", "--in", "--into", "--key-env", "--key-file", "--every", "--keep", "--out-dir", "--max-bytes", "--max-agents", "--max-channels", "--tenant", "--audit-forward", "--audit-forward-key", "--standby", "--promote-on-miss", "--fence", "--relay-interval", "--relays", "--weights", "--relay-auth", "--via", "--weight"]) VALUE_FLAGS.add(_f);
+for (const _f of ["--sender-type", "--fwd", "--secret", "--device", "--pair-token", "--pair-label", "--label", "--ttl", "--id", "--allow-env", "--allow-cmd", "--workdir-root", "--budget-tokens", "--budget-minutes", "--lead-budget-tokens", "--lead-budget-minutes", "--tls-cert", "--tls-key", "--tls-ca", "--mtls-ca", "--mtls-cert", "--mtls-key", "--oidc-issuer", "--oidc-audience", "--issuer", "--client-id", "--bearer", "--oidc-token", "--expires-in", "--service", "--offboard", "--target", "--reason", "--role", "--for", "--default-role", "--freeze", "--unfreeze", "--out", "--in", "--into", "--key-env", "--key-file", "--every", "--keep", "--out-dir", "--max-bytes", "--max-agents", "--max-channels", "--tenant", "--audit-forward", "--audit-forward-key", "--standby", "--promote-on-miss", "--fence", "--relay-interval", "--relays", "--weights", "--relay-auth", "--via", "--weight"]) VALUE_FLAGS.add(_f);
 
 // ---------------------------------------------------------------------------
 // §4.4 Security and integrity helpers (zero-dep, Windows-tolerant)
@@ -2587,7 +2587,7 @@ function cmdGroup(args) {
     const running = [];
     for (const m of t.members) {
       const rec = readAgent(d, m);
-      if (rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid)) running.push({ member: m, pid: rec.spawnedPid });
+      if (rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid) && !isPidStale(rec.spawnedPid, rec.spawnedAt)) running.push({ member: m, pid: rec.spawnedPid });
     }
     const out = { ...t, running };
     if (rest.includes("--json")) {
@@ -2967,10 +2967,11 @@ function cmdSpawn(args) {
   // the pid record: refuse only names with a live pid, before anything is
   // written or booted. Stale or never-booted names are reusable (spawn
   // overwrites the pid) — so groups whose members already claimed names
-  // still boot fine.
+  // still boot fine. A pid-recycled record (reboot + OS pid reuse) counts
+  // as reusable too: the pid belongs to an unrelated process (C2).
   for (const name of recipients) {
     const rec = readAgent(d, name);
-    if (rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid)) {
+    if (rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid) && !isPidStale(rec.spawnedPid, rec.spawnedAt)) {
       fail(`name "${name}" has a live worker (pid ${rec.spawnedPid}) — pick a fresh name via --prefix, or kill it first (spawn-kill --from ${from} --to ${name})`);
     }
   }
@@ -3070,10 +3071,19 @@ function cmdSpawn(args) {
   }
   const budgetTokensRaw = getFlag(args, "--budget-tokens");
   const budgetMinutesRaw = getFlag(args, "--budget-minutes");
-  const budgetTokens = budgetTokensRaw === undefined ? undefined : Number(budgetTokensRaw);
-  const budgetMinutes = budgetMinutesRaw === undefined ? undefined : Number(budgetMinutesRaw);
-  if (budgetTokensRaw !== undefined && !(budgetTokens > 0)) fail("--budget-tokens must be a positive number");
-  if (budgetMinutesRaw !== undefined && !(budgetMinutes > 0)) fail("--budget-minutes must be a positive number");
+const budgetTokens = budgetTokensRaw === undefined ? undefined : Number(budgetTokensRaw);
+const budgetMinutes = budgetMinutesRaw === undefined ? undefined : Number(budgetMinutesRaw);
+if (budgetTokensRaw !== undefined && !(budgetTokens > 0)) fail("--budget-tokens must be a positive number");
+if (budgetMinutesRaw !== undefined && !(budgetMinutes > 0)) fail("--budget-minutes must be a positive number");
+// Coordinator budget (C5): same semantics as worker budgets, on the
+// auto-provisioned lead lane. Unset (the common case) = persistent boss-supervised
+// coordinator, same behavior as 10.0.10.
+const leadBudgetTokensRaw = getFlag(args, "--lead-budget-tokens");
+const leadBudgetMinutesRaw = getFlag(args, "--lead-budget-minutes");
+const leadBudgetTokens = leadBudgetTokensRaw === undefined ? undefined : Number(leadBudgetTokensRaw);
+const leadBudgetMinutes = leadBudgetMinutesRaw === undefined ? undefined : Number(leadBudgetMinutesRaw);
+if (leadBudgetTokensRaw !== undefined && !(leadBudgetTokens > 0)) fail("--lead-budget-tokens must be a positive number");
+if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead-budget-minutes must be a positive number");
   const timeoutRaw = getFlag(args, "--timeout");
   let deadlineAt = undefined;
   if (timeoutRaw !== undefined) {
@@ -3125,7 +3135,9 @@ function cmdSpawn(args) {
     console.log(`--- prompt (first worker) ---\n${buildSpawnPrompt({ name: recipients[0], from, lead: leadTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]) })}`);
     if (leadMode === "board") {
       const existingLead = readAgent(d, "lead");
-      const standing = existingLead && typeof existingLead.spawnedPid === "number" && pidAlive(existingLead.spawnedPid);
+      // Stale-pid guard (C2): preview says "fresh provision" when the pid
+      // record is recycled (reboot + OS pid reuse).
+      const standing = existingLead && typeof existingLead.spawnedPid === "number" && pidAlive(existingLead.spawnedPid) && !isPidStale(existingLead.spawnedPid, existingLead.spawnedAt);
       if (standing) {
         console.log(`--- lead ---\na live coordinator already runs on the 'lead' lane (pid ${existingLead.spawnedPid}) — reused, not duplicated [board ${d.root}]`);
       } else if (existingLead && existingLead.offboarded) {
@@ -3192,6 +3204,7 @@ function cmdSpawn(args) {
       from, subject, body: body.trim(), rev, logDir,
       workers: res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })),
       batch: res.batch, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]), auto,
+      budgetTokens: leadBudgetTokens, budgetMinutes: leadBudgetMinutes,
     });
     if (provision.action === "minted" && provision.pid) {
       console.log(`auto-lead provisioned: minted lane '${provision.leadName}' (role lead — owns this crew), coordinator pid ${provision.pid} (persistent, ${coordHarness}) log ${provision.logPath} [board ${d.root}]`);
@@ -3561,7 +3574,9 @@ async function cmdRespawn(args) {
   }
   const spawnOpts = { harness, cmd, model: prev.model, maxTurns: prev.maxTurns, auto: !!prev.auto, allowTools: prev.allowTools, cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
   const attempt = ((prev.respawnCount) || 0) + 1;
-  const alive = typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid);
+  // Recycled-pid records read dead for respawn gating too (C2): a live pid
+  // that postdates the spawn belongs to an unrelated process.
+  const alive = typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid) && !isPidStale(rec.spawnedPid, rec.spawnedAt);
   if (dry) {
     const catchup = buildRespawnBrief({ name, attempt, origPromptPath: prev.promptPath, briefId, harnessSessionId: sessionId || null, harness, lead: from, extraBody });
     const t = buildRespawnTarget({ ...spawnOpts, name, promptPath: `<logs>/${name}-<stamp>.respawn.md`, prompt: catchup, sessionId: sessionId || undefined });
@@ -6491,7 +6506,7 @@ async function cmdServe(args) {
           try {
             for (const e of listJson(path.join(d.root, "agents"))) {
               if (!e || !e.data) continue;
-              if (typeof e.data.spawnedPid === "number" && pidAlive(e.data.spawnedPid)) workers++;
+              if (typeof e.data.spawnedPid === "number" && pidAlive(e.data.spawnedPid) && !isPidStale(e.data.spawnedPid, e.data.spawnedAt)) workers++;
             }
           } catch {}
           res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-relay-role": role });
@@ -6841,7 +6856,8 @@ Messaging (primitive — just a tool call, whenever you want):
     (recover mail a dead watcher consumed: clears delivered markers and
      rewinds the cursor so the next poll/push treats it as fresh;
      use after re-registering with the live session)
-  crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|generic] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
+  crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|generic] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
+   (--budget-* cap the WORKERS; --lead-budget-* cap the auto-provisioned coordinator lane — same semantics, e.g. a 400k-token lead that posts its aggregate and exits. Unset = persistent boss-supervised coordinator (default). A standing coordinator keeps its boot-time budget; the flags cannot change it mid-flight.)
    (workers boot with cloud/AI credential vars scrubbed from their environment by default (lead's keys never leak into briefs); pass --keep-env to inherit everything or --allow-env <prefix,...> to keep listed names. CREWBUS_TOKEN is never inherited — workers claim their own identity.)
     (brief N workers AND boot them detached: the DM lands first so the brief
      waits even if a launch fails. opencode: \`run\` + brief via --file;

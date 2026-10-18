@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, readBoardMeta, writeBoardMeta, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS } from "./store.js";
 import { readAgent, agentTokenMatches, authorizeCheck, ensureLoopbackOperator, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
 import { readDMs, readVisible, ackedIds, ackedIdSet, findMessageById, deliverDMs, parseRecipients } from "./mail.js";
-import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim, buildCoordinatorPrompt, provisionAutoLead, LEAD_NAME } from "./spawn.js";
+import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim, buildCoordinatorPrompt, provisionAutoLead, LEAD_NAME, isPidStale } from "./spawn.js";
 import { groupTelemetryData, collectBatch, gatherTelemetry, listBatches } from "./groups.js";
 import { httpJson } from "./sync.js";
 import { readChainRecords, verifyChainRecords, appendChainRecord, readHold, readBoardQuotas } from "./export.js";
@@ -261,7 +261,8 @@ export function resultsSnapshot(d) {
       const a = e && e.data;
       if (a && a.name && typeof a.spawnedPid === "number") {
         try {
-          aliveByName[a.name] = pidAlive(a.spawnedPid);
+          // Stale-pid guard (C2): pid-recycled records read dead.
+          aliveByName[a.name] = pidAlive(a.spawnedPid) && !isPidStale(a.spawnedPid, a.spawnedAt);
         } catch {
           aliveByName[a.name] = false;
         }
@@ -2597,7 +2598,9 @@ export async function handleApiLaunch(d, body) {
     let coordinator = undefined;
     if (leadMode === "board") {
       const existingLead = readAgent(d, LEAD_NAME);
-      const standing = existingLead && typeof existingLead.spawnedPid === "number" && pidAlive(existingLead.spawnedPid);
+      // Stale-pid guard (C2): reuse only a live, non-stale coordinator; a
+      // pid-recycled after reboot record gets the fresh-provision branch.
+      const standing = existingLead && typeof existingLead.spawnedPid === "number" && pidAlive(existingLead.spawnedPid) && !isPidStale(existingLead.spawnedPid, existingLead.spawnedAt);
       if (standing) {
         coordinator = { name: LEAD_NAME, action: "reused", pid: existingLead.spawnedPid, note: "live coordinator already running" };
       } else if (existingLead && existingLead.offboarded) {

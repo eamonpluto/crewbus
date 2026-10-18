@@ -280,7 +280,7 @@ export function buildCrewContext({ name, from, lead: leadTarget, subject, groups
 // `workers` is [{ name, id, harness }]; `batch` the batch id ("" when solo).
 // Pure: unit-tested, no board IO — the caller boots it via bootWorker
 // (prompt override) and stamps the log file itself.
-export function buildCoordinatorPrompt({ name, from, subject, body, batch, workers, crew, cwd, root, auto, workbench }) {
+export function buildCoordinatorPrompt({ name, from, subject, body, batch, workers, crew, cwd, root, auto, workbench, budgetTokens, budgetMinutes }) {
   const boss = String(from || "boss");
   const me = String(name || LEAD_NAME);
   const ws = Array.isArray(workers) ? workers.filter((w) => w && w.name) : [];
@@ -298,6 +298,9 @@ export function buildCoordinatorPrompt({ name, from, subject, body, batch, worke
     ...(batch ? ["Worker briefs (thread ids, for --reply):", ...ws.map((w) => `- ${w.name}: brief ${w.id}${w.harness ? ` [${w.harness}]` : ""}`), ""] : []),
     ...(wbLines.length > 0 ? ["Workbench (lessons + artifacts from prior work on this board):", ...wbLines, ""] : []),
     `Your identity: token saved at logs/${me}.token — read it into CREWBUS_TOKEN at the top of each shell that sends (PowerShell: \$env:CREWBUS_TOKEN = Get-Content .crewbus/logs/${me}.token). All sends run as --from ${me}. Never re-register over your own name — re-read the token file after any restart or compaction.`,
+    ...(budgetTokens !== undefined || budgetMinutes !== undefined
+      ? [`Budget mandate:${budgetTokens !== undefined ? ` ~${budgetTokens} est. tokens total${budgetMinutes !== undefined ? " and" : ""}` : ""}${budgetMinutes !== undefined ? ` ${budgetMinutes} wall-clock minutes total` : ""} — coordinate within it: batch your polls (listen --timeout 120000), digest-read first, and post the aggregate to ${boss} BEFORE the budget runs out (a budgeted coordinator gets reaped at the cap).`, ``]
+      : []),
     ``,
     `Jobs, in order:`,
     `0. Boot habit: crewbus agents + crewbus group list, so you know who is on the board (workers claim over the first minutes; re-check when triaging).`,
@@ -383,9 +386,11 @@ export function provisionAutoLead(d, opts) {
     }
   }
   // Always (re)record how this coordinator came to be, without clobbering
-  // an existing live one.
+  // an existing live one. Standing = pid alive AND not stale (reboot + OS
+  // pid reuse: a different (unrelated) process recycled the pid — see
+  // isPidStale; stale never blocks a fresh boot, it just disqualifies reuse).
   const rec = readAgent(d, leadName);
-  const standing = rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid);
+  const standing = rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid) && !isPidStale(rec.spawnedPid, rec.spawnedAt);
   if (minted) saveTokenFile(d.root, leadName, token);
   let booted = null;
   if (standing) {
@@ -401,9 +406,10 @@ export function provisionAutoLead(d, opts) {
           batch: o.batch, workers: o.workers, crew: o.crew,
           cwd: (o.spawnOpts && o.spawnOpts.cwd) || process.cwd(),
           root: d.root, auto: !!o.auto, workbench: o.workbench,
+          budgetTokens: o.budgetTokens, budgetMinutes: o.budgetMinutes,
         }),
         spawnedLifetime: "persistent",
-        budgetTokens: undefined, budgetMinutes: undefined, deadlineAt: undefined,
+        budgetTokens: o.budgetTokens, budgetMinutes: o.budgetMinutes, deadlineAt: undefined,
       });
     } catch (e) {
       const detail = String((e && (e.message || e)) || e).slice(0, 160);
@@ -1403,6 +1409,12 @@ export async function killWorkers(d, names) { // line 4529
     const pid = doc.spawnedPid;
     if (!pidAlive(pid)) {
       out.push({ name, result: "already-exited", pid });
+      continue;
+    }
+    // Safety guard (C2): a live pid that provably postdates the spawn record
+    // belongs to an UNRELATED process (reboot + OS pid reuse). Never kill it.
+    if (isPidStale(pid, doc.spawnedAt)) {
+      out.push({ name, result: "pid-stale", pid, detail: "pid recycled after a reboot — it is not this worker; nothing killed" });
       continue;
     }
     try {

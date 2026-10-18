@@ -42,7 +42,7 @@ import https from "node:https";
 import { readJson, writeJson, listJson, getFlag, cleanWebName, gitRevForBoard, MAX_BODY_CHARS, MAX_FWD_DEPTH, webErr } from "./store.js";
 import { readAgent, agentTokenMatches, mintToken, newSalt, hashToken, timingSafeEqualStr, writeAgentFile, isBoardFrozen, defaultRoleForNew, authorizeThrow, authorizeCheck, touchAgent } from "./identity.js";
 import { httpJson } from "./sync.js";
-import { killWorkers, pidAlive, bootWorker, parseAllowEnv } from "./spawn.js";
+import { killWorkers, pidAlive, bootWorker, parseAllowEnv, isPidStale } from "./spawn.js";
 import { expandGroups, heuristicSenderType } from "./groups.js";
 import { deliverDMs, findMessageById } from "./mail.js";
 import { appendChainRecord } from "./export.js";
@@ -176,7 +176,9 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
   if (recipients.length > maxSpawn) throw webErr(400, `spawn caps at ${maxSpawn} workers per call (got ${recipients.length})`);
   for (const name of recipients) {
     const rec = readAgent(d, name);
-    if (rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid)) {
+    // Stale-pid guard (C2): pid reuse after a reboot is "not live" for spawn
+    // purposes — a different process recycled the pid, the worker is gone.
+    if (rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid) && !isPidStale(rec.spawnedPid, rec.spawnedAt)) {
       throw webErr(400, `name "${name}" has a live worker (pid ${rec.spawnedPid})`);
     }
   }
