@@ -331,11 +331,15 @@ check("spawn --count auto-names", dryCount.includes("would spawn solo") && dryCo
 check("spawn --count --prefix", run(["spawn", "--from", "alice", "--count", "2", "--prefix", "crew", "--body", "x", "--dry-run"]).includes("would spawn crew-2"));
 let countZero = false;
 try {
-  run(["spawn", "--from", "alice", "--count", "0", "--body", "x", "--dry-run"]);
+  // C9: --count 0 is now the LEAD REVIVE path (only the auto-coordinator
+  // boots; smoke has no coding-harness lead lane context here, so the
+  // revive precondition still refuses loudly — keep the guard alive).
+  run(["spawn", "--from", "alice", "--count", "0", "--lead", "none", "--body", "x", "--dry-run"]);
 } catch {
   countZero = true;
 }
-check("spawn --count 0 refused", countZero);
+check("spawn --count 0 refused without the lead lane", countZero);
+check("spawn --count 0 revive previews lead-only", run(["spawn", "--from", "alice", "--count", "0", "--body", "x", "--dry-run"]).includes("lead-revive:"));
 let countBig = false;
 try {
   run(["spawn", "--from", "alice", "--count", "21", "--body", "x", "--dry-run"]);
