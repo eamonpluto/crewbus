@@ -60,7 +60,7 @@ const apiPost = (port, p, payload, contentType) =>
   });
 
 // Board setup: lead + worker, two high-priority approval requests to the lead.
-run(["init", "--harness", "generic"]);
+run(["init", "--harness", "opencode"]);
 run(["register", "--from", "lead"]);
 run(["register", "--from", "worker"]);
 const sent1 = run(["send", "--from", "worker", "--to", "lead", "--subject", "approval: restart db", "--priority", "high", "--body", "run: restart db now?"]);

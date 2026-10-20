@@ -74,7 +74,7 @@ const webAt = await web.waitFor(/crewbus web at http:\/\/(\S+)/);
 const webBase = `http://${webAt[1]}`;
 
 const harn = await httpCall(webBase, "GET", "/api/harnesses");
-check("web: GET /api/harnesses 200 x7", harn.status === 200 && Array.isArray(harn.json) && harn.json.length === 7);
+check("web: GET /api/harnesses 200 x6", harn.status === 200 && Array.isArray(harn.json) && harn.json.length === 6);
 check("web: harnesses carry brief+resume", Array.isArray(harn.json) && harn.json.every((r) => r.briefDelivery && typeof r.resume === "boolean"));
 
 const routes = await httpCall(webBase, "GET", "/api/routes");
@@ -88,10 +88,10 @@ check("web: POST /api/launch dry-run previews", dry.status === 200 && dry.json &
 check("web: POST /api/launch dry-run auto-lead previews coordinator", dry.json && dry.json.coordinator && dry.json.coordinator.name === "lead" && dry.json.coordinator.wouldProvision === true);
 
 const dryNone = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", lead: "none", body: "audit scope", dryRun: true });
-check("web: POST /api/launch lead=none omits coordinator", dryNone.status === 200 && dryNone.json && dryNone.json.coordinator === undefined);
+check("web: POST /api/launch lead=none refused 400", dryNone.status === 400);
 
-const badLeadGen = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "generic", cmd: "echo ok", lead: "board", body: "x", dryRun: true });
-check("web: POST /api/launch lead=board + generic 400", badLeadGen.status === 400 && (badLeadGen.json.error || "").includes("needs a coding harness"));
+const badLeadGen = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "generic", body: "x", dryRun: true });
+check("web: POST /api/launch generic 400", badLeadGen.status === 400);
 
 const customCwd = fs.mkdtempSync(path.join(os.tmpdir(), "cb-custom-cwd-"));
 const dryWithCwd = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "audit scope", dryRun: true, cwd: customCwd });
@@ -104,9 +104,9 @@ check("web: POST /api/launch bad harness 400", badPlan.status === 400 && (badPla
 const badTok = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: "abt-deadbeef", harness: "grok", body: "x", dryRun: true });
 check("web: POST /api/launch bad token 403", badTok.status === 403);
 
-const live = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "generic", cmd: 'node -e "process.exit(0)"', to: "ww1", body: "quick check" });
+const live = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "opencode", to: "ww1", body: "quick check" });
 check("web: POST /api/launch live boots (workers)", live.status === 200 && live.json && Array.isArray(live.json.workers) && live.json.workers.length === 1 && typeof live.json.workers[0].pid === "number");
-check("web: POST /api/launch generic harness omits coordinator", live.json && live.json.coordinator === undefined);
+check("web: POST /api/launch provisions coordinator", live.json && live.json.coordinator && (live.json.coordinator.name === "lead" || live.json.coordinator.leadName === "lead"));
 run(["spawn-kill", "--from", "lead", "--token", leadTok, "--to", "ww1"]);
 
 // ---- loopback operator auto-provision & /api/operator-creds ----
@@ -152,7 +152,7 @@ const rRoutes = await httpCall(relayBase, "GET", "/api/routes");
 check("relay: GET /api/routes carries hints", rRoutes.status === 200 && Array.isArray(rRoutes.json.advertisedRoutes) && rRoutes.json.advertisedRoutes.length === 2);
 
 const rHarn = await httpCall(relayBase, "GET", "/api/harnesses");
-check("relay: GET /api/harnesses 200 x7", rHarn.status === 200 && Array.isArray(rHarn.json) && rHarn.json.length === 7);
+check("relay: GET /api/harnesses 200 x6", rHarn.status === 200 && Array.isArray(rHarn.json) && rHarn.json.length === 6);
 
 const hz = await httpCall(relayBase, "GET", "/healthz");
 check("relay: /healthz carries advertisedRoutes", hz.status === 200 && Array.isArray(hz.json.advertisedRoutes) && hz.json.advertisedRoutes.length === 2);
@@ -164,7 +164,7 @@ check("relay: POST /api/launch dry-run 200", rDry.status === 200 && rDry.json &&
 const rNoAuth = await httpCall(relayBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "x", dryRun: true });
 check("relay: POST /api/launch without secret refused", rNoAuth.status === 401 || rNoAuth.status === 403);
 
-const rLive = await httpCall(relayBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "generic", cmd: 'node -e "process.exit(0)"', to: "rw1", body: "remote check" }, sec);
+const rLive = await httpCall(relayBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "opencode", to: "rw1", body: "remote check" }, sec);
 check("relay: POST /api/launch live boots via remote core", rLive.status === 200 && rLive.json && Array.isArray(rLive.json.results) && rLive.json.results.length === 1);
 run(["spawn-kill", "--from", "lead", "--token", leadTok, "--to", "rw1"]);
 relay.kill();
@@ -196,7 +196,7 @@ check("desktop serve: POST /api/launch dry-run 200 without --allow-remote-spawn"
 const dsBadTok = await httpCall(dsBase, "POST", "/api/launch", { from: "lead", token: "abt-badtoken", harness: "grok", body: "x", dryRun: true });
 check("desktop serve: POST /api/launch bad token rejected 403", dsBadTok.status === 403);
 
-const dsLive = await httpCall(dsBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "generic", cmd: 'node -e "process.exit(0)"', to: "dw1", body: "desktop live boot" });
+const dsLive = await httpCall(dsBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "opencode", to: "dw1", body: "desktop live boot" });
 check("desktop serve: POST /api/launch live boots workers", dsLive.status === 200 && dsLive.json && Array.isArray(dsLive.json.workers) && dsLive.json.workers.length === 1 && typeof dsLive.json.workers[0].pid === "number");
 
 const dsKill = await httpCall(dsBase, "POST", "/api/kill", { from: "lead", token: leadTok, to: ["dw1"] });

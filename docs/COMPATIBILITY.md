@@ -49,7 +49,7 @@ Status per harness (re-check the "no" rows when vendors change flags):
 Honesty authority: `packages/contracts/harness.json` (`version: 1`,
 frozen-M0). `resume:true` for opencode / claude / codex / grok
 (`harness.json:15,29,43,57`); `resume:false` for antigravity / cursor /
-generic (`harness.json:71,86,103`) — UIs render resume unsupported for those
+UIs render resume unsupported for those
 three and never fake continuity. Flags below mirror
 `buildRespawnTarget()` in `bin/lib/spawn.js:265-284` and the
 `LAUNCH_DRIVER_FALLBACK` table in `bin/lib/launch.js:24-30`.
@@ -68,7 +68,6 @@ three and never fake continuity. Flags below mirror
 - cursor: `-p --force --resume <id> "<catch-up>"` — HONESTLY UNSUPPORTED
   (`resume:false`): the id lives in `stream-json` while spawn uses plain
   print mode; same conditional as agy.
-- generic: no continuity — fresh boot of the catch-up brief
   (`resume:false`; `bin/lib/spawn.js:273-274,288-290`).
 
 ## `doctor`: what it checks (and what it can't)
@@ -186,7 +185,6 @@ or unrelated commands/tools.
 | grok-build (`grok`) | none (project-local JSON) — skipped | nothing (code comment in `applyHarness`) | `[permission]` rules in `.grok/config.toml` (TOML — no zero-dep-safe merge); note grok reads Claude-compat `.claude/settings.json`, covered under `--harness claude` | unverified (vendor docs: docs.x.ai permissions; community config reference) |
 | antigravity (`agy`) | none (project-local) — skipped | nothing (code comment in `applyHarness`) | `permissions.allow` with `mcp(server/*)`, `command(...)` lives in GLOBAL `~/.gemini/antigravity-cli/settings.json`, which init never touches | unverified for project-local (vendor docs: antigravity.google permissions) |
 | copilot | n/a — skipped | nothing (not an `init --harness` adapter) | all copilot approval policy | unverified (no adapter in this repo) |
-| generic | n/a — skipped | nothing (no config surface) | n/a | n/a |
 
 Verification: `node test/crewbus.approvals-init.mjs` asserts the three
 wired harnesses (entries written, re-run byte-identical, user config

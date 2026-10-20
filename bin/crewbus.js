@@ -1319,7 +1319,7 @@ function installOpencodeFiles(cwd, force) {
 // marker dirs (.opencode/.claude/.codex/.agents/.grok/.cursor). No markers at all
 // keeps the legacy default (opencode) so existing checkouts don't change.
 
-const HARNESSES = ["opencode", "claude", "codex", "antigravity", "grok", "cursor", "generic"];
+const HARNESSES = ["opencode", "claude", "codex", "antigravity", "grok", "cursor"];
 const HARNESS_MARKERS = {
   opencode: ".opencode",
   claude: ".claude",
@@ -1603,7 +1603,6 @@ function mergeCursorHooks(file, hookAbs, boardExtra) {
 //   `mcp(server/*)`, `command(...)`); .agents/ has no documented
 //   project-local permissions allowlist.
 // - copilot: SKIPPED — not an init --harness adapter in this repo.
-// - generic: SKIPPED — no config surface.
 const CLAUDE_BOARD_ALLOW = [
   "mcp__crewbus__*",
   "Bash(node *crewbus* *)",
@@ -1762,8 +1761,6 @@ waiters (PostToolUse/SessionStart \`asyncRewake\`) wake the session when mail la
   cursor: (cli) =>
     `On Cursor use the \`crewbus\` MCP server (\`.cursor/mcp.json\`) for DM tools — approve/enable it in Cursor settings.\n` +
     `SessionStart + stop hooks (\`.cursor/hooks.json\`) inject waiting DMs. Set \`CREWBUS_AGENT=<you>\` once per terminal so hooks know who you are.`,
-  generic: (cli) =>
-    `On any other harness: send with \`${cli} send\`, read with \`inbox\`, or block with \`listen\`. Poll \`inbox\` at session start and after each task.`,
 };
 
 function upsertHarnessSections(cwd, cli, ids) {
@@ -1936,7 +1933,6 @@ function cmdInit(args) {
       }
     }
     if (noOpencode) ids = ids.filter((h) => h !== "opencode");
-    if (ids.includes("generic") && ids.length > 1) ids = ids.filter((h) => h !== "generic");
   const nonLocal = root !== path.join(process.cwd(), ".crewbus");
   const boardExtra = nonLocal ? `--board "${root.split(path.sep).join("/")}"` : "";
   const mcpEnv = nonLocal ? { CREWBUS_DIR: root } : null;
@@ -1945,7 +1941,6 @@ function cmdInit(args) {
   const ctx = { force, hookAbs: binAbs("crewbus-hook.js"), mcpAbs: binAbs("crewbus-mcp.js"), boardExtra, mcpEnv, portable };
     const followUps = [];
     for (const h of ids) {
-      if (h === "generic") continue;
       for (const f of applyHarness(process.cwd(), h, ctx)) {
         if (!followUps.includes(f)) followUps.push(f);
       }
@@ -2932,7 +2927,7 @@ function cmdSend(args) {
 // fails to launch. Children inherit CREWBUS_DIR + CREWBUS_AGENT, log
 // to .crewbus/logs/<name>-<stamp>.log, and report their pid back here.
 // opencode runs `opencode run` with the brief attached via --file (no shell
-// quoting of the long prompt); generic runs your --cmd string with the same
+// quoting of the long prompt); each driver runs with the same
 // board env. Spawn caps at MAX_SPAWN — bigger crews get a broadcast DM.
 // ---------------------------------------------------------------------------
 
@@ -2998,13 +2993,11 @@ function cmdSpawn(args) {
     return s;
   }).filter(Boolean);
   if (harnesses.length === 0) harnesses.push("opencode");
-  const validDrivers = ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "generic"];
+  const validDrivers = ["opencode", "claude", "codex", "grok", "antigravity", "cursor"];
   for (const h of harnesses) {
     if (!validDrivers.includes(h)) fail(`unknown --harness "${h}" (want ${validDrivers.join("|")})`);
   }
   const harness = harnesses.join(",");
-  const cmd = getFlag(args, "--cmd");
-  if (harnesses.includes("generic") && !cmd) fail('generic harness needs --cmd "..." (runs with CREWBUS_DIR + CREWBUS_AGENT set)');
   const maxTurns = getFlag(args, "--max-turns");
   if (maxTurns !== undefined && !(Number(maxTurns) > 0)) fail("--max-turns must be a positive number");
   if (maxTurns !== undefined && !harnesses.some((h) => h === "claude" || h === "grok")) fail(`--max-turns only applies to claude/grok (got --harness ${harness})`);
@@ -3038,32 +3031,16 @@ function cmdSpawn(args) {
   const taskGroups = rosterGroups.filter((g) => groupNames.includes(g.name));
   const offTask = rosterGroups.length - taskGroups.length;
   const crewFor = (to, leadTarget) => buildCrewContext({ name: to, from, lead: leadTarget, subject, groups: taskGroups, myGroups: taskGroups.filter((g) => g.members.includes(to)).map((g) => g.name), offTask });
-  // Lead auto-assignment (§auto-lead): `--lead auto|board|none` (default: auto).
-  // Under `board` (or `auto` with a coding harness), spawn and lead are
-  // separated: workers pin replies to the board's standing 'lead' lane and a
-  // detached persistent coordinator is provisioned after the crew boots; the
-  // spawner stays boss (reads, milestone DMs). `--lead none` (or `auto` with
-  // purely generic harnesses) is the legacy star topology: replies pin to the
-  // spawner, nothing else is provisioned.
+  // Lead auto-assignment (§auto-lead): default: auto.
+  // Workers pin replies to the board's standing 'lead' lane and a detached
+  // persistent coordinator is provisioned after the crew boots; the spawner
+  // stays boss (reads, milestone DMs).
   const leadFlagRaw = getFlag(args, "--lead");
-  const hasCodingHarness = harnesses.some((h) => h !== "generic");
-  let leadMode;
-  if (leadFlagRaw === undefined) {
-    leadMode = hasCodingHarness ? "board" : "none";
-  } else {
-    leadMode = String(leadFlagRaw).trim().toLowerCase();
-    if (leadMode === "auto") {
-      leadMode = hasCodingHarness ? "board" : "none";
-    }
+  if (leadFlagRaw !== undefined) {
+    const raw = String(leadFlagRaw).trim().toLowerCase();
+    if (raw !== "auto") fail(`invalid --lead "${leadFlagRaw}" (only --lead auto is supported)`);
   }
-  if (!["board", "none"].includes(leadMode)) fail(`invalid --lead "${leadFlagRaw}" (want auto|board|none)`);
-  if (leadMode === "board" && !hasCodingHarness) {
-    fail('--lead board needs a coding harness for the auto-coordinator (add --harness opencode, or pass --lead none under --harness generic)');
-  }
-  if (revive && leadMode !== "board") {
-    fail("--count 0 is the lead-revive path: it needs the auto-coordinator (--lead board — the default when a coding harness is present)");
-  }
-  const leadTarget = leadMode === "board" ? "lead" : from;
+  const leadTarget = "lead";
   const model = getFlag(args, "--model");
   const auto = args.includes("--auto");
   requireAutoConfirm(args);
@@ -3138,7 +3115,7 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
   const at = new Date().toISOString();
   const logDir = path.join(d.root, "logs");
   if (!dry) fs.mkdirSync(logDir, { recursive: true });
-  const spawnOpts = { harness, cmd, model, auto, maxTurns: maxTurnsNum, allowTools, cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
+  const spawnOpts = { harness, model, auto, maxTurns: maxTurnsNum, allowTools, cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
   if (dry) {
     // Preview only: nothing touches the board (ids below are illustrative).
     const previewBatch = !revive && recipients.length > 1 ? newId("batch") : undefined;
@@ -3156,7 +3133,7 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
     } else {
       console.log(`lead-revive: would ONLY provision/reuse the auto-coordinator on the '${leadTarget}' lane (0 workers, no DMs delivered) [board ${d.root}]`);
     }
-    if (leadMode === "board") {
+    if (leadTarget === "lead") {
       const existingLead = readAgent(d, "lead");
       // Stale-pid guard (C2): preview says "fresh provision" when the pid
       // record is recycled (reboot + OS pid reuse).
@@ -3164,7 +3141,7 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
       if (standing) {
         console.log(`--- lead ---\na live coordinator already runs on the 'lead' lane (pid ${existingLead.spawnedPid}) — reused, not duplicated [board ${d.root}]`);
       } else if (existingLead && existingLead.offboarded) {
-        console.log(`--- lead ---\nlane "lead" is offboarded: provision would be SKIPPED (re-onboard it, or pass --lead none) [board ${d.root}]`);
+        console.log(`--- lead ---\nlane "lead" is offboarded: provision would be SKIPPED (re-onboard it) [board ${d.root}]`);
       } else {
         const coordPreview = buildCoordinatorPrompt({
           name: "lead", from, subject, body: body.trim(), batch: previewBatch,
@@ -3231,10 +3208,8 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
   // block worker boots. Lead-revive (C9): also runs here with an EMPTY
   // roster — the revive mission text becomes the coordinator's reminder of
   // what the crew was on about (worker threads/scope live on the board).
-  if (leadMode === "board") {
-    const coordHarness = [  // first coding harness wins; generic is excluded above
-      ...harnesses.filter((h) => h !== "generic"),
-    ][0] || "opencode";
+  {
+    const coordHarness = harnesses[0] || "opencode";
     const provision = provisionAutoLead(d, {
       spawnOpts: { ...spawnOpts, harness: coordHarness, maxTurns: undefined, allowTools: undefined },
       from, subject, body: body.trim(), rev, logDir,
@@ -3267,9 +3242,6 @@ function printLaunchDryRun(v, args, from, root, asJson, cmdOpt) {
   const names = p.to ? String(p.to).split(",").map((s) => s.trim()).filter(Boolean)
     : Array.from({ length: p.count }, (_, i) => `${p.prefix || "w"}-${i + 1}`);
   const harnesses = Array.isArray(p.harnesses) && p.harnesses.length > 0 ? p.harnesses : [p.harness || "opencode"];
-  if (harnesses.includes("generic") && !cmdOpt) {
-    fail("launch --harness generic needs --cmd \"...\" (no command to preview)");
-  }
   const rev = gitRevForBoard(root);
   const rows = names.map((to, i) => {
     const driver = harnesses[i % harnesses.length];
@@ -3306,7 +3278,7 @@ async function askLoop(rl, q, parse, hint) {
 }
 
 // Fills raw.harness/raw.to/raw.count/raw.prefix/raw.body/raw.permission
-// (+ cmdOpt for generic) by prompting. Assumes a TTY; pure parse logic
+// by prompting. Assumes a TTY; pure parse logic
 // lives in bin/lib/launch.js (unit-tested), this only loops.
 async function runLaunchWizard(rl, raw, cmdOpt) {
   const rows = detectHarnessBinaries();
@@ -3346,10 +3318,6 @@ async function runLaunchWizard(rl, raw, cmdOpt) {
     if (i === 2) fail("too many invalid answers — re-run non-interactively with explicit flags");
   }
   raw.permission = await askLoop(rl, "permission [1 supervised (default) | 2 autoEdits | 3 auto | 4 full]: ", (a) => parsePermissionChoice(a, "supervised"), "1-4 or name");
-  if (raw.harness === "generic" && !cmdOpt.value) {
-    const cmdRaw = await askLoop(rl, 'command to run [--cmd, required for generic]: ', (a) => String(a).trim() || null, "non-empty command");
-    cmdOpt.value = cmdRaw;
-  }
   return raw;
 }
 
@@ -3490,7 +3458,7 @@ function cmdHarnesses(args) {
   for (const r of rows) {
     const found = r.found ? "yes" : "no";
     const ver = (r.version || r.detail || "").slice(0, 26).padEnd(26);
-    console.log(`${r.driver.padEnd(12)} ${(r.binary || "(operator --cmd)").padEnd(14)} ${found.padEnd(6)} ${ver} ${(r.briefDelivery || "").padEnd(7)} ${r.resume ? "yes" : "NO (honest)"}`);
+    console.log(`${r.driver.padEnd(12)} ${(r.binary || "-").padEnd(14)} ${found.padEnd(6)} ${ver} ${(r.briefDelivery || "").padEnd(7)} ${r.resume ? "yes" : "NO (honest)"}`);
   }
   console.log("missing binaries mean not installed — install + authenticate per docs/COMPATIBILITY.md");
 }
@@ -3549,8 +3517,7 @@ async function cmdSpawnKill(args) {
 // crewbus respawn --from <lead> --to <worker> [--body "..."] [--force] [--dry-run]
 // Preconditions: the worker was booted by spawn (worker-sessions record),
 // its process is dead (or --force kills it first), and a harness session id
-// was captured — except generic, which has no session continuity and simply
-// re-boots the catch-up brief fresh. The catch-up brief points at the
+// was captured. The catch-up brief points at the
 // original prompt file and threads the same reply id, so a resumed worker
 // continues instead of restarting. Lead/admin only (like spawn); --force
 // additionally checks spawn-kill scope (own crew).
@@ -3573,7 +3540,7 @@ async function cmdRespawn(args) {
   const dry = args.includes("--dry-run");
   // --fresh: when the harness session id was never captured (opencode kills
   // its buffered output before the log scan can read it), skip the resume
-  // requirement and boot the catch-up brief fresh — same as the generic path.
+  // requirement and boot the catch-up brief fresh.
   const fresh = args.includes("--fresh");
   const extraBody = getFlag(args, "--body");
   if (extraBody !== undefined && String(extraBody).length > MAX_BODY_CHARS) fail(`message body too large (max ${MAX_BODY_CHARS} chars)`);
@@ -3590,7 +3557,7 @@ async function cmdRespawn(args) {
   const harness = prev.harness;
   if (!harness) fail(`no harness recorded for "${name}" (spawned before session capture — re-boot fresh with spawn --to ${name})`);
   const sessionId = prev.harnessSessionId;
-  if (!sessionId && harness !== "generic" && !fresh) fail(`no harness session id recorded for "${name}"${prev.idSource ? ` (source: ${prev.idSource})` : ""} — its conversation can't be resumed; re-brief with send --reply ${prev.briefId || "<brief-id>"}, respawn with --fresh to reboot it without the old conversation, or spawn a fresh worker`);
+  if (!sessionId && !fresh) fail(`no harness session id recorded for "${name}"${prev.idSource ? ` (source: ${prev.idSource})` : ""} — its conversation can't be resumed; re-brief with send --reply ${prev.briefId || "<brief-id>"}, respawn with --fresh to reboot it without the old conversation, or spawn a fresh worker`);
   if ((prev.auto || false) && !args.includes("--auto")) fail(`worker "${name}" was spawned --auto (fully-unattended) — pass --auto to confirm the respawn carries the same danger (see docs/ISOLATION.md)`);
   if (args.includes("--auto")) requireAutoConfirm(args);
   if (!prev.promptPath) fail(`no original prompt on record for "${name}" (spawned before prompt capture — re-boot fresh with spawn --to ${name})`);
@@ -3602,21 +3569,16 @@ async function cmdRespawn(args) {
   const briefId = prev.briefId || rec.briefId;
   if (!briefId) fail(`no brief id on record for "${name}" — re-boot fresh with spawn --to ${name}`);
   const cwd = getFlag(args, "--cwd") ? path.resolve(getFlag(args, "--cwd")) : (prev.cwd || path.dirname(root));
-  let cmd = prev.cmd;
-  if (harness === "generic") {
-    const cmdOverride = getFlag(args, "--cmd");
-    if (cmdOverride !== undefined) cmd = cmdOverride;
-    if (!cmd) fail(`generic respawn needs the original --cmd (not recorded — re-boot fresh with spawn --harness generic --cmd "..." --to ${name})`);
-  }
-  const spawnOpts = { harness, cmd, model: prev.model, maxTurns: prev.maxTurns, auto: !!prev.auto, allowTools: prev.allowTools, cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
+  const spawnOpts = { harness, model: prev.model, maxTurns: prev.maxTurns, auto: !!prev.auto, allowTools: prev.allowTools, cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
   const attempt = ((prev.respawnCount) || 0) + 1;
   // Recycled-pid records read dead for respawn gating too (C2): a live pid
   // that postdates the spawn belongs to an unrelated process.
   const alive = typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid) && !isPidStale(rec.spawnedPid, rec.spawnedAt);
+  const effectiveSessionId = fresh ? undefined : (sessionId || undefined);
   if (dry) {
-    const catchup = buildRespawnBrief({ name, attempt, origPromptPath: prev.promptPath, briefId, harnessSessionId: sessionId || null, harness, lead: from, extraBody });
-    const t = buildRespawnTarget({ ...spawnOpts, name, promptPath: `<logs>/${name}-<stamp>.respawn.md`, prompt: catchup, sessionId: sessionId || undefined });
-    console.log(`would respawn ${name} [${harness}] attempt ${attempt}${sessionId ? ` session ${sessionId}` : " (fresh boot, no session continuity)"} cmd: ${formatSpawnCmd(t)} [board ${d.root}]`);
+    const catchup = buildRespawnBrief({ name, attempt, origPromptPath: prev.promptPath, briefId, harnessSessionId: effectiveSessionId || null, harness, lead: from, extraBody });
+    const t = buildRespawnTarget({ ...spawnOpts, name, promptPath: `<logs>/${name}-<stamp>.respawn.md`, prompt: catchup, sessionId: effectiveSessionId });
+    console.log(`would respawn ${name} [${harness}] attempt ${attempt}${effectiveSessionId ? ` session ${effectiveSessionId}` : " (fresh boot, no session continuity)"} cmd: ${formatSpawnCmd(t)} [board ${d.root}]`);
     console.log(`--- catch-up brief ---\n${catchup}`);
     return;
   }
@@ -3629,9 +3591,9 @@ async function cmdRespawn(args) {
   }
   const logDir = path.join(d.root, "logs");
   fs.mkdirSync(logDir, { recursive: true });
-  const r = bootRespawnedWorker(d, spawnOpts, { to: name, briefId, from, sessionId: sessionId || undefined, attempt, origPromptPath: prev.promptPath, extraBody, logDir });
-  appendChainRecord(d, from, "respawn", { to: name, harness, attempt, sessionId: sessionId || null });
-  console.log(`respawned ${name} [${harness}] attempt ${attempt} pid ${r.pid}${sessionId ? ` session ${sessionId}` : " (fresh boot)"} [board ${d.root}]`);
+  const r = bootRespawnedWorker(d, spawnOpts, { to: name, briefId, from, sessionId: effectiveSessionId, attempt, origPromptPath: prev.promptPath, extraBody, logDir });
+  appendChainRecord(d, from, "respawn", { to: name, harness, attempt, sessionId: effectiveSessionId || null });
+  console.log(`respawned ${name} [${harness}] attempt ${attempt} pid ${r.pid}${effectiveSessionId ? ` session ${effectiveSessionId}` : " (fresh boot)"} [board ${d.root}]`);
 }
 
 // Global stop: kill every spawned worker truly (whole process tree).
@@ -4831,7 +4793,7 @@ function cmdDoctor(args) {
       if (meta && Array.isArray(meta.harnesses) && meta.harnesses.length > 0) ids = meta.harnesses.filter((h) => HARNESSES.includes(h));
       else {
         ids = detectHarnesses(cwd);
-        if (ids.length === 0) ids = ["generic"];
+        if (ids.length === 0) ids = ["opencode"];
       }
     }
     // Dead-man scan (read-only, board-local only — no cwd needed): the
@@ -5009,9 +4971,6 @@ function cmdDoctor(args) {
         else no("cursor MCP .cursor/mcp.json", "run: crewbus init --harness cursor (then approve/enable it in Cursor settings)");
         break;
       }
-      default:
-        info(`generic harness: CLI pull only (inbox/listen), nothing to validate`);
-        break;
     }
   }
     // Reconcile hint (read-only): workers whose pids look recycled since a
@@ -6833,7 +6792,7 @@ const USAGE = `crewbus — DM-only minimal bus for AI agent coordination (v2)
 
 Setup:
   crewbus init [--global] [--board <path>] [--force] [--no-opencode] [--portable]
-                 [--harness opencode,claude,codex,antigravity,grok,cursor,generic]
+                 [--harness opencode,claude,codex,antigravity,grok,cursor]
     create board in ./.crewbus, write AGENTS.md block, install harness
   crewbus install-cli
     install standalone CLI wrapper to user PATH (~/.crewbus/bin)
@@ -6968,7 +6927,7 @@ Messaging (primitive — just a tool call, whenever you want):
     (recover mail a dead watcher consumed: clears delivered markers and
      rewinds the cursor so the next poll/push treats it as fresh;
      use after re-registering with the live session)
-    crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|generic] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
+    crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
    (--budget-* cap the WORKERS; --lead-budget-* cap the auto-provisioned coordinator lane — same semantics, e.g. a 400k-token lead that posts its aggregate and exits. Unset = persistent boss-supervised coordinator (default). A standing coordinator keeps its boot-time budget; the flags cannot change it mid-flight.)
    (workers boot with cloud/AI credential vars scrubbed from their environment by default (lead's keys never leak into briefs); pass --keep-env to inherit everything or --allow-env <prefix,...> to keep listed names. CREWBUS_TOKEN is never inherited — workers claim their own identity.)
     (brief N workers AND boot them detached: the DM lands first so the brief
@@ -6976,7 +6935,7 @@ Messaging (primitive — just a tool call, whenever you want):
      claude: \`-p\` + brief on stdin; codex: \`exec\` pointing at the brief
      file; grok: headless via --prompt-file; antigravity: \`--print\` with the
      brief inline; cursor: headless via \`-p --force --trust\` pointing at the
-     brief file; generic: --cmd with CREWBUS_DIR + CREWBUS_AGENT set.
+     brief file.
      Briefs auto-inject the latest scoped lessons + newest board artifacts
      (the Workbench block) so prior output compounds; --needs-by stamps a
      handoff deadline on the brief DMs.
@@ -7003,7 +6962,7 @@ Messaging (primitive — just a tool call, whenever you want):
      Terminates by recorded pid, confirms death, reports. Needs your token.)
   crewbus respawn --from <you> --to <worker> [--body "..."] [--force] [--fresh] [--cwd <dir>] [--cmd "..."] [--keep-env] [--allow-env ...] [--dry-run]
     (reboot one DEAD worker in its SAME harness conversation: needs the
-      captured session id (spawn-status shows it; generic re-boots fresh).
+      captured session id (spawn-status shows it; respawn --fresh re-boots without prior context).
       --fresh skips the resume requirement when the id can't be captured
       (e.g. an opencode worker died before its log revealed anything) and
       re-boots the catch-up brief as a fresh session.
@@ -7049,7 +7008,7 @@ Messaging (primitive — just a tool call, whenever you want):
      Surviving markers are kept, so nothing replays. Pruned ids leave
      tombstones/ entries replicated via sync so deletes don't return.
      Refused while a legal hold is active — see hold.)
-  crewbus pool --from <you> --count N --pool-size S --body "..." [--harness generic --cmd "..."] [--prefix p] [--queue a,b] [--json]
+  crewbus pool --from <you> --count N --pool-size S --body "..." [--harness opencode] [--prefix p] [--queue a,b] [--json]
     (lean async runner: brief N workers but boot at most S concurrently,
      watch exits and auto-replace until N total. Queue backpressure refuses
      when pending > 4*poolSize. State in pool-state/<id>.json, token-checked;
@@ -7120,12 +7079,10 @@ Messaging (primitive — just a tool call, whenever you want):
      --mtls-ca additionally requires verified client certs on /sync/* (mTLS,
      opt-in; tunnel alternative -- plain http behind your terminator -- stays
       fine). /api/spawn + /api/kill are OPT-IN (default OFF
-      → 403) via --allow-remote-spawn. Remote generic --cmd is refused unless
-      it matches --allow-cmd (default harness-only); remote cwd must sit under
-      --workdir-root      when set. Remote spawn/kill append to logs/audit.jsonl.
+      → 403) via --allow-remote-spawn. Remote cwd must sit under --workdir-root when set. Remote spawn/kill append to logs/audit.jsonl.
       Control plane (M1): POST /api/launch validates the launch plan then
       boots via the same core (same OPT-IN + secret gates; --dry-run previews
-      without booting); GET /api/harnesses lists the 7 drivers with binary
+      without booting); GET /api/harnesses lists the 6 drivers with binary
       presence; GET /api/routes + /healthz publish --advertise-routes hints;
       --pair-qrcode prints a one-time crewbus://pair URL at boot (needs
       --from <admin>; same mint + audit as relay pair).
@@ -7610,9 +7567,7 @@ async function cmdPool(args) {
   if (queue.length > 4 * poolSize) fail(`pool queue full (${queue.length} > 4*poolSize ${4 * poolSize}) — raise --pool-size or shrink --count`);
   let harness = String(getFlag(args, "--harness") || "opencode").toLowerCase();
   if (harness === "agy") harness = "antigravity";
-  if (!["opencode", "claude", "codex", "grok", "antigravity", "cursor", "generic"].includes(harness)) fail(`unknown --harness "${harness}"`);
-  const cmd = getFlag(args, "--cmd");
-  if (harness === "generic" && !cmd) fail('generic harness needs --cmd "..."');
+  if (!HARNESSES.includes(harness)) fail(`unknown --harness "${harness}"`);
   const maxTurnsFlag = getFlag(args, "--max-turns");
   if (maxTurnsFlag !== undefined && !(Number(maxTurnsFlag) > 0)) fail("--max-turns must be a positive number");
   if (maxTurnsFlag !== undefined && harness !== "claude" && harness !== "grok") fail(`--max-turns only applies to claude/grok (got --harness ${harness})`);
@@ -7629,11 +7584,11 @@ async function cmdPool(args) {
   fs.mkdirSync(logDir, { recursive: true });
   const poolId = newId("pool");
   const statePath = path.join(d.root, "pool-state", `${poolId}.json`);
-  const spawnOpts = { harness, cmd, model, auto, maxTurns: maxTurnsNum, allowTools: getFlag(args, "--allow-tools"), cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
+  const spawnOpts = { harness, model, auto, maxTurns: maxTurnsNum, allowTools: getFlag(args, "--allow-tools"), cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
   // Resumable state: queue/cursor/idByName let a later `pool resume` pick up
   // supervision; spawnOpts/body/subject/rev reproduce relaunches exactly.
   // `pending` stays a frozen full-queue snapshot for old readers.
-  const state = { id: poolId, from, total: queue.length, poolSize, harness, createdAt: at, launched: 0, done: 0, active: {}, pending: queue.slice(), results: [], body: body.trim(), subject, queue: queue.slice(), cursor: 0, idByName: {}, spawnOpts: { harness, cmd, model, auto, maxTurns: maxTurnsNum, allowTools: getFlag(args, "--allow-tools"), cwd }, rev };
+  const state = { id: poolId, from, total: queue.length, poolSize, harness, createdAt: at, launched: 0, done: 0, active: {}, pending: queue.slice(), results: [], body: body.trim(), subject, queue: queue.slice(), cursor: 0, idByName: {}, spawnOpts: { harness, model, auto, maxTurns: maxTurnsNum, allowTools: getFlag(args, "--allow-tools"), cwd }, rev };
   const saveState = () => {
     try {
       const { v, hlc } = stampSyncDoc(null);
@@ -7664,8 +7619,10 @@ async function cmdPool(args) {
     }
   };
   const initial = Math.min(poolSize, queue.length);
-  for (; state.cursor < initial; state.cursor++) launchOne(queue[state.cursor]);
-  saveState(); // persist the post-launch cursor (launchOne saves pre-increment)
+  while (state.cursor < initial) {
+    const next = queue[state.cursor++];
+    launchOne(next);
+  }
   const deadline = Date.now() + POOL_SUPERVISE_MS;
   while (state.done < queue.length && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 500));

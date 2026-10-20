@@ -27,13 +27,13 @@ const hasBinary = (bin) => {
   return r.status === 0 || (r.error === undefined && r.stdout !== undefined && r.status !== null);
 };
 
-execFileSync("node", [CLI, "init", "--harness", "generic"], { env });
+execFileSync("node", [CLI, "init", "--harness", "opencode"], { env });
 const leadTok = execFileSync("node", [CLI, "register", "--from", "lead"], { env })
   .toString()
   .match(/token (abt-[0-9a-f]+)/)[1];
 const LEAD = { ...env, CREWBUS_TOKEN: leadTok };
 
-// binary per harness; generic needs none (own --cmd, always exercised)
+// binary per harness
 const HARNESS_BIN = {
   opencode: "opencode",
   claude: "claude",
@@ -67,14 +67,14 @@ for (const h of ["opencode", "claude", "codex", "antigravity", "grok", "cursor"]
   }
 }
 
-// generic path always runs (no vendor binary needed)
+// spawn dry-run path always runs (no vendor binary needed)
 {
   const out = execFileSync(
     "node",
-    [CLI, "spawn", "--from", "lead", "--harness", "generic", "--cmd", "node -e 0", "--to", "int-generic", "--body", "integration probe", "--dry-run"],
+    [CLI, "spawn", "--from", "lead", "--harness", "opencode", "--to", "int-dry", "--body", "integration probe", "--dry-run"],
     { env: LEAD }
   ).toString();
-  check("integration: spawn --dry-run --harness generic previews command", out.length > 0);
+  check("integration: spawn --dry-run --harness opencode previews command", out.length > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,8 +145,8 @@ if (!hasOpenssl) {
   let srv = null;
   try {
     execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-keyout", "key.pem", "-out", "cert.pem", "-days", "2", "-nodes", "-subj", "/CN=localhost"], { cwd: tlsDir, stdio: "pipe", timeout: 60000 });
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: { ...stripIdent(), CREWBUS_DIR: boardA } });
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: { ...stripIdent(), CREWBUS_DIR: boardB } });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: { ...stripIdent(), CREWBUS_DIR: boardA } });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: { ...stripIdent(), CREWBUS_DIR: boardB } });
     const tokA = execFileSync("node", [CLI, "register", "--from", "alice"], { env: { ...stripIdent(), CREWBUS_DIR: boardA } }).toString().match(/token (abt-[0-9a-f]+)/)[1];
     execFileSync("node", [CLI, "send", "--from", "alice", "--to", "bob", "--body", "tls probe"], { env: { ...stripIdent(), CREWBUS_DIR: boardA, CREWBUS_TOKEN: tokA } });
     srv = await startServe(["serve", "--board", boardA, "--port", "0", "--tls-cert", path.join(tlsDir, "cert.pem"), "--tls-key", path.join(tlsDir, "key.pem"), "--secret", "s3"], {});
@@ -183,8 +183,8 @@ if (!hasOpenssl) {
     run(["x509", "-req", "-in", "srv.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-out", "srv.crt", "-days", "2"]);
     run(["req", "-newkey", "rsa:2048", "-keyout", "cli.key", "-out", "cli.csr", "-nodes", "-subj", "/CN=test-client"]);
     run(["x509", "-req", "-in", "cli.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-out", "cli.crt", "-days", "2"]);
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: { ...stripIdent(), CREWBUS_DIR: boardC } });
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: { ...stripIdent(), CREWBUS_DIR: boardD } });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: { ...stripIdent(), CREWBUS_DIR: boardC } });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: { ...stripIdent(), CREWBUS_DIR: boardD } });
     const tokC = execFileSync("node", [CLI, "register", "--from", "carol"], { env: { ...stripIdent(), CREWBUS_DIR: boardC } }).toString().match(/token (abt-[0-9a-f]+)/)[1];
     execFileSync("node", [CLI, "send", "--from", "carol", "--to", "dave", "--body", "mtls probe"], { env: { ...stripIdent(), CREWBUS_DIR: boardC, CREWBUS_TOKEN: tokC } });
     msrv = await startServe(["serve", "--board", boardC, "--port", "0", "--tls-cert", path.join(mtlsDir, "srv.crt"), "--tls-key", path.join(mtlsDir, "srv.key"), "--mtls-ca", path.join(mtlsDir, "ca.crt"), "--secret", "s3"], {});
@@ -270,7 +270,7 @@ if (!hasOpenssl) {
   const boardO = fs.mkdtempSync(path.join(os.tmpdir(), "cb-oidc-"));
   const OENV = { ...stripIdent(), CREWBUS_DIR: boardO };
   try {
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: OENV });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: OENV });
     const good = mint(rsa.privateKey, "test-rsa", "RS256", { iss: stubBase, aud: AUD, sub: "alice-oidc", iat: nowSec(), exp: nowSec() + 600 });
     const goodEc = mint(ec.privateKey, "test-ec", "ES256", { iss: stubBase, aud: AUD, sub: "bob-oidc", iat: nowSec(), exp: nowSec() + 600 });
     // valid JWT accepted (RS256 + ES256 DER path)
@@ -304,8 +304,8 @@ if (!hasOpenssl) {
     // relay: Bearer alternative to --secret (secret set, client sends only Bearer)
     const boardR = fs.mkdtempSync(path.join(os.tmpdir(), "cb-oidc-r-"));
     const boardS = fs.mkdtempSync(path.join(os.tmpdir(), "cb-oidc-s-"));
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: { ...stripIdent(), CREWBUS_DIR: boardR } });
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: { ...stripIdent(), CREWBUS_DIR: boardS } });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: { ...stripIdent(), CREWBUS_DIR: boardR } });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: { ...stripIdent(), CREWBUS_DIR: boardS } });
     let osrv = null;
     try {
       osrv = await startServe(["serve", "--board", boardR, "--port", "0", "--secret", "relay-secret", "--oidc-issuer", stubBase, "--oidc-audience", AUD], {});
@@ -374,7 +374,7 @@ if (!hasOpenssl) {
   const FENV = { ...stripIdent(), CREWBUS_DIR: boardF, CREWBUS_SECRET: "p2a-fwd-secret" };
   let fsrv = null;
   try {
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: FENV });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: FENV });
     const fwdReg = execFileSync("node", [CLI, "register", "--from", "boss"], { env: FENV }).toString();
     const fwdTok = fwdReg.match(/token (abt-[0-9a-f]+)/)[1];
     const FADM = { ...FENV, CREWBUS_TOKEN: fwdTok };
@@ -460,8 +460,8 @@ if (!hasOpenssl) {
       });
     });
   try {
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: PENV });
-    execFileSync("node", [CLI, "init", "--harness", "generic"], { env: SENV });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: PENV });
+    execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: SENV });
     const pReg = execFileSync("node", [CLI, "register", "--from", "boss"], { env: PENV }).toString();
     const pTok = pReg.match(/token (abt-[0-9a-f]+)/)[1];
     const PADM = { ...PENV, CREWBUS_TOKEN: pTok };

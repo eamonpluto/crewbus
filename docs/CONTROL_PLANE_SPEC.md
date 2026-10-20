@@ -61,7 +61,7 @@ Constants: `MAX_BODY_CHARS=8000`, `MAX_RECIPIENTS=10000`, `MAX_SPAWN=20`,
 
 | Verb | Key flags | Lib owner |
 |---|---|---|
-| `init [--harness opencode,claude,codex,antigravity,grok,cursor,generic]` | `--global --board --force --no-opencode --portable` | monolith `cmdInit` |
+| `init [--harness opencode,claude,codex,antigravity,grok,cursor]` | `--global --board --force --no-opencode --portable` | monolith `cmdInit` |
 | `register --from <you>` | `--session --token --role --expires-in --service --offboard --for` | `identity.js` |
 | `send --from --to --body` | `--subject --reply --priority --checkpoint --sender-type --to-group --no-rate-limit --yes` | `mail.js` |
 | `inbox --from` | `--after --unacked --digest --grep --priority --json` | `mail.js` |
@@ -144,7 +144,6 @@ lazily fills `worker-sessions/<name>.json` (machine-local, NEVER synced).
 | grok | `--prompt-file -s <uuid> --output-format json` | file | preassigned (end-of-run log) | `--prompt-file <catchup> -r <id>` |
 | antigravity | `--print --mode accept-edits` | inline | none | `-p "<catchup>" --conversation <id>` (rare) |
 | cursor | `cursor-agent -p --force --trust` | inline | none | `-p --force --resume <id>` (rare) |
-| generic | `--cmd "<arbitrary>"` | n/a | none | fresh boot only |
 
 `--auto` per harness: opencode auto-approve, claude `-p` unattended, grok
 `--always-approve`, cursor `--yolo`, agy `--dangerously-skip-permissions`.

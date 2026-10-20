@@ -30,17 +30,17 @@ const check = (label, cond) => {
 };
 
 // ---- lib: drivers table ----
-check("drivers: 7 entries", launchDrivers().length === 7);
-check("drivers: all names", ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "generic"].every((n) => launchDrivers().some((d) => d.driver === n)));
+check("drivers: 6 entries", launchDrivers().length === 6);
+check("drivers: all names", ["opencode", "claude", "codex", "grok", "antigravity", "cursor"].every((n) => launchDrivers().some((d) => d.driver === n)));
 
 // ---- lib: probe never throws ----
 const probe = probeBinary("definitely-not-a-crewbus-binary-xyz", ["--version"]);
 check("probe: missing reports found=false", probe.found === false && probe.detail === "not installed");
-check("probe: null binary explains --cmd", probeBinary(null).detail.includes("--cmd"));
+// probe null binary removed
 
 // ---- lib: detect shape ----
 const rows = detectHarnessBinaries();
-check("detect: 7 rows", rows.length === 7);
+check("detect: 6 rows", rows.length === 6);
 check("detect: rows carry brief+resume", rows.every((r) => r.briefDelivery && typeof r.resume === "boolean"));
 
 // ---- lib: plan validation ----
@@ -80,7 +80,7 @@ check("advertise: shape", (() => { const a = advertiseEnv({ envId: "e", routes: 
 
 // ---- lib: wizard parsers (pure, no TTY needed) ----
 const menuRows = detectHarnessBinaries();
-check("wizard: menu lists 7 drivers", formatHarnessMenu(menuRows).split("\n").length === 7);
+check("wizard: menu lists 6 drivers", formatHarnessMenu(menuRows).split("\n").length === 6);
 check("wizard: harness by number", parseHarnessChoice(menuRows, "2") === menuRows[1].driver);
 check("wizard: harness by name (case-insensitive)", parseHarnessChoice(menuRows, "CLAUDE") === "claude");
 check("wizard: harness by display name", parseHarnessChoice(menuRows, menuRows[0].displayName) === menuRows[0].driver);
@@ -98,8 +98,8 @@ check("wizard: @path is file ref", isBodyFileRef("@brief.md") === true && isBody
 const board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-launch-"));
 const env = { ...process.env, CREWBUS_DIR: board };
 const run = (args) => execFileSync("node", [CLI, ...args], { env, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] }).toString();
-check("cli: harnesses lists 7", run(["harnesses"]).split("\n").filter((l) => l.includes("file") || l.includes("stdin") || l.includes("inline")).length === 7);
-check("cli: harnesses --json parses", JSON.parse(run(["harnesses", "--json"])).length === 7);
+check("cli: harnesses lists 6", run(["harnesses"]).split("\n").filter((l) => l.includes("file") || l.includes("stdin") || l.includes("inline")).length === 6);
+check("cli: harnesses --json parses", JSON.parse(run(["harnesses", "--json"])).length === 6);
 
 // ---- CLI: launch dry-run (boots nothing) ----
 const dry = run(["launch", "--from", "lead", "--harness", "grok", "--body", "audit scope", "--dry-run"]);
@@ -110,15 +110,13 @@ check("cli: dry-run --json shape", dryJson.ok === true && dryJson.dryRun === tru
 const multiDry = JSON.parse(run(["launch", "--from", "lead", "--harness", "claude,antigravity", "--model", "claude-3-7-sonnet", "--body", "x", "--count", "2", "--dry-run", "--json"]));
 check("cli: multi-harness dry-run distributes drivers", multiDry.ok === true && multiDry.commands[0].harness === "claude" && multiDry.commands[1].harness === "antigravity");
 check("cli: multi-harness dry-run formats model", multiDry.commands[0].command.includes("claude-3-7-sonnet"));
-let genericNeedsCmd = false;
+let genericRefused = false;
 try {
   run(["launch", "--from", "lead", "--harness", "generic", "--body", "x", "--dry-run"]);
 } catch (e) {
-  genericNeedsCmd = String((e.stdout || "") + (e.stderr || "")).includes("needs --cmd");
+  genericRefused = String((e.stdout || "") + (e.stderr || "")).includes("launch plan invalid");
 }
-check("cli: generic dry-run demands --cmd", genericNeedsCmd);
-const genDry = run(["launch", "--from", "lead", "--harness", "generic", "--cmd", "node worker.js", "--body", "x", "--dry-run"]);
-check("cli: generic dry-run previews cmd", genDry.includes("node worker.js"));
+check("cli: generic harness refused", genericRefused);
 
 // ---- CLI: validation failures ----
 let badFails = false;
@@ -161,7 +159,7 @@ const leadReg = run(["register", "--from", "lead"]);
 const leadTok = ((leadReg.match(/token (abt-[0-9a-f]+)/) || [])[1]) || "";
 const tokM = run(["register", "--from", "lead2"]).match(/token (abt-[0-9a-f]+)/);
 const lead2Tok = tokM ? tokM[1] : "";
-const live = run(["launch", "--from", "lead", "--token", leadTok, "--harness", "generic", "--cmd", "node -e \"process.exit(0)\"", "--to", "lw1", "--body", "quick check"]);
+const live = run(["launch", "--from", "lead", "--token", leadTok, "--harness", "opencode", "--to", "lw1", "--body", "quick check"]);
 check("cli: live launch delegates (spawned)", live.includes("spawned lw1 pid"));
 execFileSync("node", [CLI, "spawn-kill", "--from", "lead", "--token", leadTok, "--to", "lw1"], { env, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] });
 

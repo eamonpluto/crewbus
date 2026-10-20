@@ -25,7 +25,7 @@ const timed = (label, fn, budgetMs) => {
   return out;
 };
 
-run(["init", "--harness", "generic"]);
+run(["init", "--harness", "opencode"]);
 const leadTok = run(["register", "--from", "lead"]).match(/token (abt-[0-9a-f]+)/)[1];
 const LEAD = { CREWBUS_TOKEN: leadTok };
 {

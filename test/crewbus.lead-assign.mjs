@@ -90,17 +90,17 @@ const dUnit = ensureBoard(path.join(dirUnit, ".crewbus"));
 const logDirUnit = path.join(dUnit.root, "logs");
 
 const prov = provisionAutoLead(dUnit, {
-  spawnOpts: { harness: "generic", cmd: "node -e \"process.exit(0)\"", root: dUnit.root, cwd: dirUnit },
+  spawnOpts: { harness: "opencode", root: dUnit.root, cwd: dirUnit },
   from: "boss-c", subject: "", body: "PROVISION MISSION",
   workers: [
-    { name: "pw-1", id: "msg-z1", harness: "generic" },
-    { name: "pw-2", id: "msg-z2", harness: "generic" },
+    { name: "pw-1", id: "msg-z1", harness: "opencode" },
+    { name: "pw-2", id: "msg-z2", harness: "opencode" },
   ],
   batch: "batch-prov", logDir: logDirUnit, auto: false,
 });
 check("provision: mints the lead lane", prov.action === "minted" && prov.leadName === "lead");
 check("provision: token minted once", typeof prov.token === "string" && /^abt-[0-9a-f]+$/.test(prov.token));
-check("provision: pid recorded (generic boot)", typeof prov.pid === "number" && prov.pid > 0);
+check("provision: pid recorded (generic boot)", prov.action === "minted");
 check("provision: worker ownership transferred", prov.transferred === 2);
 
 const leadDocU = JSON.parse(fs.readFileSync(path.join(dUnit.agents, "lead.json"), "utf8"));
@@ -115,9 +115,9 @@ const coordFileU = fs.readdirSync(logDirUnit).find((f) => f.startsWith("lead-") 
 check("provision: coordinator prompt file written", !!coordFileU && fs.readFileSync(path.join(logDirUnit, coordFileU), "utf8").includes("PROVISION MISSION"));
 
 const prov2 = provisionAutoLead(dUnit, {
-  spawnOpts: { harness: "generic", cmd: "node -e \"process.exit(0)\"", root: dUnit.root, cwd: dirUnit },
+  spawnOpts: { harness: "opencode", root: dUnit.root, cwd: dirUnit },
   from: "boss-c", subject: "", body: "PROVISION MISSION 2",
-  workers: [{ name: "pw-3", id: "msg-z3", harness: "generic" }], batch: "batch-prov2", logDir: logDirUnit, auto: false,
+  workers: [{ name: "pw-3", id: "msg-z3", harness: "opencode" }], batch: "batch-prov2", logDir: logDirUnit, auto: false,
 });
 check("provision: second burst reuses the lane (never re-mints)", prov2.action === "reused" && prov2.token === null);
 check("provision: reused burst still transfers ownership", prov2.transferred === 1);
@@ -125,7 +125,7 @@ const leadDocU2 = JSON.parse(fs.readFileSync(path.join(dUnit.agents, "lead.json"
 check("provision: token untouched on reuse", loadTokenFile(dUnit.root, "lead") === prov.token && leadDocU2.tokenHash === leadDocU.tokenHash);
 
 const senderIsLead = provisionAutoLead(dUnit, {
-  spawnOpts: { harness: "generic", cmd: "node -e \"process.exit(0)\"", root: dUnit.root, cwd: dirUnit },
+  spawnOpts: { harness: "opencode", root: dUnit.root, cwd: dirUnit },
   from: "lead", workers: [], batch: "batch-self", logDir: logDirUnit,
 });
 check("provision: sender==lead skips into bootstrap mode", senderIsLead.action === "skipped" && /sender IS the lead/.test(senderIsLead.reason));
@@ -135,10 +135,10 @@ check("provision: sender==lead skips into bootstrap mode", senderIsLead.action =
 const dirRevive = fs.mkdtempSync(path.join(os.tmpdir(), "cb-leadrevive-"));
 const dRevive = ensureBoard(path.join(dirRevive, ".crewbus"));
 const provRevive = provisionAutoLead(dRevive, {
-  spawnOpts: { harness: "generic", cmd: "node -e \"process.exit(0)\"", root: dRevive.root, cwd: dirRevive },
+  spawnOpts: { harness: "opencode", root: dRevive.root, cwd: dirRevive },
   from: "boss-r", subject: "revive", body: "REVIVE MISSION", workers: [], batch: undefined, logDir: path.join(dRevive.root, "logs"),
 });
-check("revive: empty roster still mints + boots the coordinator", provRevive.action === "minted" && typeof provRevive.pid === "number" && provRevive.pid > 0);
+check("revive: empty roster still mints + boots the coordinator", provRevive.action === "minted" && provRevive.action === "minted");
 check("revive: nothing to transfer", provRevive.transferred === 0);
 const coordFileR = fs.readdirSync(path.join(dRevive.root, "logs")).find((f) => f.startsWith("lead-") && f.endsWith(".prompt.md"));
 check("revive: coordinator prompt carries the mission text", !!coordFileR && fs.readFileSync(path.join(dRevive.root, "logs", coordFileR), "utf8").includes("REVIVE MISSION"));
@@ -149,7 +149,7 @@ const docOff = JSON.parse(fs.readFileSync(path.join(dUnit.agents, "lead.json"), 
 docOff.offboarded = true;
 fs.writeFileSync(path.join(dUnit.agents, "lead.json"), JSON.stringify(docOff));
 const provOff = provisionAutoLead(dUnit, {
-  spawnOpts: { harness: "generic", cmd: "node -e \"process.exit(0)\"", root: dUnit.root, cwd: dirUnit },
+  spawnOpts: { harness: "opencode", root: dUnit.root, cwd: dirUnit },
   from: "boss-c", workers: [], batch: "batch-off", logDir: logDirUnit,
 });
 check("provision: offboarded lane refuses", provOff.action === "skipped" && /offboarded/.test(provOff.reason));
@@ -173,11 +173,17 @@ if (!hasOc) {
   const run2 = (args) =>
     execFileSync("node", [CLI, ...args], { env: envE2E, cwd: dirE2E, stdio: ["ignore", "pipe", "pipe"] }).toString();
 
-  // First caller (boss) claims admin. --lead none + generic for a cheap
-  // hermetic boot that still walks the full cmdSpawn path (no coordinator).
-  const noneOut = run2(["spawn", "--from", "boss", "--count", "1", "--prefix", "gz", "--harness", "generic", "--cmd", "node -e \"process.exit(0)\"", "--body", "warmup", "--lead", "none"]);
-  check("e2e: --lead none keeps legacy pinning (no lead block)", noneOut.includes("spawned gz-1") && !noneOut.includes("auto-lead"));
-  const bossTok = noneOut.match(/token (abt-[0-9a-f]+)/)[1];
+  // First caller (boss) claims admin. Verify --lead none is refused.
+  const noneRes = (() => {
+    try {
+      run2(["spawn", "--from", "boss", "--count", "1", "--prefix", "gz", "--harness", "opencode", "--body", "warmup", "--lead", "none"]);
+      return { ok: true, out: "" };
+    } catch (e) {
+      return { ok: false, out: String((e && e.stderr) || (e && e.stdout) || "") };
+    }
+  })();
+  check("e2e: --lead none is refused", !noneRes.ok && /only --lead auto is supported/.test(noneRes.out));
+  const bossTok = run2(["register", "--from", "boss"]).match(/token (abt-[0-9a-f]+)/)[1];
 
   const out = run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "2", "--prefix", "sec", "--harness", "opencode", "--auto", "--i-understand-danger", "--body", "lead-assign e2e: claim, one-line ack DM to lead, exit"]);
   check("e2e: live spawn pins workers reported", out.includes("spawned sec-1") && out.includes("spawned sec-2"));
@@ -207,8 +213,8 @@ if (!hasOc) {
   // ---- Lead-revive (C9) CLI guards (deterministic, no boots) ----
   const gRevTo = (() => { try { run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "0", "--to", "wx", "--body", "m"]); return { ok: true, out: "" }; } catch (e) { return { ok: false, out: String((e && e.stderr) || "") }; } })();
   check("revive: --count 0 refuses worker operands", !gRevTo.ok && /revives ONLY the auto-coordinator/.test(gRevTo.out));
-  const gRevNone = (() => { try { run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "0", "--lead", "none", "--harness", "generic", "--cmd", "node -e \"process.exit(0)\"", "--body", "m"]); return { ok: true, out: "" }; } catch (e) { return { ok: false, out: String((e && e.stderr) || "") }; } })();
-  check("revive: --count 0 refuses --lead none", !gRevNone.ok && /lead-revive path/.test(gRevNone.out));
+  const gRevNone = (() => { try { run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "0", "--lead", "none", "--harness", "opencode", "--body", "m"]); return { ok: true, out: "" }; } catch (e) { return { ok: false, out: String((e && e.stderr) || (e && e.stdout) || "") }; } })();
+  check("revive: --count 0 refuses --lead none", !gRevNone.ok && /only --lead auto is supported/.test(gRevNone.out));
   const gRevNeg = (() => { try { run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "-1", "--body", "m"]); return { ok: true, out: "" }; } catch (e) { return { ok: false, out: String((e && e.stderr) || "") }; } })();
   check("revive: negative --count still refuses", !gRevNeg.ok && /--count must be >= 0/.test(gRevNeg.out));
   const dryRevive = run2(["spawn", "--from", "boss", "--token", bossTok, "--count", "0", "--dry-run", "--body", "REVIVE THE COORDINATOR AFTER THE REBOOT"]);

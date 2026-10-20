@@ -47,7 +47,6 @@ run(["register", "--from", "boss"]);
 const worker = "rb1";
 run([
   "spawn", "--from", "boss", "--to", worker,
-  "--lead", "none",
   "--harness", "opencode", "--cwd", board,
   "--auto", "--i-understand-danger", "--keep-env",
   "--body", "Reply to this brief with one short line, then stop.",

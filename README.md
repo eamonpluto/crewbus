@@ -64,7 +64,7 @@ Start with `docs/QUICKSTART.md` (5 minutes).
 
 ```powershell
 # one-time per project: creates .crewbus/, AGENTS.md block + harness wiring
-crewbus init [--harness opencode,claude,codex,antigravity,grok,cursor,generic]
+crewbus init [--harness opencode,claude,codex,antigravity,grok,cursor]
 # onboarding humans? copy TEAM.template.md to TEAM.md (10-minute team quickstart)
 
 # pick a stable name, register (first claim mints your token — save it)
@@ -207,7 +207,7 @@ Worker pools for big crews without fork-bombs — brief N, boot at most S at
 once, exits auto-replace until N total, backpressure past 4×poolSize:
 
 ```powershell
-crewbus pool --from lead --count 20 --pool-size 4 --harness generic --cmd "my-worker" --body "..."
+crewbus pool --from lead --count 20 --pool-size 4 --harness opencode --body "..."
 crewbus pool-status --json   # pool workers also show in spawn-status --all --json
 ```
 
@@ -278,8 +278,7 @@ Invoke-WebRequest http://relay2:8471/api/spawn -Method Post -ContentType "applic
 the CLI. Responses are
 per-worker (`{to, id, pid, log}` or `{to, id, error}`), so partial success is
 visible. `/api/kill` rides the same relay for remote shutdown. Both are
-OPT-IN (`--allow-remote-spawn`, default OFF → 403); remote generic `--cmd`
-must match `--allow-cmd` and `cwd` must sit under `--workdir-root`.
+OPT-IN (`--allow-remote-spawn`, default OFF → 403); remote `cwd` must sit under `--workdir-root`.
 
 ## Live view (humans' dashboard)
 
@@ -394,7 +393,7 @@ crewbus spawn --from ui-lead --harness grok --to alice --body "..."
 crewbus spawn --from ui-lead --harness cursor --to alice --body "..."
 
 # any command, same board env (CREWBUS_DIR + CREWBUS_AGENT)
-crewbus spawn --from ui-lead --harness generic --cmd "my-worker --loop" --to alice --body "..."
+crewbus spawn --from ui-lead --harness opencode --to alice --body "..."
 
 crewbus spawn --from ui-lead --to alice --body "..." --dry-run  # preview prompt + exact command, touch nothing
 
@@ -414,7 +413,6 @@ counted — `--max-spawn N` overrides it when you have the compute.
 | grok | headless `--prompt-file` | `--prompt-file` | `--permission-mode auto --max-turns 50`; `--auto` → `--always-approve` |
 | antigravity | `--print` (`agy`, real exe — argv verbatim) | inline positional | `--mode accept-edits`; `--auto` → `--dangerously-skip-permissions` |
 | cursor | `cursor-agent -p` (canonical binary; `agent` alias too generic for PATH) | worker reads brief file | `--force --trust` always (print mode only proposes edits otherwise); `--auto` → `--yolo` |
-| generic | your `--cmd` | — (env only) | your responsibility |
 
 Caps at 20 workers/call by default (`--max-spawn N` overrides — a whole harness each, so budget it like compute); bigger crews
 get a broadcast DM for live agents to pick up. `--to @all` is refused
@@ -466,7 +464,7 @@ Rules worth knowing: the brief caps at 8000 chars (`--body-file` for
 anything long); `--to` and `--count` together warn (`--to` wins);
 `--worktree` and `--branch` are exclusive; permission ladder is
 `supervised` (default) | `autoEdits` | `auto` | `full`
-(`full` needs `--i-understand-danger`); cursor/antigravity/generic
+(`full` needs `--i-understand-danger`); cursor/antigravity
 cannot resume (one-shot briefs — the wizard warns, never fakes it).
 
 Pair a phone or desktop client without sharing the relay secret:
@@ -524,8 +522,7 @@ DEVS (source builds):
 ## Inserted into context
 
 Files alone can only be polled — the harness does the push, on every
-harness (see the Push column in the table below — only pure-generic
-polls):
+harness (see the Push column in the table below):
 
 * **Tool** `.opencode/tools/dm-send.js` (`dm-send`): same as `send`, plus it
   records your live `sessionID` in `agents/<you>.json` so pushes route back
@@ -671,7 +668,7 @@ primaries by weight (`serve --weight`, `crew survey`, `crew dispatch`
   `/sync/*` + `/api/spawn` + `/api/kill` require `--secret` /
   `CREWBUS_SECRET` (`x-crewbus-secret` or `?secret=`, constant-time
   compare). `/api/spawn` + `/api/kill` are OPT-IN (`--allow-remote-spawn`,
-  default OFF); remote generic `--cmd` needs `--allow-cmd`, remote `cwd`
+  default OFF); remote `cwd`
   obeys `--workdir-root`; relay ops append to `logs/audit.jsonl`.
 - **`--auto` is loud.** It needs `--i-understand-danger` (or an interactive
   `yes`), prints a DANGER banner, and warns outside container/CI sandboxes;

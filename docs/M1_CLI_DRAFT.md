@@ -128,7 +128,7 @@ crewbus launch --from alice --harness codex --count 1 \
 Rules worth knowing: the brief caps at 8000 chars (`--body-file` for
 anything long); `--to` and `--count` together warn (`--to` wins);
 `--worktree` and `--branch` are exclusive; `--max-turns` applies to
-claude/grok and `--allow-tools` to claude; cursor/antigravity/generic
+claude/grok and `--allow-tools` to claude; cursor/antigravity
 cannot resume (one-shot briefs — the wizard warns, never fakes it);
 `--target` is `local` (fleet placement stays `crew dispatch`).
 
@@ -154,7 +154,7 @@ frozen contracts and delegates to the existing spawn path, so no verified
 row (adapter flags, session-id capture, resume commands, compaction,
 approval pre-approvals) moves. No edit to `docs/COMPATIBILITY.md` —
 no new harness, no flag change, no date to refresh. The one honest
-surface to keep citing is the resume column: cursor/antigravity/generic
+surface to keep citing is the resume column: cursor/antigravity
 report `resume: false` in `harnesses` output by design (see §2 wording
 above), matching the existing "no" rows.
 

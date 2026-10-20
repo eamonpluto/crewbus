@@ -43,7 +43,7 @@ Outbound TLS flags (`--insecure`, `--mtls-cert`/`--mtls-key`,
 crewbus serve --port 8080 --secret "$RELAY_SECRET"
 
 # standby: empty board that tracks the primary every 5s (default)
-crewbus init --board /var/boards/replica.crewbus --harness generic
+crewbus init --board /var/boards/replica.crewbus --harness opencode
 CREWBUS_DIR=/var/boards/replica.crewbus \
   crewbus serve --port 8081 --secret "$RELAY_SECRET" \
     --standby http://primary:8080 [--relay-interval 5]

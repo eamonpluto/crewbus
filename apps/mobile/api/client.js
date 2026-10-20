@@ -53,7 +53,7 @@ const DEVICE_HEADER = "x-crewbus-device";
 // (harness drivers, 8000-char body cap, count>=1, full-needs-confirm).
 // bin/ is NEVER imported here; the server re-validates everything and its
 // verdict wins. This only saves an obvious-dud round-trip from a phone form.
-const KNOWN_HARNESSES = ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "generic"];
+const KNOWN_HARNESSES = ["opencode", "claude", "codex", "grok", "antigravity", "cursor"];
 const MAX_BODY_CHARS = 8000;
 const LAUNCH_PERMISSIONS = ["supervised", "autoEdits", "auto", "full"];
 

@@ -198,7 +198,7 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
     return s;
   }).filter(Boolean);
   if (harnesses.length === 0) harnesses.push("opencode");
-  const validHarnesses = ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "generic"];
+  const validHarnesses = ["opencode", "claude", "codex", "grok", "antigravity", "cursor"];
   for (const h of harnesses) {
     if (!validHarnesses.includes(h)) {
       throw webErr(400, `unknown harness "${h}" (want ${validHarnesses.join("|")})`);
@@ -206,7 +206,6 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
   }
   let harness = harnesses.join(",");
   const cmd = cleanOpt(a.cmd);
-  if (harnesses.includes("generic") && !cmd) throw webErr(400, 'generic harness needs cmd "..."');
   const maxTurns = a.maxTurns === undefined || a.maxTurns === null || String(a.maxTurns).trim() === "" ? ((harness === "claude" || harness === "grok") ? 50 : undefined) : Number(a.maxTurns);
   if (maxTurns !== undefined && !(maxTurns > 0)) throw webErr(400, "maxTurns must be a positive number");
   if (maxTurns !== undefined && harness !== "claude" && harness !== "grok") throw webErr(400, `maxTurns only applies to claude/grok (got ${harness})`);
@@ -240,17 +239,7 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
     const wr = path.resolve(String(svc.workdirRoot));
     if (cwd !== wr && !cwd.startsWith(wr + path.sep)) throw webErr(403, `cwd ${cwd} is outside --workdir-root ${wr}`);
   }
-  if (harness === "generic") {
-    const pattern = svc.allowCmd;
-    if (!pattern) throw webErr(403, "generic --cmd is refused remotely unless the relay sets --allow-cmd (default harness-only)");
-    let ok = false;
-    try {
-      ok = new RegExp(String(pattern)).test(String(cmd || ""));
-    } catch {
-      throw webErr(500, "relay --allow-cmd is not a valid regex");
-    }
-    if (!ok) throw webErr(403, "remote --cmd not in relay allowlist (--allow-cmd)");
-  }
+
   if (auto && !(a.iUnderstandDanger === true || a.i_understand_danger === true)) throw webErr(400, "--auto remotely needs iUnderstandDanger:true plus an isolated relay (see docs/ISOLATION.md)");
   // Pre-verify: CLI ensureSender calls fail() (process exit) on mismatch,
   // which must never run inside a request handler. Hashed + legacy accepted.

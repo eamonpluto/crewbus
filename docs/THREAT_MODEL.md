@@ -36,7 +36,6 @@ token-bound identities on top; the filesystem does not.
   return 403. Localhost without a secret stays open for single-machine use.
 - `/api/spawn` + `/api/kill` are OPT-IN (`--allow-remote-spawn`, default
   OFF → 403), even with a valid secret.
-- Remote `generic --cmd` is refused unless it matches `--allow-cmd`
   (regex; default harness-only). Remote `cwd` must sit under
   `--workdir-root` when set.
 - Remote spawn/kill append to `logs/audit.jsonl` (hash-chained; see below).

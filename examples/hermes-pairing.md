@@ -19,9 +19,9 @@ them:
 ```sh
 export CREWBUS_DIR="$REPO/.crewbus"
 # one profile per worker — never share a profile between two writers
-crewbus spawn --from lead --harness generic --to hermes-1 \
+crewbus spawn --from lead --harness opencode --to hermes-1 \
   --cmd "hermes --profile hermes-1" --body "Your brief: ..."
-crewbus spawn --from lead --harness generic --to hermes-2 \
+crewbus spawn --from lead --harness opencode --to hermes-2 \
   --cmd "hermes --profile hermes-2" --body "Your brief: ..."
 ```
 

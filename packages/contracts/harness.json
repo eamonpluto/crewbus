@@ -89,23 +89,6 @@
       "permissionMap": { "supervised": "default prompts", "autoEdits": "not offered — supervised + note", "auto": "--auto adds --yolo", "full": "--yolo --i-understand-danger" },
       "spawnArgs": "cursor-agent -p --force --trust \"<brief inline>\"",
       "resumeArgs": "-p --force --resume <id> \"<catchup>\" (id rarely captured)"
-    },
-    {
-      "driver": "generic",
-      "displayName": "generic",
-      "binary": null,
-      "binaryNote": "operator-supplied --cmd; remote needs --allow-cmd",
-      "versionProbe": [],
-      "briefDelivery": "file",
-      "briefNote": "prompt file path available; command decides how to consume it",
-      "sessionCapture": "none",
-      "sessionKeys": [],
-      "resume": false,
-      "resumeNote": "no continuity — fresh boot of the catch-up brief",
-      "capabilities": { "jsonLog": false, "preassign": false, "compactionHook": "none", "autoModes": [] },
-      "permissionMap": { "supervised": "command default", "autoEdits": "n/a", "auto": "operator --cmd decides", "full": "operator --cmd decides" },
-      "spawnArgs": "--cmd \"<arbitrary>\"",
-      "resumeArgs": "fresh boot only"
     }
   ]
 }

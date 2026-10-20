@@ -28,7 +28,6 @@ export const LAUNCH_DRIVER_FALLBACK = [
   { driver: "grok", displayName: "grok-build", binary: "grok", briefDelivery: "file", sessionCapture: "preassigned", resume: true, spawnArgs: "--prompt-file <brief> -s <uuid>", resumeArgs: "--prompt-file <catchup> -r <id>" },
   { driver: "antigravity", displayName: "Antigravity", binary: "agy", briefDelivery: "inline", sessionCapture: "none", resume: false, spawnArgs: "--print --mode accept-edits \"<brief>\"", resumeArgs: "unsupported (no stable conversation id)" },
   { driver: "cursor", displayName: "Cursor", binary: "cursor-agent", briefDelivery: "inline", sessionCapture: "none", resume: false, spawnArgs: "cursor-agent -p --force --trust \"<brief>\"", resumeArgs: "unsupported (id lives in stream-json)" },
-  { driver: "generic", displayName: "generic", binary: null, briefDelivery: "file", sessionCapture: "none", resume: false, spawnArgs: "--cmd \"<arbitrary>\"", resumeArgs: "fresh boot only" },
 ];
 // Resolve the driver table: contracts file wins, fallback otherwise.
 export function launchDrivers() {
@@ -36,7 +35,7 @@ export function launchDrivers() {
     const here = path.dirname(new URL(import.meta.url).pathname);
     const p = path.join(here, "..", "..", "packages", "contracts", "harness.json");
     const doc = JSON.parse(fs.readFileSync(p, "utf8"));
-    if (doc && Array.isArray(doc.drivers) && doc.drivers.length === 7) return doc.drivers;
+    if (doc && Array.isArray(doc.drivers) && doc.drivers.length === 6) return doc.drivers;
   } catch {}
   return LAUNCH_DRIVER_FALLBACK;
 }
@@ -151,7 +150,6 @@ export const HARNESS_MODELS = {
     { id: "claude-3.7-sonnet", label: "Claude 3.7 Sonnet (Legacy)", tier: "standard" },
     { id: "gpt-4o", label: "GPT-4o (Legacy)", tier: "standard" },
   ],
-  generic: [],
 };
 
 // Dynamic discovered model cache for harnesses capable of live discovery (e.g., opencode).
@@ -282,10 +280,10 @@ export function validateLaunchPlan(raw) {
   if (model && model.length > 100) errors.push("model name too long (max 100 chars)");
 
   const lead = r.lead === undefined || r.lead === null || String(r.lead).trim() === "" ? "auto" : String(r.lead).trim().toLowerCase();
-  if (!["auto", "board", "none"].includes(lead)) errors.push(`bad lead mode "${r.lead}" (want auto|board|none)`);
+  if (lead !== "auto") errors.push(`bad lead mode "${r.lead}" (only "auto" supported)`);
 
   const plan = {
-    harness, harnesses: harnesses.length > 0 ? harnesses : ["generic"],
+    harness, harnesses: harnesses.length > 0 ? harnesses : ["opencode"],
     model, body, count: Number.isInteger(count) && count > 0 ? count : 1,
     prefix: r.prefix === undefined ? undefined : String(r.prefix),
     to: r.to === undefined ? undefined : String(r.to),

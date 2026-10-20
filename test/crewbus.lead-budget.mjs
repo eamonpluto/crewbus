@@ -44,10 +44,10 @@ const dirU = fs.mkdtempSync(path.join(os.tmpdir(), "cb-leadbudget-prov-"));
 const dU = ensureBoard(path.join(dirU, ".crewbus"));
 try {
   const prov = provisionAutoLead(dU, {
-    spawnOpts: { harness: "generic", cmd: process.execPath + " -e process.exit(0)", cwd: dirU, root: dU.root },
+    spawnOpts: { harness: "opencode", cwd: dirU, root: dU.root },
     from: "boss", subject: "budget UA", body: "coord budget check", rev: "r0",
     logDir: path.join(dU.root, "logs"),
-    workers: [{ name: "w-1", id: "msg-1", harness: "generic" }],
+    workers: [{ name: "w-1", id: "msg-1", harness: "opencode" }],
     batch: "b-ua", crew: [], workbench: [], auto: false,
     budgetTokens: 1000, budgetMinutes: 3,
   });
@@ -74,11 +74,11 @@ const runFail = (args) => {
     return { ok: false, out: String((e && e.stderr) || "") };
   }
 };
-const g1 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "generic", "--cmd", "node -e \"process.exit(0)\"", "--body", "x", "--lead-budget-tokens", "not-a-number"]);
+const g1 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--lead-budget-tokens", "not-a-number"]);
 check("cli: --lead-budget-tokens rejects non-numbers", !g1.ok && /--lead-budget-tokens must be a positive number/.test(g1.out));
-const g2 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "generic", "--cmd", "node -e \"process.exit(0)\"", "--body", "x", "--lead-budget-minutes", "0"]);
+const g2 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--lead-budget-minutes", "0"]);
 check("cli: --lead-budget-minutes rejects 0", !g2.ok && /--lead-budget-minutes must be a positive number/.test(g2.out));
-const g3 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "generic", "--cmd", "node -e \"process.exit(0)\"", "--body", "x", "--lead-budget-tokens", "1000", "--budget-minuts", "30"]);
+const g3 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--lead-budget-tokens", "1000", "--budget-minuts", "30"]);
 check("cli: known limitation — typo'd budget flag is silently ignored (crewbus lenient-argv; strict-unknown flags is a repo-wide policy item)", g3.ok === true || (!g3.ok && /unknown/i.test(g3.out)));
 
 for (const d of [dirU, dirE]) {

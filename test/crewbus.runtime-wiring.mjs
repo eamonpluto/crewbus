@@ -67,11 +67,10 @@ try {
   leadTok = ((leadReg.match(/token (abt-[0-9a-f]+)/) || [])[1]) || "";
   check("setup: lead token minted", !!leadTok);
 
-  // Slow generic worker stays alive long enough to inspect (instant-exit
-  // generic is too fast to catch via /api/board).
+  // Slow opencode worker stays alive long enough to inspect (instant-exit
+  // opencode is too fast to catch via /api/board).
   run(["spawn", "--from", "lead", "--token", leadTok, "--to", workerName,
-    "--harness", "generic", "--cmd", 'node -e "setTimeout(()=>{},15000)"',
-    "--body", "wiring check"]);
+    "--harness", "opencode", "--body", "wiring check"]);
   spawned = true;
 
   // Record: agents/<name>.json carries the harness driver.
@@ -79,7 +78,7 @@ try {
   try {
     rec = JSON.parse(fs.readFileSync(path.join(board, "agents", `${workerName}.json`), "utf8"));
   } catch {}
-  check("record: agents doc carries spawnedHarness=generic", !!rec && rec.spawnedHarness === "generic");
+  check("record: agents doc carries spawnedHarness=opencode", !!rec && rec.spawnedHarness === "opencode");
 
   web = startServer(["web", "--port", "0", "--board", board]);
   const webAt = await web.waitFor(/crewbus web at http:\/\/(\S+)/);
@@ -89,13 +88,13 @@ try {
   const bworkers = (boardRes.json && boardRes.json.workers) || [];
   const bw = bworkers.find((w) => w.name === workerName);
   check("payload: GET /api/board 200", boardRes.status === 200);
-  check("payload: /api/board worker carries driver=generic", !!bw && bw.driver === "generic");
+  check("payload: /api/board worker carries driver=opencode", !!bw && bw.driver === "opencode");
 
   const fleetRes = await httpGet(webBase, "/api/fleet");
   const fworkers = (fleetRes.json && fleetRes.json.workers) || [];
   const fw = fworkers.find((w) => w.name === workerName);
   check("payload: GET /api/fleet 200", fleetRes.status === 200);
-  check("payload: /api/fleet worker carries driver=generic", !!fw && fw.driver === "generic");
+  check("payload: /api/fleet worker carries driver=opencode", !!fw && fw.driver === "opencode");
 
   const page = await httpGet(webBase, "/");
   check("ui: GET / 200", page.status === 200);

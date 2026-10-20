@@ -102,7 +102,7 @@ are refused with guidance. Lead/admin only.
 
 Windows note: console-less detached `cmd.exe` wrappers linger up to ~60s
 after their payload exits, so natural-exit detection on `shell:true`
-harnesses (opencode/claude/codex/cursor/generic) trails by up to a
+harnesses (opencode/claude/codex/cursor) trails by up to a
 minute; kills report immediately. Pool turnover and `spawn-status`
 inherit the tail — size supervision windows accordingly.
 
@@ -181,8 +181,8 @@ terminates everything when the whole run is lost.
   worker in its *same* harness conversation: `opencode run --session`,
   `claude -p --resume` (+ `CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1` so a
   killed turn continues), `codex exec resume`, `grok -r`, agy
-  `--conversation`, cursor `--resume`; generic has no continuity and
-  re-boots fresh. The catch-up brief points at the original prompt file
+  `--conversation`, cursor `--resume`; `--fresh` re-boots fresh without
+  prior conversation continuity. The catch-up brief points at the original prompt file
   and threads the same reply id, so the worker continues instead of
   restarting; codex points at the catch-up file itself (its positional
   prompt can't attach files). Refuses live workers unless `--force`

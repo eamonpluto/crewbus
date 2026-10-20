@@ -19,7 +19,7 @@ crewbus crew survey --relays http://r1:8471,http://r2:8471 [--json]
 ```sh
 crewbus crew dispatch --from lead \
   --relays http://r1:8471,http://r2:8471 --weights 3,1 \
-  --count 4 --prefix w --harness generic --cmd "node worker.js" \
+  --count 4 --prefix w --harness opencode \
   --body "Triage batch 7…" --secret s3 [--dry-run]
 # dispatched 3/3 to http://r1:8471 [weight 3]
 #   w-1 pid 7436 reply msg-…

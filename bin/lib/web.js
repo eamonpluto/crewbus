@@ -786,7 +786,6 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
             <span class="dim" style="margin-left:8px">Coordinator:</span>
             <select id="launch-lead" style="background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-size:12px" title="Observer coordinator lane: auto provisions a persistent background coordinator (lead) to triage workers and report to you">
               <option value="auto">auto (Observer coordinator)</option>
-              <option value="none">none (direct to me)</option>
             </select>
             <label class="dim" style="cursor:pointer;margin-left:6px"><input id="launch-dry" type="checkbox" checked> Dry-run</label>
           </div>
@@ -2562,15 +2561,11 @@ export async function handleApiLaunch(d, body) {
   if (!v.ok) return { status: 400, payload: { error: "launch plan invalid", errors: v.errors, warnings: v.warnings } };
   const p = v.plan;
   const harnesses = Array.isArray(p.harnesses) && p.harnesses.length > 0 ? p.harnesses : [p.harness || "opencode"];
-  const hasCodingHarness = harnesses.some((h) => h !== "generic");
-  let leadMode = p.lead || "auto";
-  if (leadMode === "auto") {
-    leadMode = hasCodingHarness ? "board" : "none";
+  const leadMode = p.lead || "auto";
+  if (leadMode !== "auto") {
+    return { status: 400, payload: { error: `invalid lead mode "${p.lead}" (only "auto" supported)` } };
   }
-  if (leadMode === "board" && !hasCodingHarness) {
-    return { status: 400, payload: { error: 'lead "board" needs a coding harness for the auto-coordinator (add a harness like opencode, or use lead "none")' } };
-  }
-  const leadTarget = leadMode === "board" ? LEAD_NAME : from;
+  const leadTarget = LEAD_NAME;
   const names = p.to ? String(p.to).split(",").map((s) => cleanWebName(s)).filter(Boolean)
     : Array.from({ length: p.count }, (_, i) => `${cleanWebName(p.prefix || "w") || "w"}-${i + 1}`);
   if (names.length === 0) return { status: 400, payload: { error: "no worker names (pass to or count)" } };
@@ -2579,16 +2574,13 @@ export async function handleApiLaunch(d, body) {
   let cwdOk = false;
   try { cwdOk = fs.statSync(cwd).isDirectory(); } catch {}
   if (!cwdOk) return { status: 400, payload: { error: `cwd is not a directory: ${cwd}` } };
-  if (harnesses.includes("generic") && !(body && body.cmd && String(body.cmd).trim())) {
-    return { status: 400, payload: { error: 'generic harness needs cmd "..."' } };
-  }
   if (v.plan.dryRun) {
     const previewBatch = names.length > 1 ? newId("batch") : undefined;
     const rows = names.map((to, i) => {
       const driver = harnesses[i % harnesses.length];
       const previewPrompt = buildSpawnPrompt({ name: to, from, lead: leadTarget, subject: p.subject, body: p.body.trim(), replyId: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", rev, cwd, root: d.root });
       const t = buildSpawnTarget({
-        harness: driver, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model,
+        harness: driver, model: p.model,
         auto: p.permission === "auto" || p.permission === "full" ? true : undefined,
         maxTurns: p.maxTurns, allowTools: p.allowTools, cwd,
         name: to, promptPath: path.join("<board>", "logs", `${to}-<stamp>.prompt.md`), prompt: previewPrompt,
@@ -2596,7 +2588,7 @@ export async function handleApiLaunch(d, body) {
       return { to, harness: driver, command: formatSpawnCmd(t) };
     });
     let coordinator = undefined;
-    if (leadMode === "board") {
+    if (leadMode === "auto") {
       const existingLead = readAgent(d, LEAD_NAME);
       // Stale-pid guard (C2): reuse only a live, non-stale coordinator; a
       // pid-recycled after reboot record gets the fresh-provision branch.
@@ -2606,7 +2598,7 @@ export async function handleApiLaunch(d, body) {
       } else if (existingLead && existingLead.offboarded) {
         coordinator = { name: LEAD_NAME, action: "skipped", reason: "lane is offboarded" };
       } else {
-        const coordDriver = harnesses.find((h) => h !== "generic") || "opencode";
+        const coordDriver = harnesses[0] || "opencode";
         const previewCoordPrompt = buildCoordinatorPrompt({
           name: LEAD_NAME, from, subject: p.subject, body: p.body.trim(), batch: previewBatch,
           workers: names.map((name, i) => ({ name, id: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", harness: harnesses[i % harnesses.length] })),
@@ -2644,8 +2636,8 @@ export async function handleApiLaunch(d, body) {
     }
   }
   let coordinator = undefined;
-  if (leadMode === "board") {
-    const coordHarness = harnesses.find((h) => h !== "generic") || "opencode";
+  if (leadMode === "auto") {
+    const coordHarness = harnesses[0] || "opencode";
     const coordSpawnOpts = { harness: coordHarness, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model, auto, cwd, root: d.root, prompt: null };
     try {
       coordinator = provisionAutoLead(d, {

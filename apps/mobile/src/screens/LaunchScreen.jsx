@@ -76,7 +76,7 @@ export function LaunchScreen({ ctx, navigation }) {
     } catch (e) { setStatus(`launch failed: ${String((e && e.message) || e)}`); }
   };
 
-  const harnessList = harnesses.length ? harnesses : [{ name: 'claude' }, { name: 'antigravity' }, { name: 'codex' }, { name: 'grok' }, { name: 'generic' }];
+  const harnessList = harnesses.length ? harnesses : [{ name: 'claude' }, { name: 'antigravity' }, { name: 'codex' }, { name: 'grok' }];
 
   return (
     <View style={S.screen}>

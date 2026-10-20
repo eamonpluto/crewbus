@@ -20,8 +20,8 @@ check("harness: version 1 frozen", harness.version === 1);
 const drivers = harness.drivers || [];
 const got = drivers.map((d) => d.driver).sort();
 check(
-  "harness: all 7 drivers",
-  JSON.stringify(got) === JSON.stringify(["antigravity", "claude", "codex", "cursor", "generic", "grok", "opencode"])
+  "harness: all 6 drivers",
+  JSON.stringify(got) === JSON.stringify(["antigravity", "claude", "codex", "cursor", "grok", "opencode"])
 );
 for (const d of drivers) {
   for (const f of ["driver", "displayName", "briefDelivery", "sessionCapture", "resume", "capabilities", "permissionMap", "spawnArgs", "resumeArgs"]) {

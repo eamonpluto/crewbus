@@ -58,7 +58,7 @@ const check = (label, cond) => {
 {
   const board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-race-"));
   const env = { ...stripIdent(), CREWBUS_DIR: board };
-  execFileSync("node", [CLI, "init", "--harness", "generic"], { env });
+  execFileSync("node", [CLI, "init", "--harness", "opencode"], { env });
   const attempts = await Promise.all(
     Array.from({ length: 6 }, () =>
       execFileAsync("node", [CLI, "register", "--from", "race"], { env })
@@ -101,8 +101,8 @@ const check = (label, cond) => {
     if (m && who && !TOKP[who]) TOKP[who] = m[1];
     return out;
   };
-  cliP(envA, ["init", "--harness", "generic"]);
-  cliP(envB, ["init", "--harness", "generic"]);
+  cliP(envA, ["init", "--harness", "opencode"]);
+  cliP(envB, ["init", "--harness", "opencode"]);
   // divergent writes while "partitioned" (no contact)
   cliP(envA, ["register", "--from", "anna"]);
   cliP(envA, ["send", "--from", "anna", "--to", "zoe", "--body", "mail from A"]);

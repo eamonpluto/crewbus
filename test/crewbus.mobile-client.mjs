@@ -65,17 +65,17 @@ const okJson = (payload, status = 200) => ({ status, payload });
 
   const w = workerCards([
     { name: "a", known: true, alive: true, pid: 11, driver: "grok" },
-    { name: "b", known: true, alive: false, pid: 12, spawnedHarness: "generic" },
+    { name: "b", known: true, alive: false, pid: 12, spawnedHarness: "claude" },
     { name: "c", known: true, reply: "msg-1", acked: false, pid: null },
     { name: "d", known: false },
   ]);
   check("cards: worker states mirror dashboard", w[0].state === "running" && w[1].state === "exited · no reply" && w[2].state === "done · reply waiting" && w[3].state === "unknown");
   check("cards: worker killable only on live pid", w[0].killable === true && w[0].pid === 11 && w[1].killable === false && w[2].killable === false);
-  check("cards: worker driver fallback to spawnedHarness", w[1].driver === "generic" && w[2].replyPending === true);
+  check("cards: worker driver fallback to spawnedHarness", w[1].driver === "claude" && w[2].replyPending === true);
 
   const lp1 = launchPreview({ harness: "Grok", count: 2, permission: "supervised", dryRun: true });
   check("cards: launchPreview count summary", lp1.count === 2 && lp1.names.join(",") === "w-1,w-2" && lp1.summary.includes("grok × 2") && lp1.summary.includes("dry-run"));
-  const lp2 = launchPreview({ harness: "generic", to: "a,b,c", count: 9 });
+  const lp2 = launchPreview({ harness: "claude", to: "a,b,c", count: 9 });
   check("cards: launchPreview to-names win over count", lp2.count === 3 && lp2.names[2] === "c" && lp2.warnings.some((x) => x.includes("to names win")));
 }
 
@@ -231,7 +231,7 @@ try {
   run(["send", "--from", "worker", "--to", "lead", "--subject", "hello", "--body", "plain message"]);
 
   const secret = "m5-mobile-secret";
-  const serve = startServer(["serve", "--port", "0", "--board", board, "--secret", secret, "--allow-remote-spawn", "--allow-cmd", "node -e"]);
+  const serve = startServer(["serve", "--port", "0", "--board", board, "--secret", secret, "--allow-remote-spawn"]);
   const serveAt = await serve.waitFor(/crewbus serve at http:\/\/(\S+)/);
   serveProc = serve;
   const serveBase = `http://${serveAt[1]}`;
@@ -291,9 +291,9 @@ try {
   check("live: launchPreview summarizes the dry-run", prev.count === 1 && prev.summary.includes("grok × 1"), "live");
 
   // Live generic launch + kill.
-  const liveLaunch = await client.launch({ harness: "generic", cmd: 'node -e "process.exit(0)"', to: "mw1", body: "live check", dryRun: false });
+  const liveLaunch = await client.launch({ harness: "opencode", to: "mw1", body: "live check", dryRun: false });
   const booted = liveLaunch.ok === true && Array.isArray(liveLaunch.data.results || liveLaunch.data.workers) && (liveLaunch.data.results || liveLaunch.data.workers).length === 1;
-  check("live: generic launch boots one worker", booted, "live");
+  check("live: launch boots one worker", booted, "live");
   const killed = await client.kill({ to: ["mw1"] });
   check("live: kill closes the worker", killed.ok === true && killed.status === 200 && Array.isArray(killed.data.results), "live");
 

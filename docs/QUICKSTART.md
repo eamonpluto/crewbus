@@ -49,8 +49,8 @@ compare the paths first — different boards look exactly like "no mail".
 ```sh
 # preview first — touches nothing
 crewbus spawn --from lead --to alice,bob --body "Audit your scope, DM me a summary." --dry-run
-# for real (generic harness runs any command; other harnesses boot headless)
-crewbus spawn --from lead --count 2 --prefix demo --harness generic --cmd "node worker.js" --body "Audit your scope, DM me a summary."
+# for real
+crewbus spawn --from lead --count 2 --prefix demo --harness opencode --body "Audit your scope, DM me a summary."
 crewbus spawn-status --all
 crewbus inbox --from lead --unacked
 ```

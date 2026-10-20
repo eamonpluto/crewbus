@@ -52,7 +52,7 @@ export { resolveShellShot };
 // cleanBranchPrefix lives in store.js (canonical home).
 
 // Auto-provisioned lead lane: the board's standing coordinator lane name.
-// `spawn --lead board` (the default) mints it once (first claim wins) and
+// `spawn --lead auto` (the default) mints it once (first claim wins) and
 // boots a detached persistent coordinator that owns the crew for the burst;
 // the interactive spawner steps back to boss (reads the dashboard, gets
 // milestone DMs). All worker prompts pin replies to this name.
@@ -193,7 +193,7 @@ export function parseAllowEnv(raw) { // line 4078
 export function buildSpawnPrompt({ name, from, lead, subject, body, replyId, rev, cwd, root, crew, workbench }) { // line 4090
   const me = String(name || "you");
   // Reply target: the sender by default (legacy star topology), or the
-  // board's lead lane under --lead board (spawn and lead separated: the
+  // board's lead lane under --lead auto (spawn and lead separated: the
   // spawner is boss, the auto-provisioned coordinator is lead).
   const replyTo = String(lead || from || LEAD_NAME);
   const crewLines = Array.isArray(crew) ? crew.map((l) => String(l)).filter((s) => s.trim() !== "") : [];
@@ -342,10 +342,10 @@ export function provisionAutoLead(d, opts) {
     return { action: "skipped", reason: "the sender IS the lead lane — it bootstraps its own coordinator", leadName };
   }
   // Offboarded lead lane = deliberate teardown: refuse to skeleton it back
-  // up behind the caller's back (re-onboard it or pass --lead none).
+  // up behind the caller's back.
   const existing = readAgent(d, leadName);
   if (existing && existing.offboarded) {
-    return { action: "skipped", reason: `lane "${leadName}" is offboarded (re-onboard it, or pass --lead none to pin replies to the spawner)`, leadName };
+    return { action: "skipped", reason: `lane "${leadName}" is offboarded (re-onboard it to provision the coordinator)`, leadName };
   }
   let token = null;
   let minted = false;
@@ -381,7 +381,7 @@ export function provisionAutoLead(d, opts) {
       } else if (again && (again.tokenHash || again.token)) {
         token = null; // absorbed by a concurrent minter — reuse its identity
       } else {
-        return { action: "skipped", reason: `lane "${leadName}" raced a parallel claim that hid the name — retry or pass --lead none`, leadName };
+        return { action: "skipped", reason: `lane "${leadName}" raced a parallel claim that hid the name — retry`, leadName };
       }
     }
   }
@@ -561,7 +561,7 @@ export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowToo
     cargs.push(quoteFree(`you are '${name}': read the brief at ${promptPath} and follow it`));
     return { exe: "cursor-agent", args: cargs, shell: true };
   }
-  return { exe: cmd, args: [], shell: true };
+  fail(`unknown --harness "${harness}" (want opencode|claude|codex|grok|antigravity|cursor)`);
 }
 
 // Resume targets for `respawn` (slice 2): same worker name, same conversation,
@@ -569,10 +569,9 @@ export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowToo
 // opencode `run --session`, claude `-p --resume` (never --session-id: it
 // cannot combine with --resume), codex `exec <parent opts> resume <id>`
 // (parent options precede the subcommand), grok `-r`, agy `--conversation`,
-// cursor `--resume`. Generic has no session continuity: plain fresh boot of
-// the catch-up brief. File/stdin plumbing mirrors buildSpawnTarget.
+// cursor `--resume`. File/stdin plumbing mirrors buildSpawnTarget.
 export function buildRespawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt, sessionId }) { // respawn slice 2
-  // No captured session id (generic, or the respawn --fresh fallback when a
+  // No captured session id (the respawn --fresh fallback when a
   // harness id could not be captured): plain fresh boot of the catch-up
   // brief — the same command shape as spawn.
   if (!sessionId) {
@@ -585,9 +584,6 @@ export function buildRespawnTarget({ harness, cmd, model, auto, maxTurns, allowT
     const positional = String(`you are '${name}': read the catch-up brief at ${promptPath} and follow it`).replace(/"/g, "'");
     return { ...base, args: [...base.args.slice(0, -1), "resume", sessionId, positional] };
   }
-  if (harness === "generic") {
-    return buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt });
-  }
   const t = buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt });
   const flag = harness === "opencode" ? ["--session", sessionId]
     : harness === "claude" ? ["--resume", sessionId]
@@ -595,18 +591,16 @@ export function buildRespawnTarget({ harness, cmd, model, auto, maxTurns, allowT
     : harness === "antigravity" ? ["--conversation", sessionId]
     : harness === "cursor" ? ["--resume", sessionId]
     : null;
-  if (!flag) fail(`unknown --harness "${harness}" (want opencode|claude|codex|grok|antigravity|cursor|generic)`);
+  if (!flag) fail(`unknown --harness "${harness}" (want opencode|claude|codex|grok|antigravity|cursor)`);
   return { ...t, args: [...t.args, ...flag] };
 }
 
 export function buildRespawnBrief({ name, attempt, origPromptPath, briefId, harnessSessionId, harness, lead, extraBody }) { // respawn slice 2
-  // --fresh respawn (opencode with no captured id) boots fresh like generic;
+  // --fresh respawn (opencode with no captured id) boots fresh;
   // the wording must not claim "prior context intact" when there is none.
-  const resumed = harness === "generic"
-    ? "fresh session (generic harness has no session continuity — no prior context)"
-    : !harnessSessionId && harness === "opencode"
-      ? "fresh session (opencode session id could not be captured; brief + checkpoints are your memory)"
-      : `resumed ${harness} session ${harnessSessionId} (prior context intact)`;
+  const resumed = !harnessSessionId && harness === "opencode"
+    ? "fresh session (opencode session id could not be captured; brief + checkpoints are your memory)"
+    : `resumed ${harness} session ${harnessSessionId} (prior context intact)`;
   const lines = [
     `You are '${name}': this is restart attempt ${attempt} (${resumed}). Your previous process died.`,
     ``,
@@ -652,7 +646,7 @@ function cleanSessionId(raw) {
 
 // Harness driver allowlist (mirrors packages/contracts/harness.json drivers;
 // unknown values are omitted, never invented).
-export const KNOWN_HARNESS_DRIVERS = ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "generic"];
+export const KNOWN_HARNESS_DRIVERS = ["opencode", "claude", "codex", "grok", "antigravity", "cursor"];
 
 export function cleanHarnessDriver(raw) {
   const s = String(raw === undefined || raw === null ? "" : raw).trim().toLowerCase();

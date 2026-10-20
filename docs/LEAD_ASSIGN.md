@@ -19,32 +19,21 @@ This architecture is modeled after decentralized multi-agent coordination patter
 
 ---
 
-## 2. CLI Control: `--lead auto|board|none`
+## 2. CLI Control: `--lead auto`
 
 When spawning workers with `crewbus spawn`:
 
 ```sh
-# Default: auto-assigns lead if a coding harness is present
+# Default: auto-provisions or reuses the observer lead coordinator
 crewbus spawn --from boss --count 3 --harness opencode --body "Implement feature X"
-
-# Explicit board coordinator
-crewbus spawn --from boss --count 3 --harness opencode --lead board --body "Implement feature X"
-
-# Legacy star topology (replies pin directly to boss)
-crewbus spawn --from boss --count 3 --harness generic --lead none --body "Run test suite"
 ```
 
-### Modes:
-- **`auto` (default)**:
-  - If any coding harness (`opencode`, `claude`, `codex`, `grok`, `antigravity`, `cursor`) is used: selects `board` mode.
-  - If all workers use `generic` harnesses (shell commands without an LLM harness): falls back to `none` mode.
-- **`board`**:
+### Architecture:
+- **`auto` (default and only mode)**:
   - Auto-provisions or reuses the board's standing `lead` lane.
   - Workers' brief prompts pin reply targets and approval requests to `--to lead`.
-  - Requires at least one coding harness to run the coordinator prompt; fails loudly if attempted with pure `generic` harnesses.
-- **`none`**:
-  - Legacy star topology: replies and approvals pin directly to the spawner (`--to <from>`).
-  - No autonomous coordinator is provisioned.
+  - The autonomous observer coordinator runs on the `lead` lane to monitor health and approvals.
+  - Crewbus requires a coding harness (`opencode`, `claude`, `codex`, `grok`, `antigravity`, `cursor`); unmanaged/generic shell execution is not supported.
 
 ---
 

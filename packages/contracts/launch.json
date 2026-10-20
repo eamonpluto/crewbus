@@ -15,7 +15,7 @@
       "permission": "supervised|autoEdits|auto|full",
       "lifetime": "oneshot|persistent",
       "priority": "high|normal",
-      "lead": "auto|board|none",
+      "lead": "auto",
       "target": "local | {relays:[{url,weight}]}"
     },
     "permissionMapping": {
