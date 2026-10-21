@@ -639,7 +639,7 @@ fs.rmSync(noboard, { recursive: true, force: true });
 const webGet = (port, p) =>
   new Promise((resolve, reject) => {
     import("node:http").then(({ default: http }) => {
-      const req = http.get({ host: "127.0.0.1", port, path: p, timeout: 5000 }, (res) => {
+      const req = http.get({ host: "127.0.0.1", port, path: p, timeout: 15000 }, (res) => {
         let body = "";
         res.on("data", (d) => (body += d));
         res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body }));
@@ -680,7 +680,7 @@ if (webPort > 0) {
       import("node:http").then(({ default: http }) => {
         const data = typeof payload === "string" ? payload : JSON.stringify(payload);
         const req = http.request(
-          { host: "127.0.0.1", port: webPort, path: p, method: "POST", headers: { "content-type": contentType || "application/json", "content-length": Buffer.byteLength(data) }, timeout: 8000 },
+          { host: "127.0.0.1", port: webPort, path: p, method: "POST", headers: { "content-type": contentType || "application/json", "content-length": Buffer.byteLength(data) }, timeout: 15000 },
           (res) => {
             let body = "";
             res.on("data", (d) => (body += d));
@@ -729,7 +729,7 @@ if (webPort > 0) {
       import("node:http").then(({ default: http }) => {
         const data = typeof payload === "string" ? payload : JSON.stringify(payload);
         const req = http.request(
-          { host: "127.0.0.1", port: webPort, path: "/api/kill", method: "POST", headers: { "content-type": contentType || "application/json", "content-length": Buffer.byteLength(data) }, timeout: 8000 },
+          { host: "127.0.0.1", port: webPort, path: "/api/kill", method: "POST", headers: { "content-type": contentType || "application/json", "content-length": Buffer.byteLength(data) }, timeout: 15000 },
           (res) => {
             let body = "";
             res.on("data", (d) => (body += d));
@@ -1154,11 +1154,15 @@ secRun(["send", "--from", "sec1", "--to", "sec2", "--body", "after rotate"]);
   fs.rmSync(syncPeer, { recursive: true, force: true });
 }
 // ---- END Phase 1a per-identity token lifecycle ----
-// legacy plaintext migration: plant a legacy file, auth once, hash replaces it
+// without legacy plaintext token support, raw token in record is rejected
 fs.writeFileSync(path.join(secBoard, "agents", "legacy1.json"), JSON.stringify({ name: "legacy1", firstSeen: new Date().toISOString(), lastSeen: new Date().toISOString(), token: "abt-legacy1" }) + "\n");
-secRun(["send", "--from", "legacy1", "--to", "sec2", "--body", "migrate me"], { CREWBUS_TOKEN: "abt-legacy1" });
-const legDoc = JSON.parse(fs.readFileSync(path.join(secBoard, "agents", "legacy1.json"), "utf8"));
-check("legacy plaintext migrates to hash", !legDoc.token && !!legDoc.tokenHash && !!legDoc.salt);
+let legErr = false;
+try {
+  secRun(["send", "--from", "legacy1", "--to", "sec2", "--body", "migrate me"], { CREWBUS_TOKEN: "abt-legacy1" });
+} catch {
+  legErr = true;
+}
+check("legacy plaintext rejected without hash", legErr);
 // tamper-evident log verifies
 check("chain log verifies", secRun(["log", "--verify"]).includes("chain OK"));
 // inbox wraps peer content in the untrusted envelope

@@ -52,7 +52,7 @@ import { ackedIds, checkSendRateLimit, deliverDMs, enforceMaxChars, filterDigest
 import { batchReplyIds, collectBatch, contributingGroups, expandGroups, expandGroupsOrFail, gatherTelemetry, groupTelemetryData, heuristicSenderType, readGroup, ensureGroupCreatedAt, readResultRecord, writeResultRecord, findFirstVerifiedReply } from "./lib/groups.js";
 import { publishArtifact, adoptArtifact, verifyArtifact, readArtifactById, listArtifacts, listLessons, postLesson, selectLessons, renderWorkbenchBlock, workbenchMetrics, cleanArtifactId, cleanLessonScope, parseArtifactDeps } from "./lib/workbench.js";
 import { appendChannelPost, channelLogPath, groupChannelName, lockAlive, lockPath, mergeChannelText, mirrorToGroupChannels, printChannelPost, readChannelPosts, readLock, summarizePosts, writeChannelCursor, SUMMARY_STOP, channelCursorPath, readChannelCursor, lockHash, acquireLockDoc, releaseLockDoc, tailChannelPosts, listLocks, parseChannelText } from "./lib/channels.js";
-import { boardSnapshot, cmdWeb, escapeHtml, fleetSnapshot, channelsSnapshot, resultsSnapshot, auditSnapshot, handleApiAck, renderBoardHtml, handleApiKill, handleApiLaunch, handleWebDashboardRoute } from "./lib/web.js";
+import { boardSnapshot, cmdWeb, escapeHtml, fleetSnapshot, channelsSnapshot, resultsSnapshot, auditSnapshot, handleApiAck, renderBoardHtml, handleApiKill, handleApiLaunch, handleWebDashboardRoute, renderPairHtml } from "./lib/web.js";
 import { LAUNCH_DRIVER_FALLBACK, PAIR_SCOPES, advertiseEnv, buildPairUrl, detectHarnessBinaries, formatHarnessMenu, isBodyFileRef, launchDrivers, parseCountChoice, parseHarnessChoice, parsePermissionChoice, parseYesNo, probeBinary, validateLaunchPlan, HARNESS_MODELS, getDiscoveredModels, refreshDiscoveredModels } from "./lib/launch.js";
 import readline from "node:readline";
 
@@ -319,7 +319,6 @@ function agentTokenMatches(rec, token) {
       return false;
     }
   }
-  if (rec.token) return timingSafeEqual(String(token), String(rec.token));
   return false;
 }
 
@@ -345,7 +344,7 @@ function resolveToken(args) {
 }
 
 // First send as a new name mints its record + token (first-claim-wins).
-// Stores only a salted hash; legacy plaintext migrates on successful auth.
+// Stores only a salted hash.
 function ensureSender(root, agent, token) {
   const rec = readAgent(root, agent);
   if (!rec) {
@@ -355,7 +354,7 @@ function ensureSender(root, agent, token) {
     writeAgentHashed(path.join(root, "agents", agent + ".json"), { name: agent, firstSeen: now, lastSeen: now, tokenHash: hashToken(fresh, salt), salt });
     return { created: true, token: fresh };
   }
-  if (!rec.tokenHash && !rec.token) {
+  if (!rec.tokenHash) {
     const fresh = mintToken();
     const salt = newSalt();
     rec.tokenHash = hashToken(fresh, salt);
@@ -364,8 +363,7 @@ function ensureSender(root, agent, token) {
     writeAgentHashed(path.join(root, "agents", agent + ".json"), rec);
     return { created: true, token: fresh };
   }
-  if (rec.token && !rec.tokenHash) {
-    if (!agentTokenMatches(rec, token)) throw new Error(\`bad token for "\${agent}" (pass token or set CREWBUS_TOKEN)\`);
+  if (!agentTokenMatches(rec, token)) throw new Error(\`bad token for "\${agent}" (pass token or set CREWBUS_TOKEN)\`);
     const salt = newSalt();
     rec.tokenHash = hashToken(String(token), salt);
     rec.salt = salt;
@@ -1250,21 +1248,6 @@ function upsertAgentsMd(cwd, snippet) {
     fs.writeFileSync(agentsMd, cur.endsWith("\n") ? cur : cur + "\n");
     console.log("Updated crewbus section in AGENTS.md");
     return;
-  }
-  // Remove legacy v1 block if present (it starts with "## Agent board" and mentions the old workflow)
-  if (cur.includes("COORDINATOR PRIME DIRECTIVE") || cur.includes("tasks ready")) {
-    const lines = cur.split("\n");
-    const out = [];
-    let skipping = false;
-    for (const ln of lines) {
-      if (/^## Agent board/.test(ln)) { skipping = true; continue; }
-      if (skipping && /^## /.test(ln)) { skipping = false; }
-      if (!skipping) out.push(ln);
-    }
-    cur = out.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
-    fs.writeFileSync(agentsMd, cur);
-    console.log("Removed legacy crewbus v1 section from AGENTS.md");
-    cur = fs.readFileSync(agentsMd, "utf8");
   }
   if (!cur.includes("crewbus") && !cur.includes("crewbus DM")) {
     fs.appendFileSync(agentsMd, "\n" + snippet);
@@ -2198,14 +2181,6 @@ function cmdRegister(args) {
     return;
   }
   if (!agentTokenMatches(prev, token)) fail(`name "${agent}" is claimed (bad/missing token — pass --token or set CREWBUS_TOKEN)`);
-  // Migrate legacy plaintext on successful auth.
-  if (prev.token && !prev.tokenHash) {
-    const salt = newSalt();
-    prev.tokenHash = hashToken(String(token), salt);
-    prev.salt = salt;
-    delete prev.token;
-    writeAgentFile(d, agent, prev);
-  }
   // `extra` (built right after --session parsing above) has sessionId only
   // when given, so sessionless re-registers keep the prior binding.
   if (expiresRaw !== undefined) extra.expiresAt = expiresAt;
@@ -2222,10 +2197,6 @@ function cmdRegister(args) {
       return;
     }
     process.stderr.write(`crewbus: warning: --role ignored (only an admin can grant roles; current role "${roleOfRecord(prev)}")\n`);
-  }
-  if (!prev.role) {
-    prev.role = "lead"; // backfill legacy records so agents --json exposes roles
-    try { writeAgentFile(d, agent, prev); } catch {}
   }
   const doc = touchAgent(d, agent, extra);
   console.log(`registered ${agent}${doc.sessionId ? ` (session ${doc.sessionId})` : ""} [board ${d.root}]`);
@@ -4984,16 +4955,6 @@ function cmdDoctor(args) {
     } catch {}
     if (!process.env.CREWBUS_AGENT) info("CREWBUS_AGENT is unset — hooks need it to know who you are");
   if (!process.env.CREWBUS_TOKEN) info("CREWBUS_TOKEN is unset — sends/reads as a claimed name need it");
-  try {
-    const legacy = fs.readdirSync(path.join(root, "agents")).filter((f) => f.endsWith(".json")).map((f) => {
-      try {
-        return readJson(path.join(root, "agents", f));
-      } catch {
-        return null;
-      }
-    }).filter((x) => x && x.name && !x.token && !x.tokenHash);
-    if (legacy.length > 0) info(`${legacy.length} agent(s) predate tokens (${legacy.slice(0, 5).map((x) => x.name).join(",")}${legacy.length > 5 ? "…" : ""}) — re-register to claim`);
-  } catch {}
   console.log(bad === 0 ? "doctor: healthy" : `doctor: ${bad} problem(s)`);
   if (bad > 0) process.exitCode = 1;
 }
@@ -6975,7 +6936,6 @@ Messaging (primitive — just a tool call, whenever you want):
   crewbus token rotate --from <you> [--expires-in <dur>]
     (issue a replacement token; the old one dies immediately. New token
      printed once — agent files store only a salted hash, never plaintext.
-     Legacy plaintext 'token' files migrate on next successful auth.
      --expires-in 30/90s/15m/24h/7d sets expiry; token status shows it.)
   crewbus token status --from <you> [--json]
     (expiry/rotation state, no secrets.)

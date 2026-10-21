@@ -70,7 +70,6 @@ export function agentTokenMatches(rec, token) { // line 273
       return false;
     }
   }
-  if (rec.token) return timingSafeEqualStr(t, String(rec.token));
   return false;
 }
 
@@ -92,8 +91,6 @@ export function mergeSyncedAgent(local, incoming) { // line 299
   const merged = { ...clean };
   if (local.tokenHash !== undefined) merged.tokenHash = local.tokenHash;
   if (local.salt !== undefined) merged.salt = local.salt;
-  // Legacy plaintext in flight: keep local secret, never adopt remote one.
-  if (local.token !== undefined && incoming.token === undefined) merged.token = local.token;
   return merged;
 }
 
@@ -158,17 +155,7 @@ export function checkToken(d, agent, token) { // line 361
     if (!agentTokenMatches(rec, token)) fail(`bad token for "${agent}" (pass --token or set CREWBUS_TOKEN)`);
     return rec;
   }
-  if (rec.token) {
-    if (!agentTokenMatches(rec, token)) fail(`bad token for "${agent}" (pass --token or set CREWBUS_TOKEN)`);
-    // Migrate: re-hash + drop plaintext now that the owner proved possession.
-    const salt = newSalt();
-    const migrated = { ...rec, tokenHash: hashToken(String(token), salt), salt };
-    delete migrated.token;
-    migrated.lastSeen = new Date().toISOString();
-    writeAgentFile(d, agent, migrated);
-    return migrated;
-  }
-  fail(`agent "${agent}" predates tokens — re-register to claim it: register --from ${agent}`);
+  fail(`bad/missing token hash for "${agent}" — re-register to claim it: register --from ${agent}`);
 }
 
 // First send as a new name mints its record + token (same first-claim-wins
@@ -213,16 +200,7 @@ export function ensureSender(d, agent, token) { // line 387
     assertMintWon(d, agent, rec.tokenHash);
     return { created: true, token: fresh };
   }
-  if (rec.token && !rec.tokenHash) {
-    // Legacy file: must present the old plaintext once; then migrate.
-    if (!agentTokenMatches(rec, token)) fail(`bad token for "${agent}" (pass --token or set CREWBUS_TOKEN)`);
-    const salt = newSalt();
-    rec.tokenHash = hashToken(String(token), salt);
-    rec.salt = salt;
-    delete rec.token;
-    writeAgentFile(d, agent, rec);
-    return { created: false, migrated: true };
-  }
+  if (!rec.tokenHash) fail(`bad/missing token hash for "${agent}" — re-register to claim: register --from ${agent}`);
   if (!agentTokenMatches(rec, token)) fail(`bad token for "${agent}" (pass --token or set CREWBUS_TOKEN)`);
   if (rec.offboarded) fail(`agent "${agent}" is offboarded — sends as that name are refused (inbox preserved for audit)`);
   if (tokenExpired(rec)) fail(`token for "${agent}" expired at ${rec.expiresAt} — re-register to renew: register --from ${agent} --token <old-or-new> --expires-in <dur>`);
@@ -565,7 +543,7 @@ export function ensureLoopbackOperator(d, host) {
   try { recBoss = readAgent(d, "boss"); } catch { recBoss = null; }
   try { recLead = readAgent(d, "lead"); } catch { recLead = null; }
   if (recBoss && (recBoss.tokenHash || recBoss.token)) return null; // already provisioned
-  if (recLead && (recLead.tokenHash || recLead.token)) return null; // already provisioned (legacy board)
+  if (recLead && recLead.tokenHash) return null; // already provisioned (legacy board)
   if (countAgentRecords(d) > 0) return null; // board already has registered agents
   const fresh = mintToken();
   const salt = newSalt();

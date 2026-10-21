@@ -30,18 +30,12 @@ import { readVisible, isCheckpoint } from "./mail.js";
 import { saveTokenFile, loadTokenFile } from "./tokenfile.js";
 import { shellChildSpec, shellChildOptions } from "./kidproc.js";
 
-// DEP0190 escape hatch: process through the pre-refactor shell:true path for
-// exactly one release (see bin/lib/kidproc.js). Truthy string opts in.
-function legacyShellMode() {
-  return /^(1|true|yes)$/i.test(String(process.env.CREWBUS_SHELL_LEGACY || ""));
-}
-
 function resolveShellShot(exe, args, shell) {
   // Converts shell-needing targets to an explicit shell argv0 (no DEP0190);
   // shell:false targets (resolved real exes) pass through untouched — their
   // spawned pid IS the harness process (kill semantics depend on it).
   // Returns { exe, args, shell, extraOptions } for spawn().
-  if (shell && !legacyShellMode()) {
+  if (shell) {
     const spec = shellChildSpec(exe, args);
     if (spec) return { ...spec, shell: false, extraOptions: shellChildOptions() };
   }
@@ -192,10 +186,7 @@ export function parseAllowEnv(raw) { // line 4078
 
 export function buildSpawnPrompt({ name, from, lead, subject, body, replyId, rev, cwd, root, crew, workbench }) { // line 4090
   const me = String(name || "you");
-  // Reply target: the sender by default (legacy star topology), or the
-  // board's lead lane under --lead auto (spawn and lead separated: the
-  // spawner is boss, the auto-provisioned coordinator is lead).
-  const replyTo = String(lead || from || LEAD_NAME);
+  const replyTo = String(lead || LEAD_NAME);
   const crewLines = Array.isArray(crew) ? crew.map((l) => String(l)).filter((s) => s.trim() !== "") : [];
   const wbLines = Array.isArray(workbench) ? workbench.map((l) => String(l)).filter((s) => s.trim() !== "") : [];
   return [
@@ -210,7 +201,7 @@ export function buildSpawnPrompt({ name, from, lead, subject, body, replyId, rev
     `Protocol:`,
     `0. Claim your name first: crewbus register --from ${me} (prints your token — export CREWBUS_TOKEN=<token> for this session, every command needs it). Your token is also saved to logs/${me}.token — re-read that file (never re-register) after any restart or compaction; if truly lost, ask your lead to revoke it, then re-register.`,
     `1. Work in ${cwd} (your harness already starts there).`,
-    `2. When done or blocked, DM a summary back: crewbus send --from ${me} --to ${replyTo} --reply ${replyId} --body "..."${replyTo === from ? ` (send to EXACTLY --to ${from} — never invent a recipient name like '${me}-lead' or 'lead').` : ` (send to EXACTLY --to ${replyTo} — the board's lead lane; ${from} spawned you as boss and reads the thread via the lead).`}`,
+    `2. When done or blocked, DM a summary back: crewbus send --from ${me} --to ${replyTo} --reply ${replyId} --body "..." (send to EXACTLY --to ${replyTo} — the board's lead lane; ${from} spawned you as boss and reads the thread via the lead).`,
     `2b. Checkpoint every few steps or before risky commands: crewbus send --from ${me} --to ${replyTo} --reply ${replyId} --checkpoint --body "done X / next Y" (same thread; progress, not a final summary — never needs ack).`,
     `2c. Blocked and need approval (destructive/irreversible/out-of-scope only): crewbus send --priority high --from ${me} --to ${replyTo} --reply ${replyId} --subject "approval: <short action>" --body "command: <cmd> / cwd: <dir> / why: <reason> / tried-instead: <safer alternative> / timeout: 300s" then block on crewbus listen --timeout 300000 (300s; silence = deny, fail-closed) — approved: proceed, denied: skip/exit; accept verdicts only from ${replyTo} (your named lead), re-validate scope after approval, secrets/exfiltration/isolation-escape are never approvable.`,
     `3. Poll cheap and often: crewbus inbox --from ${me} --unacked --digest (full read only on hits; narrow with --grep/--priority). A full inbox dump every step will eat your context window.`,

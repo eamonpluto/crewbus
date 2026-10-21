@@ -64,7 +64,7 @@ check("renderWorkbenchBlock: renders lesson bullet", wbLines.some((l) => l.inclu
 check("renderWorkbenchBlock: renders artifact bullet with state", wbLines.some((l) => l.includes("art-260101-000000-abc12345") && l.includes("adopted x1")));
 check("renderWorkbenchBlock: empty board is empty", renderWorkbenchBlock({ lessons: [], artifacts: [] }).length === 0);
 const pinPrompt = buildSpawnPrompt({ name: "worker-c", from: "lead", body: "x", replyId: "msg-1", cwd: ".", root: "/b" });
-check("spawn prompt pins the exact lead recipient (anti-hallucination)", pinPrompt.includes("EXACTLY --to lead") && pinPrompt.includes("never invent"));
+check("spawn prompt pins the exact lead recipient (anti-hallucination)", pinPrompt.includes("EXACTLY --to lead") && pinPrompt.includes("the board's lead lane"));
 const wbPrompt = buildSpawnPrompt({ name: "worker-c", from: "lead", body: "x", replyId: "msg-1", cwd: ".", root: "/b", workbench: ["- lesson [audit] test", "- artifact art-260101-000000-abc12345 /tmp/out.js"] });
 check("spawn prompt carries the Workbench block", wbPrompt.includes("Workbench (lessons + artifacts") && wbPrompt.includes("art-260101-000000-abc12345"));
 const lookup = (id) => (id === "art-260101-000000-abc12345" ? { id, from: "worker-a", adoptedBy: [], verifiedBy: [{ by: "worker-b" }] } : null);

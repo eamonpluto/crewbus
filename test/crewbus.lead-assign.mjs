@@ -33,12 +33,12 @@ check("spawn prompt: board mode keeps legacy anti-invent line out", !pBoard.incl
 check("spawn prompt: board mode verdicts name the lead", pBoard.includes("only from lead") && pBoard.includes("--to lead --reply msg-1 --subject \"approval:"));
 check("spawn prompt: board mode checkpoints to lead", pBoard.includes("--to lead --reply msg-1 --checkpoint"));
 
-const pLegacy = buildSpawnPrompt({
+const pLeadDirect = buildSpawnPrompt({
   name: "sec-1", from: "lead", body: "mission text",
   replyId: "msg-1", cwd: cwdUnit, root: rootUnit,
 });
-check("spawn prompt: legacy mode pins to sender", pLegacy.includes("crewbus send --from sec-1 --to lead --reply msg-1") && pLegacy.includes("never invent a recipient name like 'sec-1-lead'"));
-check("spawn prompt: legacykker verdicts unchanged", pLegacy.includes("only from lead") && !pLegacy.includes("the board's lead lane"));
+check("spawn prompt: lead direct pins to lead", pLeadDirect.includes("crewbus send --from sec-1 --to lead --reply msg-1") && pLeadDirect.includes("the board's lead lane"));
+check("spawn prompt: verdicts accept only from lead", pLeadDirect.includes("only from lead"));
 
 const pCustomLead = buildSpawnPrompt({
   name: "sec-1", from: "boss", lead: "coordinator-x", body: "m",

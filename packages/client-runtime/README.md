@@ -1,6 +1,6 @@
 # CrewBus client-runtime (M3)
 
-Shared supervisor/routes/auth/cache for Tauri desktop + Expo mobile.
+Shared supervisor/routes/auth/cache for CrewBus Web + Expo mobile.
 Runtime-agnostic core: no Node-only imports. Shells inject `fetch`,
 timers, clocks, and secure storage. Zero dependencies, Node >= 18.
 
@@ -21,7 +21,7 @@ const won = await walkRoutes(hints, probeRoute); // first-that-works
 if (!won.ok) throw new Error(won.reason); // never silent loopback
 ```
 
-Loopback is skipped unless `allowLoopback: true` (desktop sidecar only).
+Loopback is skipped unless `allowLoopback: true` (local loopback only).
 `LearnedRoutes` remembers LAN/tailnet winners; failures cool down 30s.
 While on a later route, `preflightEarlierRoutes()` re-probes earlier ones.
 

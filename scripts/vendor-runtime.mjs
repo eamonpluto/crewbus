@@ -40,7 +40,6 @@ const RUNTIME_FILES = fs.readdirSync(SRC_DIR)
 
 const APPS = [
   { name: 'mobile', dir: path.join(ROOT, 'apps', 'mobile'), roots: ['App.js', 'src', 'api'] },
-  { name: 'desktop', dir: path.join(ROOT, 'apps', 'desktop'), roots: ['src'] },
 ];
 
 const JS_EXT = new Set(['.js', '.jsx']);

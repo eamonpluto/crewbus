@@ -41,17 +41,28 @@ function startServer(args) {
     kill() { try { child.kill(); } catch {} },
   };
 }
-function httpGet(base, p) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(p, base);
-    const req = http.request(u, { method: "GET" }, (res) => {
-      const chunks = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString("utf8") }));
-    });
-    req.on("error", reject);
-    req.end();
-  });
+async function httpGet(base, p, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await new Promise((resolve, reject) => {
+        const u = new URL(p, base);
+        const req = http.request(u, { method: "GET" }, (res) => {
+          const chunks = [];
+          res.on("data", (c) => chunks.push(c));
+          res.on("error", reject);
+          res.on("end", () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString("utf8") }));
+        });
+        req.on("error", reject);
+        req.end();
+      });
+    } catch (err) {
+      if (attempt < retries && (err.code === "ECONNRESET" || err.code === "ECONNREFUSED")) {
+        await new Promise((r) => setTimeout(r, 100));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 const web = startServer(["web", "--port", "0", "--board", board]);
@@ -91,6 +102,13 @@ check("panel: existing kill/ack wiring untouched", page.text.includes("/api/kill
   const w2Msg = briefOut.match(/(\S+) -> w2/)[1];
   run(["send", "--from", "w1", "--token", w1Tok, "--to", "wlead", "--reply", w1Msg, "--checkpoint", "--body", "half done"]);
   run(["send", "--from", "w2", "--token", w2Tok, "--to", "wlead", "--reply", w2Msg, "--body", "widgets done"]);
+  const pairPage = await httpGet(webBase, "/pair");
+  check("panel: GET /pair 200", pairPage.status === 200);
+  check("panel: /pair contains title + pairing markup", pairPage.text.includes("Pair Mobile Client") && pairPage.text.includes('id="qr-wrap"') && pairPage.text.includes('id="pair-url"'));
+  check("panel: /pair contains buttons", pairPage.text.includes('id="pair-render"') && pairPage.text.includes('id="pair-clear"'));
+  check("panel: /pair auto-mints via /api/pair-qr", pairPage.text.includes("/api/pair-qr") && pairPage.text.includes("renderQrSvg"));
+  check("panel: popup pair button points to /pair", page.text.includes("open('/pair'"));
+
   const boardJson = JSON.parse((await httpGet(webBase, "/api/board")).text);
   check("panel: /api/board carries briefs", Array.isArray(boardJson.briefs) && boardJson.briefs.length === 1);
   const row = boardJson.briefs[0];

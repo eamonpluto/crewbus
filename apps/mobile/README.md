@@ -2,7 +2,7 @@
 
 Hand-written scaffold produced on a machine with NO Expo/RN toolchain:
 nothing here has been compiled and `npm install` was deliberately never
-run (no `node_modules`, no lockfiles). Mirrors `apps/desktop/` shell/pair
+run (no `node_modules`, no lockfiles). Mirrors `crewbus web` /pair
 patterns: fragment-secret hygiene, ordered routes, one retry owner, and an
 explicitly-retried mutation queue.
 
@@ -11,7 +11,7 @@ explicitly-retried mutation queue.
 - Node ≥ 18, `npm`, and the Expo CLI (`npx expo` resolves after install).
 - iOS: Xcode + simulator (or a dev-client device). Android: Android Studio +
   emulator (or a dev-client device with Expo Go / dev build).
-- A reachable CrewBus relay to pair against: desktop sidecar or
+- A reachable CrewBus relay to pair against: local web dashboard or
   `node bin/crewbus.js serve` with `--advertise-routes` (LAN/tailnet URL the
   phone can actually reach — remote-only v1, no loopback).
 
@@ -27,9 +27,9 @@ npm test               # = `node scripts/check.mjs`: JSON parses + paths + scaff
 From the repo root, mobile builds stay out of the root `package.json` —
 everything happens in `apps/mobile/` only.
 
-## Pairing a phone against a desktop/relay
+## Pairing a phone against a web dashboard or relay
 
-1. On the desktop/relay (admin, token-checked): mint a one-time link —
+1. On the dashboard/relay (admin, token-checked): mint a one-time link —
    `node bin/crewbus.js serve --advertise-routes <LAN-url> --pair-qrcode --from <admin>`
    (same mint + audit as `relay pair`; `<LAN-url>` is the http(s) address
    the phone can actually reach — remote-only v1, no loopback) — and show its QR.
@@ -50,7 +50,7 @@ everything happens in `apps/mobile/` only.
   primitives (no UI framework).
 - **QR: `expo-camera` (`CameraView.onBarcodeScanned`) for scanning +
   `react-native-qrcode-svg` (over `react-native-svg`) as the stated QR lib.**
-  The phone is scan-only: the desktop/relay renders the pair QR. The render
+  The phone is scan-only: the web dashboard (/pair) or relay renders the pair QR. The render
   lib is used exclusively for non-secret echo (env-id label on the Pair
   success card) — the pair URL / fragment secret is NEVER rendered, logged,
   or persisted.

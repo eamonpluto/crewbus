@@ -53,7 +53,7 @@ those verbs call.
   - `handleApiKill` → `web.js` (dedup done — `relay.js` re-exports
     `handleApiKill` from `web.js`).
    - HLC (`nextHlc`, `stampSyncDoc`, `hlcCompare`) → `store.js`.
-- Out-of-monolith surfaces: `packages/client-runtime/` (shared retry/route/auth/cache core for desktop/mobile shells) and `apps/desktop|mobile` consume `bin/` over HTTP (sidecar/spawn + dashboard fetch), never import it.
+- Out-of-monolith surfaces: `packages/client-runtime/` (shared retry/route/auth/cache core for desktop/mobile shells) and `apps/mobile` consume `bin/` over HTTP (sidecar/spawn + dashboard fetch), never import it.
 
 ## How to add a command
 
@@ -64,7 +64,7 @@ those verbs call.
 3. Add tests under `test/` covering the new path (`npm test` runs
    `test/crewbus.*.mjs` — smoke, harness, compact, tokenfile, digest,
    control-plane, launch, web-launch, pair-api, web-panel, web-approot,
-   client-runtime, runtime-wiring, desktop-sidecar, mobile-client,
+   client-runtime, runtime-wiring, mobile-client,
    grok-hooks, holds-quotas, approval-protocol, approvals-init,
    approvals-web — plus `test/fault-injection.mjs` + `test/integration.mjs`;
    see root `package.json` `scripts.test`).

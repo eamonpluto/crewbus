@@ -1,7 +1,7 @@
 # CrewBus Control Plane — spec (M0 frozen)
 
 Status: active build spec. Audience: contributors building the CLI launch
-wizard, evolved web dashboard, desktop shell, and mobile client in parallel.
+wizard, evolved web dashboard, and mobile client in parallel.
 
 Converges spec slices 1–5: CrewBus core audit, t3Code provider pattern,
 t3Code UI layout, t3Code sync/connectivity/auth.
@@ -162,7 +162,7 @@ Windows: detached `cmd.exe` wrappers linger ~60s; kills report immediately.
 | `pair qr` / mobile pairing | wrap `newPairToken()`; QR encodes `crewbus://pair?...#abp-…` (fragment secret) |
 | Routes / env identity | extend `relay.json` + `/healthz` with `envId + advertisedRoutes + capabilities` |
 | `POST /api/launch` | same validation as wizard → `bootWorker` local or `remoteSpawn` per relay |
-| Desktop sidecar | spawn `node bin/crewbus.js serve --port 0` on loopback, own lifecycle |
+| Web Dashboard | standalone loopback dashboard via `crewbus web [--open]` with /pair route |
 | Mobile client | `GET /api/*` + `POST /api/launch|kill|ack|approve` + `/sync/wait`; no FS access |
 | Scoped device creds | extend `parseDeviceCred` + `requireRelaySecret` → `requireScope(rpc)` |
 ## 2. t3Code lessons (reference: `pingdotgg/t3code`)
@@ -283,7 +283,7 @@ ack). Reuse snapshot shapes; add `GET /api/harnesses`, `GET /api/routes`,
 `POST /api/launch`, `POST /api/pair/issue|exchange`. Poll 5s → SSE later.
 Tokens in tab memory (opt-in persist).
 
-### 4.3 Desktop (`apps/desktop`, Tauri preferred)
+### 4.3 Web Dashboard & Pair (`crewbus web`)
 
 Same web UI via local scheme; main owns sidecar
 (`node bin/crewbus.js serve --port 0` loopback), SSH tunnels, pairing
@@ -312,7 +312,7 @@ secret sync, mutation auto-replay, silent loopback fallback.
 crewbus/  bin/ + bin/lib/*   (additive only)
   packages/contracts/        harness.json launch.json pairing.json board-caps.json
   packages/client-runtime/   supervisor, routes, auth store, cache, hooks
-  apps/web/ apps/desktop/ apps/mobile/
+  apps/mobile/
   docs/CONTROL_PLANE_SPEC.md (this file)
   test/crewbus.control-plane.mjs
 ```

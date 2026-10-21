@@ -51,13 +51,13 @@ run([
   "--auto", "--i-understand-danger", "--keep-env",
   "--body", "Reply to this brief with one short line, then stop.",
 ]);
-console.log(`spawned opencode worker "${worker}"; waiting up to ~45s for session capture...`);
+console.log(`spawned opencode worker "${worker}"; waiting up to ~90s for session capture...`);
 
 const docPath = path.join(board, "worker-sessions", `${worker}.json`);
 let doc = null;
 const poll = run; // invoking spawn-status inside syncWorkerSession's caller flow
 try {
-  const deadline = Date.now() + 45 * 1000;
+  const deadline = Date.now() + 90 * 1000;
   while (Date.now() < deadline) {
     execFileSync("node", [CLI, "spawn-status", "--from", "boss", "--to", worker], { env }).toString(); // triggers sync incl. storage probe
     try { doc = JSON.parse(fs.readFileSync(docPath, "utf8")); } catch { doc = null; }

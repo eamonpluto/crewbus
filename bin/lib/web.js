@@ -13,6 +13,7 @@
 //   monolith lines ~692-1010) — export crew must add them for web.js to link.
 
 import fs from "node:fs";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
@@ -1656,7 +1657,7 @@ function paletteActivate(m){
     else if(m.action==='openfolder'){document.getElementById('open-folder-btn').click();}
     else if(m.action==='pairmobile'){
       try{window.parent.postMessage({type:'crewbus:open-pair', dashboard: location.origin},'*');}catch(_){}
-      try{window.open('./pair.html','_blank','width=420,height=560');}catch(_){}
+      try{window.open('/pair','_blank','width=420,height=560');}catch(_){}
     }
     else if(m.action==='refresh'){refresh();}
     else if(m.action==='installcli'){document.getElementById('pop-install-cli-btn').click();}
@@ -1888,7 +1889,7 @@ document.getElementById('copy-board-btn').onclick=copyBoardPath;
 var ppb=document.getElementById('pop-pair-btn');
 if(ppb){ppb.onclick=function(){
   try{window.parent.postMessage({type:'crewbus:open-pair', dashboard: location.origin},'*');}catch(_){}
-  try{window.open('./pair.html','_blank','width=420,height=560');}catch(_){}
+  try{window.open('/pair','_blank','width=420,height=560');}catch(_){}
 };}
 var picb=document.getElementById('pop-install-cli-btn');
 if(picb){picb.onclick=async function(){
@@ -2106,7 +2107,215 @@ export const readKillBody = (req) =>
 
 // Shared web dashboard API routes for both `crewbus web` and `crewbus serve`
 // (embedded Tauri webview). Returns true if the route was handled, false otherwise.
+
+let _qrSrc = null;
+function getQrSrc() {
+  if (_qrSrc === null) {
+    try {
+      _qrSrc = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "qrcode.js"), "utf8");
+    } catch {
+      _qrSrc = "";
+    }
+  }
+  return _qrSrc;
+}
+
+export function renderPairHtml(root) {
+  const qrCodeSrc = getQrSrc();
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pair Mobile Client — CrewBus</title>
+<script>
+try{var __t=null;try{__t=localStorage.getItem('crewbus-theme')||localStorage.getItem('crewbus-desktop-theme');}catch(_){}if(__t==='light'||__t==='dark'){document.documentElement.setAttribute('data-theme',__t);}}catch(_){}
+</script>
+<style>
+:root{
+  --bg:#f4f6f3;
+  --panel:#ffffff;
+  --ink:#14201a;
+  --dim:#5b6a62;
+  --acc:#5b6a62;
+  --acc-ink:#ffffff;
+  --warn:#b86e00;
+  --line:#d5ddd7;
+  --scroll:rgba(0,0,0,.18);
+  --scroll-hi:rgba(0,0,0,.32);
+  --danger:#f85149;
+  --danger-bg:rgba(248,81,73,0.12);
+  --ok:#3d8f66;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1419;--panel:#182028;--ink:#e3e9ee;--dim:#8b98a5;--acc:#8b98a5;--acc-ink:#07130d;--warn:#ffb454;--line:#2a343e;
+  --scroll:rgba(255,255,255,.16);
+  --scroll-hi:rgba(255,255,255,.32);
+  --ok:#4fb07f;
+}}
+:root[data-theme="light"]{--bg:#f4f6f3;--panel:#ffffff;--ink:#14201a;--dim:#5b6a62;--acc:#5b6a62;--acc-ink:#ffffff;--warn:#b86e00;--line:#d5ddd7;--scroll:rgba(0,0,0,.18);--scroll-hi:rgba(0,0,0,.32);--ok:#3d8f66}
+:root[data-theme="dark"]{--bg:#0f1419;--panel:#182028;--ink:#e3e9ee;--dim:#8b98a5;--acc:#8b98a5;--acc-ink:#07130d;--warn:#ffb454;--line:#2a343e;--scroll:rgba(255,255,255,.16);--scroll-hi:rgba(255,255,255,.32);--ok:#4fb07f}
+* {
+  box-sizing:border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll) transparent;
+}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:20px}
+h2{margin:0 0 6px;font-size:17px;font-weight:700;color:var(--ink)}
+.dim{color:var(--dim);font-size:12px;line-height:1.4}
+#qr-wrap{width:220px;height:220px;margin:16px auto;border:1px solid var(--line);background:var(--panel);border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;overflow:hidden}
+#qr-wrap svg{width:100%;height:100%;display:block;border-radius:6px}
+#qr{color:var(--dim);font-size:12px}
+textarea{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:12px;resize:vertical;font-family:monospace}
+textarea:focus{border-color:var(--acc);outline:none}
+.btn-row{display:flex;gap:8px;margin-top:10px}
+button{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+button:hover{border-color:var(--acc);color:var(--acc)}
+button.primary{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+button.primary:hover{filter:brightness(1.1)}
+#msg{min-height:1.5em;margin-top:10px;font-size:12px}
+.warn{color:var(--danger)}
+.ok{color:var(--ok)}
+</style>
+</head>
+<body>
+<h2>Pair Mobile Client</h2>
+<p class="dim">A one-time pairing link is minted automatically from the local
+board — scan the QR with CrewBus Mobile. (Advanced: paste a
+<code>crewbus://pair</code> URL from <code>relay pair qr</code> or
+<code>serve --pair-qrcode</code> to render it instead.)</p>
+
+<div id="qr-wrap">
+  <div id="qr" aria-label="pairing QR">QR code will appear here after rendering</div>
+</div>
+
+<label class="dim" for="pair-url">Pairing URL (in-memory only, secret in #fragment never saved):</label>
+<textarea id="pair-url" rows="3" placeholder="crewbus://pair?env=…&amp;routes=…&amp;caps=…#abp-…"></textarea>
+
+<div class="btn-row">
+  <button id="pair-render" class="primary">Render QR</button>
+  <button id="pair-clear">Clear</button>
+</div>
+
+<div id="msg" class="dim" role="status"></div>
+<script type="module">
+${qrCodeSrc}
+
+var box = document.getElementById('pair-url');
+var qr = document.getElementById('qr');
+var qrWrap = document.getElementById('qr-wrap') || (qr ? qr.parentElement : null);
+var msg = document.getElementById('msg');
+var renderBtn = document.getElementById('pair-render');
+var clearBtn = document.getElementById('pair-clear');
+
+function say(t, isErr) {
+  if (!msg) return;
+  msg.textContent = t;
+  msg.className = isErr ? 'warn' : 'ok';
+}
+
+function qrThemeColors() {
+  var theme = null;
+  try { theme = localStorage.getItem('crewbus-theme') || localStorage.getItem('crewbus-desktop-theme'); } catch (_) {}
+  if (theme !== 'light' && theme !== 'dark') {
+    try { theme = document.documentElement.getAttribute('data-theme'); } catch (_) {}
+  }
+  if (theme !== 'light' && theme !== 'dark') {
+    try { theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) ? 'dark' : 'light'; }
+    catch (_) { theme = 'light'; }
+  }
+  if (theme === 'dark') return { dark: '#e3e9ee', light: '#182028' };
+  return { dark: '#14201a', light: '#ffffff' };
+}
+
+function validatePairUrl(raw) {
+  var s = String(raw == null ? '' : raw).trim();
+  if (!s.startsWith('crewbus://pair')) throw new Error('not a crewbus pair URL');
+  var u = new URL(s);
+  for (var p of u.searchParams) {
+    var k = p[0].toLowerCase();
+    var v = p[1];
+    if (['secret', 'token', 'pairtoken', 'pair_token', 'pair-token', 'credential'].indexOf(k) !== -1 || v.startsWith('abp-')) {
+      throw new Error('pairing secret in query — secrets travel in #fragment only');
+    }
+  }
+  var frag = u.hash ? decodeURIComponent(u.hash.slice(1)) : '';
+  if (!frag) throw new Error('missing #fragment pairing secret');
+  if (!frag.startsWith('abp-')) throw new Error('fragment is not a pairing secret (want abp-...)');
+  return { env: u.searchParams.get('env') || '(local)', pairToken: frag };
+}
+
+function describeForDisplay(u) {
+  return String(u).split('#')[0];
+}
+
+function clearAll() {
+  if (box) box.value = '';
+  if (qrWrap) qrWrap.innerHTML = '<div id="qr" aria-label="pairing QR">QR code will appear here after rendering</div>';
+  qr = document.getElementById('qr');
+  say('');
+}
+
+function renderUrl(raw) {
+  var parsed = validatePairUrl(raw);
+  var svg = renderQrSvg(raw.trim(), {
+    width: 200,
+    margin: 1,
+    color: qrThemeColors(),
+  });
+  if (qrWrap) qrWrap.innerHTML = svg;
+  say('QR code ready for ' + describeForDisplay(raw) + ' — scan with CrewBus Mobile.');
+}
+
+if (renderBtn) {
+  renderBtn.addEventListener('click', function () {
+    var raw = box ? box.value : '';
+    if (!raw.trim()) { say('paste a pair URL first', true); return; }
+    try {
+      renderUrl(raw);
+    } catch (e) {
+      say('rejected: ' + String((e && e.message) || e), true);
+    }
+  });
+}
+
+if (clearBtn) {
+  clearBtn.addEventListener('click', clearAll);
+}
+
+async function autoMint() {
+  say('minting a one-time pairing link…');
+  try {
+    var r = await fetch('/api/pair-qr', { method: 'POST' });
+    var j = null;
+    try { j = await r.json(); } catch (_) {}
+    if (!r.ok || !j || !j.ok || !j.pairUrl) {
+      say('auto-mint failed (' + (j && j.error ? j.error : ('HTTP ' + r.status)) + ') — paste a pair URL manually', true);
+      return;
+    }
+    if (box) box.value = j.pairUrl;
+    renderUrl(j.pairUrl);
+    var exp = j.expiresAt ? new Date(j.expiresAt) : null;
+    say('QR ready — scan with CrewBus Mobile.' + (exp ? ' Link expires ' + exp.toLocaleTimeString() + ' (single-use).' : ''));
+  } catch (e) {
+    say('auto-mint failed: ' + String((e && e.message) || e) + ' — paste a pair URL manually', true);
+  }
+}
+
+autoMint();
+</script>
+</body>
+</html>`;
+}
+
 export async function handleWebDashboardRoute(req, res, url, d) {
+  if (req.method === "GET" && url.pathname === "/pair") {
+    const body = renderPairHtml(d.root);
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    res.end(body);
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/board") {
     const body = JSON.stringify(boardSnapshot(d, 300));
     res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -2483,6 +2692,12 @@ export async function cmdWeb(args) {
           res.end(body);
           return;
         }
+        if (req.method === "GET" && url.pathname === "/pair") {
+          const body = renderPairHtml(d.root);
+          res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+          res.end(body);
+          return;
+        }
         res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
         res.end("not found (try / or /api/board /api/fleet /api/channels /api/results /api/audit /api/holds /api/quotas /api/inbox /api/harnesses /api/routes)");
       } catch (e) {
@@ -2498,7 +2713,15 @@ export async function cmdWeb(args) {
     server.listen(port, host, () => {
       const a = server.address();
       const shown = a && typeof a === "object" ? `${a.address}:${a.port}` : `${host}:${port}`;
-      console.log(`crewbus web at http://${shown} [board ${d.root}]`);
+      const webUrl = `http://${shown}`;
+      console.log(`crewbus web at ${webUrl} [board ${d.root}]`);
+      if (args.includes("--open")) {
+        try {
+          if (process.platform === "win32") spawn("cmd.exe", ["/c", "start", webUrl], { detached: true, stdio: "ignore" }).unref();
+          else if (process.platform === "darwin") spawn("open", [webUrl], { detached: true, stdio: "ignore" }).unref();
+          else spawn("xdg-open", [webUrl], { detached: true, stdio: "ignore" }).unref();
+        } catch {}
+      }
       resolve();
     });
   });

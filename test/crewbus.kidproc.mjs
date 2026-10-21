@@ -111,11 +111,6 @@ if (process.platform === "win32") {
   }
   const untouched = resolveShellShot("C:\\tools\\opencode.exe", ["run"], false);
   check("shot: real-exe shell:false untouched (pid = harness process)", eq(untouched, { exe: "C:\\tools\\opencode.exe", args: ["run"], shell: false, extraOptions: {} }));
-  const old = process.env.CREWBUS_SHELL_LEGACY;
-  process.env.CREWBUS_SHELL_LEGACY = "1";
-  const shotLegacy = resolveShellShot("claude", ["-p"], true);
-  check("shot: legacy escape hatch passthrough", eq(shotLegacy, { exe: "claude", args: ["-p"], shell: true, extraOptions: {} }));
-  if (old === undefined) delete process.env.CREWBUS_SHELL_LEGACY; else process.env.CREWBUS_SHELL_LEGACY = old;
 }
 
 if (failures > 0) {

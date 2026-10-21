@@ -1,5 +1,14 @@
 # Changelog
 
+## 10.0.12
+
+Retire legacy compatibility layers, enforce --lead auto, require managed AI coding harnesses, and consolidate desktop into standalone crewbus web.
+
+- **Enforce `--lead auto` exclusively**: Removed `--lead none` across CLI, control-plane launch validation, and contracts (`packages/contracts/launch.json`). Every crew launch automatically provisions and routes through the dedicated lead coordinator lane.
+- **Require managed AI harnesses**: Removed unmanaged `generic` driver support across runtime, contracts, CLI, and web UI. Supported harness drivers are strictly the 6 installed AI coding harnesses (`opencode`, `claude`, `codex`, `grok`, `antigravity`, `cursor`).
+- **Consolidate desktop into `crewbus web`**: Removed `apps/desktop/` and the Tauri build. Added a standalone, self-contained `GET /pair` route to `bin/lib/web.js` with inline zero-dependency QR code SVG generation and strict fragment-secret hygiene. Added `--open` flag to `crewbus web` to automatically launch the default browser across Windows, macOS, and Linux.
+- **Drop legacy compatibility layers**: Removed plaintext token reading and migration routines (enforcing salted hash tokens exclusively), removed legacy role backfills, and cleaned up pre-v2 AGENTS.md cleanups.
+
 ## 10.0.11
 
 Post-compaction identity recovery + stale-pid guards + coordinator budgets + member-scoped channels + inbox archive + lead revive (engine hardening batches 2-5, 9).

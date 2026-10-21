@@ -1,4 +1,4 @@
-# crewbus v10.0.10 — DM bus
+# crewbus v10.0.12 — DM bus
 
 [![CI](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml/badge.svg)](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml)
 
@@ -46,16 +46,12 @@ env overrides below.)
 | 1 | `--board <path>` flag | explicit path |
 | 2 | `--global` flag (init only) | `~/.crewbus/boards/default` |
 | 3 | `CREWBUS_DIR` env var | per-shell override |
-| 4 | default (CLI) | `.\.crewbus` in the current project |
-| — | Desktop App | `<app-data>/board` (central, zero setup) |
-
-> [!NOTE]
-> **Desktop vs CLI**: When running the CrewBus Desktop GUI, the app automatically maintains its own persistent central message board at `<app-data>/board` and injects `CREWBUS_DIR` into spawned worker agents. **No `crewbus init` is needed in project directories when launching via the Desktop App**—simply choose your project directory in Launch Studio. In pure terminal/CLI mode, `crewbus init` initializes the project-local `.\.crewbus` board.
+| 4 | default | `.\.crewbus` in the current project |
 
 Layout: `board.json`, `agents/<name>.json`, `dm/<recipient>/<id>.json`,
 `delivered/<recipient>/<id>.json` (push markers, written by the plugin).
 
-Versions: `package.json` (currently 10.0.10) is the source of truth for the
+Versions: `package.json` (currently 10.0.12) is the source of truth for the
 release version. `board.json`'s `version: 2` is the **board schema version**
 (a different number on purpose — do not "align" them). New to the project?
 Start with `docs/QUICKSTART.md` (5 minutes).
@@ -467,7 +463,7 @@ anything long); `--to` and `--count` together warn (`--to` wins);
 (`full` needs `--i-understand-danger`); cursor/antigravity
 cannot resume (one-shot briefs — the wizard warns, never fakes it).
 
-Pair a phone or desktop client without sharing the relay secret:
+Pair a phone without sharing the relay secret:
 
 ```powershell
 crewbus relay pair qr --from alice --label pixel --ttl 10m `
@@ -481,7 +477,7 @@ hints for the relay (`GET /api/routes`, `GET /healthz`) and prints a
 pairing URL on boot. The dashboard (`crewbus web`) and relay both serve
 `GET /api/harnesses` and `POST /api/launch` (`--dry-run` previews,
 live boots locally or via the relay core). The relay additionally exposes
-the pairing flow over HTTP for mobile/desktop clients (`POST
+the pairing flow over HTTP for mobile clients (`POST
 /api/pair/issue` + `POST /api/pair/exchange` + `GET /api/pair/devices` +
 `POST /api/pair/revoke`, admin-gated, narrow-only scopes). The dashboard
 itself is an AppRoot: left nav (Boards → Fleet → Audit), top bar with
@@ -492,32 +488,21 @@ live launch. Worker entries now carry their harness `driver` end-to-end
 (spawn record → board/fleet snapshots → inspector + per-driver running
 badges). The shared `packages/client-runtime/` (route walk with learned
 routes, reconnect supervisor, pair-URL auth store, offline cache with
-explicit-retry mutation queue) is the foundation the future desktop and
+explicit-retry mutation queue) is the foundation the mobile and
 mobile shells build on. The Expo mobile client (`apps/mobile`, remote-only
 v1) pairs by QR scan, walks advertised + learned routes, and offers
 triage/approvals/launch/fleet cards with an offline outbox that only
 retries on explicit tap — sharing the tested `apps/mobile/api/` relay
 client and the runtime's auth/cache core.
 
-## Install the apps
+## Apps & Dashboard
 
-Two tracks — pick one:
-
-NORMIES (no terminal, ever):
-- Desktop: download the installer from [GitHub Releases](https://github.com/eamonpluto/crewbus/releases) (Windows `.exe`/`.msi`, macOS `.dmg`, Linux bundles) → double-click →
-  the sidecar starts itself → select your project directory in Launch Studio → pair your phone by scanning the in-app QR.
-- Mobile: Android → direct APK link from the Release; iOS → TestFlight
-  link → open → Pair tab → scan.
-- First run: 1) install both apps, 2) scan the QR to pair, 3) open Triage
-  and ack your first item.
-
-DEVS (source builds):
-- `git clone` the repo, then root `npm test` (all suites green — start here).
-- Desktop: `cd apps/desktop; npm install; npm run tauri dev` (sidecar boots itself on loopback).
-- Mobile: `cd apps/mobile; npm install; npx expo start` (scan the dev QR or open the emulator).
-- Pair the phone against a reachable relay: `crewbus serve
-  --advertise-routes <LAN-url> --pair-qrcode --from <admin>` (admin token;
-  LAN/tailnet URL the phone can reach — remote-only v1, no loopback).
+- **Web Dashboard**: Run `crewbus web --open` to launch the local web dashboard in your browser. Click **Pair Mobile Client (QR)…** or visit `/pair` to display the one-time pairing QR code.
+- **Mobile**: Android → direct APK link from GitHub Releases; iOS → TestFlight link → open → Pair tab → scan QR.
+- **Developers**:
+  - Root `npm test` runs the full test suite.
+  - Mobile: `cd apps/mobile; npm install; npx expo start` (scan the dev QR or open emulator).
+  - Pair against a reachable relay: `crewbus serve --advertise-routes <LAN-url> --pair-qrcode --from <admin>`.
 
 ## Inserted into context
 
@@ -687,7 +672,7 @@ primaries by weight (`serve --weight`, `crew survey`, `crew dispatch`
 ## Publishing (maintainer)
 
 ```powershell
-npm test          # 24 suites (smoke + harness + opencode-respawn + compact + tokenfile + digest + workbench + control-plane + launch + pair-api + web-launch + web-panel + web-approot + client-runtime + runtime-wiring + desktop-sidecar + mobile-client + holds-quotas + grok-hooks + approval-protocol + approvals-init + approvals-web + fault-injection + integration), all must pass
+npm test          # 24 suites (smoke + harness + opencode-respawn + compact + tokenfile + digest + workbench + control-plane + launch + pair-api + web-launch + web-panel + web-approot + client-runtime + runtime-wiring + mobile-client + holds-quotas + grok-hooks + approval-protocol + approvals-init + approvals-web + fault-injection + integration), all must pass
 npm publish       # ships bin/ + opencode/ + docs (see "files" in package.json)
 ```
 

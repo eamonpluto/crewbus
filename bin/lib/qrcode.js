@@ -2965,3 +2965,7 @@ export function renderQrSvg(text, options = {}) {
   const data = QRCode.create(text, options);
   return SvgRenderer.render(data, options);
 }
+
+if (typeof window !== "undefined") {
+  window.renderQrSvg = renderQrSvg;
+}
