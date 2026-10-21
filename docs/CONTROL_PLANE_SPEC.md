@@ -139,18 +139,17 @@ lazily fills `worker-sessions/<name>.json` (machine-local, NEVER synced).
 | Harness | Spawn | Brief | Session capture | Respawn |
 |---|---|---|---|---|
 | opencode | `run --file <brief> --format json` | file | early stream event | `run --session <id>` |
-| claude | `-p --output-format json --session-id <uuid>` | stdin | preassigned + log | `-p --resume <id>` + resume-interrupted env |
-| codex | `exec --json` | inline positional | `thread.started.thread_id` | `exec <opts> resume <id> "<catchup>"` |
+| claude | `-p --output-format json --session-id <uuid> --allowedTools ...` | stdin | preassigned + log | `-p --resume <id>` + resume-interrupted env |
+| codex | `exec --json -c approval_policy="never" --dangerously-bypass-hook-trust` | stdin + positional | `thread.started.thread_id` | `exec <opts> resume <id> "<catchup>"` |
 | grok | `--prompt-file -s <uuid> --output-format json` | file | preassigned (end-of-run log) | `--prompt-file <catchup> -r <id>` |
 | antigravity | `--print --mode accept-edits` | inline | none | `-p "<catchup>" --conversation <id>` (rare) |
 | cursor | `cursor-agent -p --force --trust` | inline | none | `-p --force --resume <id>` (rare) |
 
-`--auto` per harness: opencode auto-approve, claude `-p` unattended, grok
-`--always-approve`, cursor `--yolo`, agy `--dangerously-skip-permissions`.
+`--auto` per harness: opencode auto-approve, claude `--dangerously-skip-permissions`, codex `--dangerously-bypass-approvals-and-sandbox`, grok `--permission-mode bypassPermissions --always-approve`, cursor `--yolo`, agy `--dangerously-skip-permissions`.
 Requires `--i-understand-danger` (or TTY `yes`) + sandbox warning
 (`docs/ISOLATION.md`). cursor/agy resume = honestly unsupported until
 vendors emit stable ids. `doctor` checks wiring presence, not live behavior.
-Windows: detached `cmd.exe` wrappers linger ~60s; kills report immediately.
+Windows: native `.exe` binaries launch directly via `resolveHarnessExe` with `shell: false` (exact PID tracking, immediate unbuffered stdio); legacy `.cmd` shims route safely through `resolveShellShot`.
 
 ### 1.7 Extension points (where the plane hooks in)
 

@@ -8,6 +8,13 @@ Retire legacy compatibility layers, enforce --lead auto, require managed AI codi
 - **Require managed AI harnesses**: Removed unmanaged `generic` driver support across runtime, contracts, CLI, and web UI. Supported harness drivers are strictly the 6 installed AI coding harnesses (`opencode`, `claude`, `codex`, `grok`, `antigravity`, `cursor`).
 - **Consolidate desktop into `crewbus web`**: Removed `apps/desktop/` and the Tauri build. Added a standalone, self-contained `GET /pair` route to `bin/lib/web.js` with inline zero-dependency QR code SVG generation and strict fragment-secret hygiene. Added `--open` flag to `crewbus web` to automatically launch the default browser across Windows, macOS, and Linux.
 - **Drop legacy compatibility layers**: Removed plaintext token reading and migration routines (enforcing salted hash tokens exclusively), removed legacy role backfills, and cleaned up pre-v2 AGENTS.md cleanups.
+- **Cross-harness integration & live binary verification**:
+  - Direct native execution on Windows via `resolveHarnessExe()`: resolves real binaries (`claude.exe`, `codex.exe`, `grok.exe`, `agy.exe`, `opencode.exe`) bypassing `cmd.exe` shell wrappers with `shell: false` for exact OS PID tracking, clean signal handling, and immediate unbuffered streaming stdio.
+  - Codex CLI (0.163.0) fixes: replaced syntax-error `-a never` flag with `-c approval_policy="never"`, added `--dangerously-bypass-hook-trust` to run project hooks unattended, added `--dangerously-bypass-approvals-and-sandbox` under `--auto`, and plumbed prompt through stdin.
+  - Zero-config dynamic MCP mounting in Codex: `spawn` dynamically passes `-c mcp_servers.crewbus.command="node"` and `-c mcp_servers.crewbus.args=[...]`, making CrewBus tools immediately available in Codex sessions without touching global user TOML configuration.
+  - Claude Code (2.1.306) pre-approvals: added `mcp__crewbus__*` to default `--allowedTools` so bus tools execute unattended without interactive confirmation stops.
+  - Grok CLI permissions: mapped `--auto` to `--permission-mode bypassPermissions` and `--always-approve`.
+  - Multi-harness dynamic model discovery: added live CLI probes for `grok models` and `agy models` alongside `opencode models` in `bin/lib/launch.js`.
 
 ## 10.0.11
 
