@@ -13,6 +13,20 @@ const MCP = fileURLToPath(new URL("../bin/crewbus-mcp.js", import.meta.url));
 // fresh tmp-board identities always mint their own tokens.
 delete process.env.CREWBUS_TOKEN;
 delete process.env.CREWBUS_AGENT;
+
+// Ensure an opencode harness runner is available on PATH for live spawn tests (CI safe)
+const shimDir = path.join(os.tmpdir(), "cb-harness-shims-" + process.pid);
+fs.mkdirSync(shimDir, { recursive: true });
+const nodeBin = process.execPath;
+if (process.platform === "win32") {
+  fs.writeFileSync(path.join(shimDir, "opencode.cmd"), `@echo off\r\n"${nodeBin}" -e "setInterval(() => {}, 1000)"\r\n`);
+} else {
+  const shimPath = path.join(shimDir, "opencode");
+  fs.writeFileSync(shimPath, `#!/bin/sh\nexec "${nodeBin}" -e 'setInterval(() => {}, 1000)'\n`);
+  fs.chmodSync(shimPath, 0o755);
+}
+process.env.PATH = `${shimDir}${path.delimiter}${process.env.PATH || ""}`;
+process.env.OPENCODE_EXE = "";
 import { buildSpawnTarget, buildSpawnPrompt, buildCrewContext, buildRespawnTarget, buildRespawnBrief, extractHarnessSessionId, isPidStale, readWorkerSession, syncWorkerSession, workerStatus, bootWorker, pidStartTime, parsePsEtime, probeOpencodeStorage, resolveOpencodeExe } from "../bin/lib/spawn.js";
 import { mergeAgentDoc } from "../bin/lib/identity.js";
 import { boardSnapshot } from "../bin/lib/web.js";
@@ -1039,6 +1053,8 @@ try {
 }
 check("init: unknown harness rejected", unknownFails);
 fs.rmSync(bad.p, { recursive: true, force: true });
+
+try { fs.rmSync(shimDir, { recursive: true, force: true }); } catch {}
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
