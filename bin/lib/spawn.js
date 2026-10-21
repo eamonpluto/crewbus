@@ -445,6 +445,7 @@ export function provisionAutoLead(d, opts) {
 // callers fall back to the shim invocation they always used.
 let _opencodeExe = undefined; // undefined = unresolved; string | null after
 export function resolveOpencodeExe() {
+  if (process.env.OPENCODE_EXE !== undefined) return process.env.OPENCODE_EXE || null;
   if (_opencodeExe !== undefined) return _opencodeExe;
   _opencodeExe = null;
   try {

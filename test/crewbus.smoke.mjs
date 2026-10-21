@@ -8,6 +8,22 @@ import { fileURLToPath } from "node:url";
 const CLI = fileURLToPath(new URL("../bin/crewbus.js", import.meta.url));
 const board = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".smoke-test-board");
 fs.rmSync(board, { recursive: true, force: true });
+fs.mkdirSync(board, { recursive: true });
+
+// Ensure an opencode harness runner is available on PATH for live spawn tests (CI safe)
+const shimDir = path.join(board, "shims");
+fs.mkdirSync(shimDir, { recursive: true });
+const nodeBin = process.execPath;
+if (process.platform === "win32") {
+  fs.writeFileSync(path.join(shimDir, "opencode.cmd"), `@echo off\r\n"${nodeBin}" -e "setInterval(() => {}, 1000)"\r\n`);
+} else {
+  const shimPath = path.join(shimDir, "opencode");
+  fs.writeFileSync(shimPath, `#!/bin/sh\nexec "${nodeBin}" -e 'setInterval(() => {}, 1000)'\n`);
+  fs.chmodSync(shimPath, 0o755);
+}
+process.env.PATH = `${shimDir}${path.delimiter}${process.env.PATH || ""}`;
+process.env.OPENCODE_EXE = "";
+
 // Test env hygiene: strip operator identity leaks (CREWBUS_TOKEN/AGENT) so
 // fresh tmp-board identities always mint their own tokens.
 delete process.env.CREWBUS_TOKEN;
@@ -302,7 +318,10 @@ check("spawn-status --json structured", Array.isArray(stJson) && stJson[0].name 
 check("spawn-status unknown name", run(["spawn-status", "--to", "ghost-st"]).includes("unknown"));
 check("spawn-status --all lists workers", run(["spawn-status", "--all"]).includes("st1"));
 try {
-  if (stJson[0].pid) execFileSync("taskkill", ["/PID", String(stJson[0].pid), "/F"], { stdio: "ignore" });
+  if (stJson[0].pid) {
+    if (process.platform === "win32") execFileSync("taskkill", ["/PID", String(stJson[0].pid), "/T", "/F"], { stdio: "ignore" });
+    else execFileSync("kill", ["-9", String(stJson[0].pid)], { stdio: "ignore" });
+  }
 } catch {}
 // spawn-kill: the kill switch (closing the terminal does NOT stop detached workers)
 run(["spawn", "--from", "alice", "--harness", "opencode", "--to", "kk1", "--body", "x"]);
