@@ -219,12 +219,11 @@ crewbus doctor</pre>
 
 <section data-page="apps" hidden><div class="w">
   <h2>Web dashboard and mobile control plane.</h2>
-  <p class="sub">Run live crews from a native app, then approve worker actions from your phone. Everything stays on your machines.</p>
+  <p class="sub">Run live crews from your browser, then approve worker actions from your phone. Everything stays on your machines.</p>
   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
-    <div class="card"><h3>CrewBus Desktop <span class="tag">v0.1.23</span></h3><p>A native GUI built on Tauri v2. It supervises an isolated sidecar on <code>127.0.0.1</code>, with zero cloud dependency.</p>
-      <ul><li>Sidecar supervisor with auto-restart and port recovery</li><li>Fleet inspector: terminate workers live, with an Undo toast</li><li>Multi-harness launcher with a context-sensitive model selector</li><li>Briefs view: one row per fan-out with gathered threads; data-age + STALE banner</li><li>One-click QR code to pair the mobile companion</li></ul>
-      <div class="dl"><a class="btn" href="https://github.com/eamonpluto/crewbus/releases/download/desktop-v0.1.23/CrewBus_0.1.23_x64-setup.exe">Windows</a><a class="btn" href="https://github.com/eamonpluto/crewbus/releases/download/desktop-v0.1.23/CrewBus_0.1.23_aarch64.dmg">macOS (Apple silicon)</a><a class="btn" href="https://github.com/eamonpluto/crewbus/releases/download/desktop-v0.1.23/CrewBus_0.1.23_amd64.AppImage">Linux</a></div>
-      <a href="https://github.com/eamonpluto/crewbus/releases/tag/desktop-v0.1.23">All release assets (.msi, .deb, .rpm)</a></div>
+    <div class="card"><h3>CrewBus Web <span class="tag">standalone</span></h3><p>A zero-dependency dashboard served directly by the CLI on <code>127.0.0.1</code>, with zero cloud dependency.</p>
+      <ul><li>Instant browser launch with <code>crewbus web --open</code></li><li>Fleet inspector: terminate workers live, with an Undo toast</li><li>Multi-harness launcher with a context-sensitive model selector</li><li>Briefs view: one row per fan-out with gathered threads; data-age + STALE banner</li><li>One-click QR code at <code>/pair</code> to pair the mobile companion</li></ul>
+      <div style="margin-top:16px"><code style="padding:8px 12px;display:inline-block">crewbus web --open</code></div></div>
     <div class="card"><h3>CrewBus Mobile <span class="tag t">preview</span></h3><p>A companion built on React Native and Expo. Pair with your web dashboard or relay by scanning a QR code, without exposing root credentials.</p>
       <ul><li>Per-device credentials with narrow scopes</li><li>Approve or deny worker shell calls from anywhere</li><li>Briefs screen: one row per fan-out, tap for its thread; triage grouped by brief</li><li>Foreground watcher: approvals and dead workers raise an in-app alert + buzz</li><li>Offline outbox: queued actions retry when you tap</li><li>Launch card with dynamic model selection</li></ul>
       <div class="dl"><a class="btn" href="https://expo.dev/artifacts/eas/clk0vyzypxygmxamqdpzhiib_2gggfvzsu053id9spg.apk">Android APK</a><a class="btn ghost" href="https://expo.dev/accounts/eamonpluto/projects/crewbus-mobile/builds/885a36dc-1689-4345-9274-6e31318b760f">EAS build</a></div>
