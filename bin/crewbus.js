@@ -363,14 +363,7 @@ function ensureSender(root, agent, token) {
     writeAgentHashed(path.join(root, "agents", agent + ".json"), rec);
     return { created: true, token: fresh };
   }
-  if (!agentTokenMatches(rec, token)) throw new Error(\`bad token for "\${agent}" (pass token or set CREWBUS_TOKEN)\`);
-    const salt = newSalt();
-    rec.tokenHash = hashToken(String(token), salt);
-    rec.salt = salt;
-    delete rec.token;
-    writeAgentHashed(path.join(root, "agents", agent + ".json"), rec);
-    return { created: false };
-  }
+
   if (!agentTokenMatches(rec, token)) throw new Error(\`bad token for "\${agent}" (pass token or set CREWBUS_TOKEN)\`);
   return { created: false };
 }

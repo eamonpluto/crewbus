@@ -109,7 +109,6 @@ function agentTokenMatches(rec, token) {
       return false;
     }
   }
-  if (rec.token) return timingSafeEqual(String(token), String(rec.token));
   return false;
 }
 
@@ -135,7 +134,7 @@ function resolveToken(args) {
 }
 
 // First send as a new name mints its record + token (first-claim-wins).
-// Stores only a salted hash; legacy plaintext migrates on successful auth.
+// Stores only a salted hash.
 function ensureSender(root, agent, token) {
   const rec = readAgent(root, agent);
   if (!rec) {
@@ -145,7 +144,7 @@ function ensureSender(root, agent, token) {
     writeAgentHashed(path.join(root, "agents", agent + ".json"), { name: agent, firstSeen: now, lastSeen: now, tokenHash: hashToken(fresh, salt), salt });
     return { created: true, token: fresh };
   }
-  if (!rec.tokenHash && !rec.token) {
+  if (!rec.tokenHash) {
     const fresh = mintToken();
     const salt = newSalt();
     rec.tokenHash = hashToken(fresh, salt);
@@ -154,15 +153,7 @@ function ensureSender(root, agent, token) {
     writeAgentHashed(path.join(root, "agents", agent + ".json"), rec);
     return { created: true, token: fresh };
   }
-  if (rec.token && !rec.tokenHash) {
-    if (!agentTokenMatches(rec, token)) throw new Error(`bad token for "${agent}" (pass token or set CREWBUS_TOKEN)`);
-    const salt = newSalt();
-    rec.tokenHash = hashToken(String(token), salt);
-    rec.salt = salt;
-    delete rec.token;
-    writeAgentHashed(path.join(root, "agents", agent + ".json"), rec);
-    return { created: false };
-  }
+
   if (!agentTokenMatches(rec, token)) throw new Error(`bad token for "${agent}" (pass token or set CREWBUS_TOKEN)`);
   return { created: false };
 }
