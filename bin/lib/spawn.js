@@ -22,6 +22,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { execFileSync, spawn } from "node:child_process";
 import { fail, readJson, writeJson, writeExclusiveJson, cleanBranchPrefix } from "./store.js";
@@ -449,8 +450,6 @@ export function resolveOpencodeExe() {
   if (_opencodeExe !== undefined) return _opencodeExe;
   _opencodeExe = null;
   try {
-    // where/which are real binaries — no shell was ever needed for this
-    // probe (execFileSync + args + shell:true was DEP0190 on modern Node).
     const probe = process.platform === "win32" ? "where" : "which";
     const out = execFileSync(probe, ["opencode"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 10000 });
     for (const raw of String(out || "").split(/\r?\n/)) {
@@ -473,6 +472,59 @@ export function resolveOpencodeExe() {
     }
   } catch {}
   return _opencodeExe;
+}
+
+const _harnessExeCache = {};
+export function resolveHarnessExe(harness) {
+  const envKey = `${harness.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_EXE`;
+  if (process.env[envKey] !== undefined) return process.env[envKey] || null;
+  if (harness === "opencode") return resolveOpencodeExe();
+  if (_harnessExeCache[harness] !== undefined) return _harnessExeCache[harness];
+  _harnessExeCache[harness] = null;
+  const binName = harness === "antigravity" ? "agy" : harness;
+  try {
+    const probe = process.platform === "win32" ? "where" : "which";
+    const out = execFileSync(probe, [binName], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 10000 });
+    for (const raw of String(out || "").split(/\r?\n/)) {
+      const shim = raw.trim();
+      if (!shim) continue;
+      if (process.platform === "win32") {
+        if (/\.exe$/i.test(shim)) {
+          _harnessExeCache[harness] = shim;
+          break;
+        }
+        let txt = "";
+        try { txt = fs.readFileSync(shim, "utf8"); } catch { continue; }
+        const m = /"([^"\n]*?\.exe)"/i.exec(txt);
+        if (m) {
+          const target = path.resolve(m[1].replace(/%~?dp0%/gi, path.dirname(shim)).replace(/%dp0%/gi, path.dirname(shim)));
+          if (fs.existsSync(target) && fs.statSync(target).isFile()) {
+            _harnessExeCache[harness] = target;
+            break;
+          }
+        }
+        const mJs = /"([^"\n]*?\.js)"/i.exec(txt);
+        if (mJs) {
+          const jsPath = path.resolve(mJs[1].replace(/%~?dp0%/gi, path.dirname(shim)).replace(/%dp0%/gi, path.dirname(shim)));
+          const pkgDir = path.dirname(path.dirname(jsPath));
+          for (const cand of [
+            path.join(pkgDir, "node_modules", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe"),
+            path.join(path.dirname(pkgDir), "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe"),
+          ]) {
+            if (fs.existsSync(cand) && fs.statSync(cand).isFile()) {
+              _harnessExeCache[harness] = cand;
+              break;
+            }
+          }
+          if (_harnessExeCache[harness]) break;
+        }
+      } else {
+        _harnessExeCache[harness] = shim;
+        break;
+      }
+    }
+  } catch {}
+  return _harnessExeCache[harness];
 }
 
 export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt, sessionId }) { // line 4114
@@ -499,7 +551,8 @@ export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowToo
     // --output-format json reports session_id for later resume (same as above).
     // --session-id pre-assigns it, so even a mid-run kill leaves a resumable
     // id on record (verified in CLI docs; needs a valid UUID).
-    const cargs = ["-p", "--output-format", "json", "--allowedTools", allowTools || "Read,Edit,Write,Bash"];
+    // Include mcp__crewbus__* in default allowedTools so bus tools can be invoked.
+    const cargs = ["-p", "--output-format", "json", "--allowedTools", allowTools || "Read,Edit,Write,Bash,mcp__crewbus__*"];
     if (sessionId) cargs.push("--session-id", sessionId);
     if (model) cargs.push("--model", model);
     if (maxTurns !== undefined) cargs.push("--max-turns", String(maxTurns));
@@ -509,22 +562,30 @@ export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowToo
   if (harness === "codex") {
     // codex exec has no --file attach: the positional message points at the
     // brief file and the worker reads it with its own tools. Read-only is
-    // the exec default, so workspace-write + never makes a worker that can
-    // actually work unattended; --skip-git-repo-check allows non-repo cwds.
+    // the exec default, so workspace-write makes a worker that can work unattended;
+    // -c approval_policy="never" avoids unexpected argument '-a' failure in codex exec;
+    // --dangerously-bypass-hook-trust allows .codex/hooks.json to execute unattended;
+    // --skip-git-repo-check allows non-repo cwds.
     // --json prints JSONL events: the first is thread.started {thread_id},
     // which shares the session-id namespace (session_id: ThreadId in core)
     // and is what `codex exec resume <id>` accepts — captured for respawn.
-    const cargs = ["exec", "--json", "--sandbox", auto ? "danger-full-access" : "workspace-write", "-a", "never", "--skip-git-repo-check", "-C", cwd];
+    const cargs = ["exec", "--json", "--sandbox", auto ? "danger-full-access" : "workspace-write", "-c", "approval_policy=\"never\"", "--dangerously-bypass-hook-trust", "--skip-git-repo-check", "-C", cwd];
+    const mcpPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../crewbus-mcp.js");
+    if (fs.existsSync(mcpPath)) {
+      const normMcp = mcpPath.replace(/\\/g, "/");
+      cargs.push("-c", 'mcp_servers.crewbus.command="node"', "-c", `mcp_servers.crewbus.args=["${normMcp}"]`);
+    }
     if (model) cargs.push("--model", model);
+    if (auto) cargs.push("--dangerously-bypass-approvals-and-sandbox");
     cargs.push(quoteFree(`you are '${name}': read the brief at ${promptPath} and follow it`));
-    return { exe: "codex", args: cargs, shell: true };
+    return { exe: "codex", args: cargs, shell: true, stdinPath: promptPath };
   }
   if (harness === "grok") {
     // grok.exe is a real binary: no shell, argv passes verbatim.
     // --output-format json emits sessionId for later resume (see above).
     // -s pre-assigns it (create-only UUID): the id is knowable at boot,
     // before the run emits anything — the mid-run-kill case.
-    const gargs = ["--prompt-file", promptPath, "--cwd", cwd, "--output-format", "json", "--permission-mode", "auto", "--max-turns", String(maxTurns === undefined ? 50 : maxTurns)];
+    const gargs = ["--prompt-file", promptPath, "--cwd", cwd, "--output-format", "json", "--permission-mode", auto ? "bypassPermissions" : "auto", "--max-turns", String(maxTurns === undefined ? 50 : maxTurns)];
     if (sessionId) gargs.push("-s", sessionId);
     if (model) gargs.push("-m", model);
     if (auto) gargs.push("--always-approve");
@@ -973,7 +1034,14 @@ export function launchWorkerProcess({ exe, args, shell, cwd, env, logPath, stdin
         inFd = fs.openSync(stdinPath, "r");
         stdio[0] = inFd;
       }
-      const shot = resolveShellShot(exe, args || [], shell);
+      const direct = resolveHarnessExe(exe);
+      let targetExe = exe;
+      let targetShell = shell;
+      if (direct) {
+        targetExe = direct;
+        targetShell = false;
+      }
+      const shot = resolveShellShot(targetExe, args || [], targetShell);
       child = spawn(shot.exe, shot.args, { cwd, env, detached: true, stdio, shell: shot.shell, windowsHide: true, ...shot.extraOptions });
     } catch (e) {
     try { fs.closeSync(logFd); } catch {}

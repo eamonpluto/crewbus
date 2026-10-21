@@ -181,27 +181,72 @@ export function refreshDiscoveredModels(timeoutMs = 15000) {
       const { execFile } = await import("node:child_process");
       const { promisify } = await import("node:util");
       const execFileAsync = promisify(execFile);
-      const { stdout } = await execFileAsync("opencode", ["models"], {
-        timeout: timeoutMs,
-        shell: isWin,
-      });
-      const rawLines = String(stdout || "").split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l && !l.startsWith("⠀") && !l.startsWith("█") && !l.includes(" "));
-      if (rawLines.length > 0) {
-        const opencodeModels = rawLines.map((m) => {
-          const parts = m.split("/");
-          const name = parts[1] || parts[0];
-          const tier = /pro|r1|opus|3\.7|o3|o1|gpt-5|grok-4|max/i.test(m)
-            ? "frontier"
-            : /haiku|flash|mini|nano|free/i.test(m)
-              ? "fast"
-              : "standard";
-          return { id: m, label: `${name} (${parts[0]})`, tier };
+
+      // opencode model discovery
+      try {
+        const { stdout } = await execFileAsync("opencode", ["models"], {
+          timeout: timeoutMs,
+          shell: isWin,
         });
-        if (!_cachedDiscoveredModels) _cachedDiscoveredModels = {};
-        _cachedDiscoveredModels.opencode = opencodeModels;
-      }
+        const rawLines = String(stdout || "").split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l && !l.startsWith("⠀") && !l.startsWith("█") && !l.includes(" "));
+        if (rawLines.length > 0) {
+          const opencodeModels = rawLines.map((m) => {
+            const parts = m.split("/");
+            const name = parts[1] || parts[0];
+            const tier = /pro|r1|opus|3\.7|o3|o1|gpt-5|grok-4|max/i.test(m)
+              ? "frontier"
+              : /haiku|flash|mini|nano|free/i.test(m)
+                ? "fast"
+                : "standard";
+            return { id: m, label: `${name} (${parts[0]})`, tier };
+          });
+          if (!_cachedDiscoveredModels) _cachedDiscoveredModels = {};
+          _cachedDiscoveredModels.opencode = opencodeModels;
+        }
+      } catch {}
+
+      // grok model discovery
+      try {
+        const { stdout: gOut } = await execFileAsync("grok", ["models"], {
+          timeout: timeoutMs,
+          shell: isWin,
+        });
+        const gLines = String(gOut || "").split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l.startsWith("*") || l.startsWith("-"))
+          .map((l) => l.replace(/^[*-\s]+/, "").split(" ")[0].trim())
+          .filter(Boolean);
+        if (gLines.length > 0) {
+          if (!_cachedDiscoveredModels) _cachedDiscoveredModels = {};
+          _cachedDiscoveredModels.grok = gLines.map((id) => ({
+            id,
+            label: `${id.charAt(0).toUpperCase() + id.slice(1)} (Discovered)`,
+            tier: /4\.[6-9]|5/i.test(id) ? "frontier" : "standard",
+          }));
+        }
+      } catch {}
+
+      // antigravity model discovery
+      try {
+        const { stdout: aOut } = await execFileAsync("agy", ["models"], {
+          timeout: timeoutMs,
+          shell: isWin,
+        });
+        const aLines = String(aOut || "").split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l && !l.toLowerCase().startsWith("fetching") && l.includes("\t"))
+          .map((l) => {
+            const [id, label] = l.split("\t");
+            const tier = /high|pro|opus|4/i.test(label || id) ? "frontier" : /low|lite|mini/i.test(label || id) ? "fast" : "standard";
+            return { id: id.trim(), label: (label || id).trim(), tier };
+          });
+        if (aLines.length > 0) {
+          if (!_cachedDiscoveredModels) _cachedDiscoveredModels = {};
+          _cachedDiscoveredModels.antigravity = aLines;
+        }
+      } catch {}
     } catch {
       // Ignore discovery errors — static catalog remains available
     } finally {
