@@ -17,7 +17,8 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 echo "==> Installing crewbus globally via npm..."
-npm install -g crewbus
+# Private package: npm must be authenticated to GitHub Packages (read:packages).
+npm install -g @eamonpluto/crewbus
 
 echo "==> Successfully installed crewbus."
 echo ""

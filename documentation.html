@@ -296,9 +296,9 @@ crewbus doctor                              # confirm all-ok</code></pre>
 <p><code>npm test</code> runs 20 suites — smoke + harness + compact + tokenfile + digest + control-plane + launch + web-launch + pair-api + web-panel + web-approot + client-runtime + runtime-wiring + mobile-client + approvals (×3) + fault-injection + integration — all green. <code>npm run bench</code> asserts scale budgets and <code>npm run bench:load</code> the synthetic 10–10k load test separately. <code>sync-embeds.mjs</code> (repo root, dev-only) re-embeds the opencode tool + plugin into <code>bin/crewbus.js</code> for global installs — run it after editing either file (CI enforces <code>--check</code>).</p>
 
 <h2 id="publish">15 · Install &amp; publish</h2>
-<pre><code>npm i -g crewbus     # global install
+<pre><code>npm i -g @eamonpluto/crewbus     # private GitHub Packages (read:packages token)
 crewbus init --harness &lt;name&gt; --portable   # portable wiring
-# maintainer: npm test && npm publish   (needs npm login + 2FA approval)</code></pre>
+# maintainer: npm test, then run the "Publish to GitHub Packages" workflow</code></pre>
 
 <h2 id="changes">16 · Changelog</h2>
 <ul>

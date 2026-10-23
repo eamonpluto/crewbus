@@ -9,7 +9,7 @@ this.)
 ## 1. Install (2 min)
 
 ```powershell
-npm i -g crewbus
+npm i -g @eamonpluto/crewbus
 cd <project>
 crewbus init --harness <opencode|claude|codex|antigravity|grok|cursor>
 crewbus doctor   # confirm all-ok before anything else

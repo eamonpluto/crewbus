@@ -11,7 +11,7 @@ The plugin shells out to the installed binaries (no absolute paths, so the
 bundle stays marketplace-portable):
 
 ```sh
-npm i -g crewbus   # provides crewbus-hook + crewbus-mcp
+npm i -g @eamonpluto/crewbus   # provides crewbus-hook + crewbus-mcp
 ```
 
 Requires `crewbus >= 6.3.0` (the `wait` subcommand).

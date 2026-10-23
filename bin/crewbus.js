@@ -6760,7 +6760,7 @@ Setup:
   crewbus update [--check] [--yes] [--version x.y.z]
     self-update the global npm install to the registry latest
     (--check reports only; needs --yes off-TTY; runs the published
-    install scripts — same trust as npm i -g crewbus)
+    install scripts — same trust as npm i -g @eamonpluto/crewbus)
 
 Identity (first claim wins, token after that):
   crewbus register --from <you> [--session <opencode-session-id>] [--token <t>] [--expires-in <dur>] [--service]
@@ -7848,7 +7848,7 @@ function cmdUpdate(args) {
     fail(`--version must be a plain x.y.z version (got "${wantRaw}") — no tags, URLs, or ranges`);
   }
   const own = ownPackage();
-  if (!own) fail("cannot determine the installed package (no package.json next to the CLI) — reinstall with: npm i -g crewbus");
+  if (!own) fail("cannot determine the installed package (no package.json next to the CLI) — reinstall with: npm i -g @eamonpluto/crewbus");
   try {
     if (fs.existsSync(path.join(own.dir, ".git"))) {
       fail(`running from a source checkout at ${own.dir} — update it with: git pull (npm would install the registry copy elsewhere; the global CLI is a separate install)`);
@@ -7863,7 +7863,7 @@ function cmdUpdate(args) {
   try {
     execFileSync("npm", ["--version"], { stdio: ["ignore", "pipe", "pipe"], timeout: 15000, shell: npmShell });
   } catch {
-    fail("npm was not found on PATH — install Node.js/npm first, or update manually: npm i -g crewbus@latest");
+    fail("npm was not found on PATH — install Node.js/npm first, or update manually: npm i -g @eamonpluto/crewbus@latest");
   }
   let latest = "";
   try {

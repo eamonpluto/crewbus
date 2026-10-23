@@ -1,5 +1,5 @@
 {
-  "name": "crewbus",
+  "name": "@eamonpluto/crewbus",
   "version": "10.0.12",
   "description": "Zero-dependency message bus for AI coding-agent crews: message another agent, inserted into context, just a tool call.",
   "type": "module",
@@ -39,6 +39,9 @@
   },
   "license": "MIT",
   "author": "eamonpluto",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/eamonpluto/crewbus.git"

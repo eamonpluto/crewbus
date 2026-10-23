@@ -18,8 +18,9 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "==> Installing crewbus globally via npm..." -ForegroundColor Cyan
+# Private package: npm must be authenticated to GitHub Packages (read:packages).
 try {
-    npm install -g crewbus
+    npm install -g @eamonpluto/crewbus
     Write-Host "==> Successfully installed crewbus." -ForegroundColor Green
     Write-Host ""
     Write-Host "Run 'crewbus web --open' to start the web dashboard." -ForegroundColor Cyan

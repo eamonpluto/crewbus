@@ -21,10 +21,11 @@ Node 18+ from anywhere:
 node $REPO/bin/crewbus.js <command>
 ```
 
-Or install globally:
+Or install globally from private GitHub Packages (authenticate npm with a
+token that has `read:packages` first):
 
 ```sh
-npm i -g crewbus
+npm i -g @eamonpluto/crewbus
 crewbus --help
 ```
 
@@ -550,7 +551,7 @@ Stop envelope is verified against the Claude, Codex, and grok-build docs
 Or install globally (enables portable `init --portable` wiring):
 
 ```powershell
-npm i -g crewbus
+npm i -g @eamonpluto/crewbus
 crewbus --help
 ```
 
@@ -673,7 +674,8 @@ primaries by weight (`serve --weight`, `crew survey`, `crew dispatch`
 
 ```powershell
 npm test          # 24 suites (smoke + harness + opencode-respawn + compact + tokenfile + digest + workbench + control-plane + launch + pair-api + web-launch + web-panel + web-approot + client-runtime + runtime-wiring + mobile-client + holds-quotas + grok-hooks + approval-protocol + approvals-init + approvals-web + fault-injection + integration), all must pass
-npm publish       # ships bin/ + opencode/ + docs (see "files" in package.json)
+# publish via GitHub Actions -> "Publish to GitHub Packages" (workflow_dispatch)
+# local fallback: npm publish (needs a write:packages token in NODE_AUTH_TOKEN)
 ```
 
 `sync-embeds.mjs` (repo root, dev-only) re-embeds
@@ -687,4 +689,4 @@ logic lives in `bin/lib/` (13 modules). See `docs/SPLIT.md` for the module
 map, dependency rules, and how to add a command.
 
 After publishing, projects can skip the checkout entirely:
-`npm i -g crewbus` then `crewbus init --harness <name> --portable`.
+`npm i -g @eamonpluto/crewbus` then `crewbus init --harness <name> --portable`.
