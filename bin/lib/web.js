@@ -2867,7 +2867,7 @@ export async function handleApiLaunch(d, body) {
         spawnOpts: coordSpawnOpts,
         from, subject: p.subject, body: p.body.trim(), rev, logDir,
         workers: res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })),
-        batch: res.batch, auto,
+        batch: res.batch, auto, authToken: token,
       });
     } catch (e) {
       coordinator = { action: "skipped", reason: `coordinator boot error: ${String((e && e.message) || e)}`, leadName: LEAD_NAME };

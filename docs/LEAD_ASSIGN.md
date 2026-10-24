@@ -47,8 +47,9 @@ crewbus spawn --from boss --count 3 --harness opencode --body "Implement feature
    - Workers from new bursts are transferred to the lead lane (`spawnedBy: "lead"`), preserving own-crew RBAC permissions for health tracking and `spawn-kill`.
 3. **Offboarded Safety**:
    - If the `lead` lane has been marked `offboarded: true` (deliberate teardown), auto-provisioning is skipped with a loud warning.
-4. **Boss Detachment**:
-   - If `from === "lead"`, auto-provisioning skips into self-bootstrap mode to prevent recursion.
+4. **No `--from lead` bypass**:
+   - Every `spawn` provisions or reuses the coordinator, even when the spawner is the `lead` lane itself. A standing coordinator is reused (never duplicated); if the lane exists without a live coordinator, the persistent coordinator is booted on that lane.
+   - When the sender is the lead lane, the spawner's authenticated token is persisted to `logs/lead.token` if the file is missing, so the booted coordinator can authenticate (the stored hash cannot recover the plaintext).
 5. **Lead Revive (`crewbus spawn --count 0`)**:
    - When the coordinator died (crash, reboot, budget reap), the crew still has
      its briefs/threads on the board — but nobody triaging. `--count 0` boots

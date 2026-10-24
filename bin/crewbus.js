@@ -3071,7 +3071,12 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
     });
   const isolateInfo = maybeIsolate(args, d.root);
   if ((worktreePrefix !== undefined || branchPrefix !== undefined) && !dry) assertGitCheckout(cwd);
-  const minted = ensureSender(d, from, resolveToken(args));
+  const providedToken = resolveToken(args);
+  const minted = ensureSender(d, from, providedToken);
+  // Auto-lead may need to hand the lead lane's plaintext token to a
+  // coordinator it is about to boot (the stored hash cannot recover it).
+  // Use the caller's token, or the one just minted on first claim.
+  const authToken = providedToken || (minted.created ? minted.token : undefined);
   authorize(d, from, "spawn", { toGroups: groupNames });
   touchAgent(d, from, { lastDir: process.cwd() });
   if (minted.created) console.log(`identity '${from}' claimed, token ${minted.token} (set CREWBUS_TOKEN=${minted.token})`);
@@ -3179,7 +3184,7 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
       from, subject, body: body.trim(), rev, logDir,
       workers: res ? res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })) : [],
       batch: res ? res.batch : undefined, crew: crewFor(recipients[0], leadTarget), workbench: wbFor(recipients[0]), auto,
-      budgetTokens: leadBudgetTokens, budgetMinutes: leadBudgetMinutes,
+      budgetTokens: leadBudgetTokens, budgetMinutes: leadBudgetMinutes, authToken,
     });
     if (provision.action === "minted" && provision.pid) {
       console.log(`auto-lead provisioned: minted lane '${provision.leadName}' (role lead — owns this crew), coordinator pid ${provision.pid} (persistent, ${coordHarness}) log ${provision.logPath} [board ${d.root}]`);

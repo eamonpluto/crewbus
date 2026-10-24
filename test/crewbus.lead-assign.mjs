@@ -75,6 +75,12 @@ check("coord prompt: needs-by + overdue discipline", cCoord.includes(`stamp --ne
 check("coord prompt: does the mission itself never", cCoord.includes("Never: change the workers' mission text") && cCoord.includes("redo workers' work"));
 check("coord prompt: unattended inheritance noted", cCoord.includes("respawns inherit it"));
 
+const cSelf = buildCoordinatorPrompt({
+  name: "lead", from: "lead", subject: "self", body: "SELF SPAWN",
+  cwd: cwdUnit, root: rootUnit,
+});
+check("coord prompt: sender==lead avoids DM-to-self guidance", cSelf.includes("spawned from the 'lead' lane itself") && !cSelf.includes("send --from lead --to lead"));
+
 // ---------------------------------------------------------------------------
 // Unit: crew context names the lead lane
 // ---------------------------------------------------------------------------
@@ -124,11 +130,30 @@ check("provision: reused burst still transfers ownership", prov2.transferred ===
 const leadDocU2 = JSON.parse(fs.readFileSync(path.join(dUnit.agents, "lead.json"), "utf8"));
 check("provision: token untouched on reuse", loadTokenFile(dUnit.root, "lead") === prov.token && leadDocU2.tokenHash === leadDocU.tokenHash);
 
+// No `--from lead` bypass: the call must provision or reuse the coordinator,
+// never take the old self-bootstrap skip. The lane already exists here and
+// may have a live coordinator, so "reused" and "minted" are both valid; a
+// coordinator boot failure is the only remaining skip path.
 const senderIsLead = provisionAutoLead(dUnit, {
   spawnOpts: { harness: "opencode", root: dUnit.root, cwd: dirUnit },
-  from: "lead", workers: [], batch: "batch-self", logDir: logDirUnit,
+  from: "lead", authToken: prov.token, workers: [], batch: "batch-self", logDir: logDirUnit,
 });
-check("provision: sender==lead skips into bootstrap mode", senderIsLead.action === "skipped" && /sender IS the lead/.test(senderIsLead.reason));
+check("provision: sender==lead never takes the old bypass", !/sender IS the lead/.test(String(senderIsLead.reason || "")));
+check("provision: sender==lead provisions or reuses the coordinator", senderIsLead.action !== "skipped" || /coordinator boot failed/.test(String(senderIsLead.reason || "")));
+
+// A board where the lead lane is the spawner from the start: provisioning
+// mints the lane and boots the persistent coordinator instead of skipping.
+const dirSelfSpawn = fs.mkdtempSync(path.join(os.tmpdir(), "cb-leadself-"));
+const dSelfSpawn = ensureBoard(path.join(dirSelfSpawn, ".crewbus"));
+const selfSpawn = provisionAutoLead(dSelfSpawn, {
+  spawnOpts: { harness: "opencode", root: dSelfSpawn.root, cwd: dirSelfSpawn },
+  from: LEAD_NAME, subject: "self", body: "SELF-LEAD MISSION", workers: [], batch: "batch-self-fresh",
+  logDir: path.join(dSelfSpawn.root, "logs"),
+});
+check("provision: from lead on a fresh lane mints the lane (no bypass)", selfSpawn.action === "minted" && selfSpawn.leadName === "lead");
+check("provision: from lead persists the coordinator token file", !!loadTokenFile(dSelfSpawn.root, "lead"));
+const selfPromptFile = fs.readdirSync(path.join(dSelfSpawn.root, "logs")).find((f) => f.startsWith("lead-") && f.endsWith(".prompt.md"));
+check("provision: self-boss coordinator prompt avoids DM-to-self", !!selfPromptFile && fs.readFileSync(path.join(dSelfSpawn.root, "logs", selfPromptFile), "utf8").includes("spawned from the 'lead' lane itself"));
 
 // Lead-revive (C9): an EMPTY roster still provisions/boots the coordinator
 // (that is exactly what `spawn --count 0` exercises end-to-end).
@@ -248,6 +273,10 @@ if (!hasOc) {
 let removedUnit = false;
 for (let i = 0; i < 20; i++) {
   try { fs.rmSync(dirUnit, { recursive: true, force: true }); removedUnit = true; break; }
+  catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200); }
+}
+for (let i = 0; i < 20; i++) {
+  try { fs.rmSync(dirSelfSpawn, { recursive: true, force: true }); break; }
   catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200); }
 }
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Removed the `spawn --from lead` bypass**: every spawn now provisions or reuses the auto-lead coordinator, even when the spawner is the `lead` lane. A standing coordinator is reused (never duplicated); a lane with no live coordinator gets the persistent coordinator booted on it. When the sender is the lead lane, `cmdSpawn`/web launch pass the authenticated token so `logs/lead.token` is persisted for the coordinator (the stored hash cannot recover the plaintext). Coordinator prompts for a self-lane spawn no longer tell the coordinator to DM itself (aggregate goes to the board instead); docs/`LEAD_ASSIGN.md` §3.4 updated, tests cover the no-bypass path.
+
 ## 10.0.12
 
 Retire legacy compatibility layers, enforce --lead auto, require managed AI coding harnesses, and consolidate desktop into standalone crewbus web.

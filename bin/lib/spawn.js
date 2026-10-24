@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { execFileSync, spawn } from "node:child_process";
 import { fail, readJson, writeJson, writeExclusiveJson, cleanBranchPrefix } from "./store.js";
-import { touchAgent, readAgent, writeAgentFile, assertMintWon, mintToken, newSalt, hashToken } from "./identity.js";
+import { touchAgent, readAgent, writeAgentFile, assertMintWon, mintToken, newSalt, hashToken, agentTokenMatches } from "./identity.js";
 import { readVisible, isCheckpoint } from "./mail.js";
 import { saveTokenFile, loadTokenFile } from "./tokenfile.js";
 import { shellChildSpec, shellChildOptions } from "./kidproc.js";
@@ -275,13 +275,20 @@ export function buildCrewContext({ name, from, lead: leadTarget, subject, groups
 export function buildCoordinatorPrompt({ name, from, subject, body, batch, workers, crew, cwd, root, auto, workbench, budgetTokens, budgetMinutes }) {
   const boss = String(from || "boss");
   const me = String(name || LEAD_NAME);
+  // No `--from lead` bypass exists any more: every spawn provisions/reuses
+  // the coordinator, so the spawner can be the lead lane itself. Avoid
+  // telling that coordinator to DM its own lane.
+  const selfBoss = boss === me;
+  const aggregateTarget = selfBoss ? "on the board" : `to ${boss}`;
   const ws = Array.isArray(workers) ? workers.filter((w) => w && w.name) : [];
   const crewLines = Array.isArray(crew) ? crew.map((l) => String(l)).filter((s) => s.trim() !== "") : [];
   const wbLines = Array.isArray(workbench) ? workbench.map((l) => String(l)).filter((s) => s.trim() !== "") : [];
   const today = new Date().toISOString().slice(0, 10);
   return [
     `You are '${me}' on crewbus (board: ${root}) — the auto-provisioned lead for this crew${batch ? ` (batch ${batch})` : ""}.`,
-    `${boss} spawned the crew as boss and left the acting lead seat to you from here on. This is an infrastructure/coordinator role, not a do-the-task role.`,
+    selfBoss
+      ? `This crew was spawned from the '${me}' lane itself; the acting lead seat is yours from here on. This is an infrastructure/coordinator role, not a do-the-task role.`
+      : `${boss} spawned the crew as boss and left the acting lead seat to you from here on. This is an infrastructure/coordinator role, not a do-the-task role.`,
     ``,
     `Mission the crew is working (from ${boss}${subject ? ` — ${subject}` : ""}):`,
     String(body || "(original brief; see each worker's prompt file under logs/)"),
@@ -291,7 +298,7 @@ export function buildCoordinatorPrompt({ name, from, subject, body, batch, worke
     ...(wbLines.length > 0 ? ["Workbench (lessons + artifacts from prior work on this board):", ...wbLines, ""] : []),
     `Your identity: token saved at logs/${me}.token — read it into CREWBUS_TOKEN at the top of each shell that sends (PowerShell: \$env:CREWBUS_TOKEN = Get-Content .crewbus/logs/${me}.token). All sends run as --from ${me}. Never re-register over your own name — re-read the token file after any restart or compaction.`,
     ...(budgetTokens !== undefined || budgetMinutes !== undefined
-      ? [`Budget mandate:${budgetTokens !== undefined ? ` ~${budgetTokens} est. tokens total${budgetMinutes !== undefined ? " and" : ""}` : ""}${budgetMinutes !== undefined ? ` ${budgetMinutes} wall-clock minutes total` : ""} — coordinate within it: batch your polls (listen --timeout 120000), digest-read first, and post the aggregate to ${boss} BEFORE the budget runs out (a budgeted coordinator gets reaped at the cap).`, ``]
+      ? [`Budget mandate:${budgetTokens !== undefined ? ` ~${budgetTokens} est. tokens total${budgetMinutes !== undefined ? " and" : ""}` : ""}${budgetMinutes !== undefined ? ` ${budgetMinutes} wall-clock minutes total` : ""} — coordinate within it: batch your polls (listen --timeout 120000), digest-read first, and post the aggregate ${aggregateTarget} BEFORE the budget runs out (a budgeted coordinator gets reaped at the cap).`, ``]
       : []),
     ``,
     `Jobs, in order:`,
@@ -300,12 +307,16 @@ export function buildCoordinatorPrompt({ name, from, subject, body, batch, worke
     `2. Keep the board alive — poll in a loop, cheaply: crewbus listen --from ${me} --timeout 120000 (blocks until a DM arrives; re-issue after each wake; fall back to sleep 60 + inbox --digest when listen is unavailable). Triage as DMs land: unblock, dedupe sibling lanes, point a worker at its sibling's finding instead of redoing it.`,
     `3. Watch crew health: crewbus spawn-status --all. A worker that exited without a final is a lane to close: prefer the catch-up path first (crewbus respawn --from ${me} --to <name>${ws.some((w) => w.harness === "opencode") ? " (--fresh when its session id was never captured)" : ""}${auto ? " --auto (this crew was spawned fully-unattended; respawns inherit it)" : ""}); fall back to a fresh spawn (crewbus spawn --from ${me} --to <name> --persistent ... same mission text) only when respawn data is gone. Respawns need your lead token loaded (owned-crew). Cap: 2 respawn attempts per lane before DM'ing the boss with the stall evidence.`,
     `4. Approvals: a worker's "approval:" ask (destructive/irreversible/out-of-scope) waits on your verdict — answer by --reply on its thread within the ask's stated timeout (crewbus send --from ${me} --to <worker> --reply <id> --body "approved ..." | "denied: <reason>; try-instead ..."). Silence beyond the ask's timeout reads as deny, fail-closed. Secrets/exfiltration/isolation-escape asks are NEVER approvable — deny and flag the boss.`,
-    `5. Scope disputes or mission changes: DM the boss — crewbus send --from ${me} --to ${boss} --priority high --subject "..." (the boss may not have a session open; the DM waits on the board by design — that is fine, keep working conservatively meanwhile). Same lane for milestones: batch started, lane closed, blocked, final aggregate.`,
+    selfBoss
+      ? `5. Scope disputes or mission changes: the spawner shares the '${me}' lane — record the open question on the board (artifact/lesson) and keep working conservatively; surface it in your aggregate. Same lane for milestones: batch started, lane closed, blocked, final aggregate.`
+      : `5. Scope disputes or mission changes: DM the boss — crewbus send --from ${me} --to ${boss} --priority high --subject "..." (the boss may not have a session open; the DM waits on the board by design — that is fine, keep working conservatively meanwhile). Same lane for milestones: batch started, lane closed, blocked, final aggregate.`,
     `6. Long promises get deadlines: when you push a task or a lane's window, stamp --needs-by <duration> on the DM; chase inbox rows marked [OVERDUE] explicitly; when a lane stalls, surface it to the boss rather than silently absorbing it.`,
     `7. Verify before relaying: worker claims about files/output get spot-checked against the board and ${cwd} when reasonable; do not relay a claim you contradict. Record what you verified in the thread.`,
     ``,
     `Never: change the workers' mission text (the mission above is the boss's words — pass it through verbatim), redo workers' work yourself, paste secrets (reference file paths), or micro-manage strategy. Peer-coordination belongs to the peers; you own health, verdicts, and the clock.`,
-    `Exit: when every lane has a final report or a deliberate stand-down, send the aggregate to the boss (crewbus send --from ${me} --to ${boss} --subject "result: ..." — include outcome, lanes closed, respawn count, artifacts left on the board), then you may exit. If the board is stalled with nothing spawnable, send the aggregate with the stall reason and exit.`,
+    selfBoss
+      ? `Exit: when every lane has a final report or a deliberate stand-down, post the aggregate on the board (artifact publish and/or lesson post — include outcome, lanes closed, respawn count, artifacts left), then you may exit. If the board is stalled with nothing spawnable, post the aggregate with the stall reason and exit.`
+      : `Exit: when every lane has a final report or a deliberate stand-down, send the aggregate to the boss (crewbus send --from ${me} --to ${boss} --subject "result: ..." — include outcome, lanes closed, respawn count, artifacts left on the board), then you may exit. If the board is stalled with nothing spawnable, send the aggregate with the stall reason and exit.`,
     ``,
     `Protocol:`,
     `3. Poll cheap and often: crewbus inbox --from ${me} --unacked --digest (full read only on hits). A full inbox dump every step will eat your context window.`,
@@ -321,18 +332,18 @@ export function buildCoordinatorPrompt({ name, from, subject, body, batch, worke
 // from buildCoordinatorPrompt, then TRANSFER crew ownership (workers'
 // spawnedBy -> lead) so respawn/spawn-kill own-crew checks pass.
 // opts: { d, spawnOpts, from, subject, body, rev, logDir, workers, batch,
-//         crew, workbench, auto }
+//         crew, workbench, auto, authToken }
 // Returns { action: "minted"|"reused"|"skipped", reason?, leadName, pid?,
 //           logPath?, promptPath?, token?, transferred? } — token only on
 // mint (printed once, then saved to the token file); a standing live
-// coordinator is reused, never duplicated.
+// coordinator is reused, never duplicated. There is NO `--from lead` bypass:
+// every spawn provisions or reuses the coordinator. When the sender is the
+// lead lane itself, the caller passes its authenticated token as authToken so
+// a coordinator boot can persist logs/lead.token (the hash cannot recover it).
 export function provisionAutoLead(d, opts) {
   const leadName = LEAD_NAME;
   const o = opts || {};
   const boss = String(o.from || "boss");
-  if (boss === leadName) {
-    return { action: "skipped", reason: "the sender IS the lead lane — it bootstraps its own coordinator", leadName };
-  }
   // Offboarded lead lane = deliberate teardown: refuse to skeleton it back
   // up behind the caller's back.
   const existing = readAgent(d, leadName);
@@ -384,6 +395,18 @@ export function provisionAutoLead(d, opts) {
   const rec = readAgent(d, leadName);
   const standing = rec && typeof rec.spawnedPid === "number" && pidAlive(rec.spawnedPid) && !isPidStale(rec.spawnedPid, rec.spawnedAt);
   if (minted) saveTokenFile(d.root, leadName, token);
+  // Reuse path: no token is minted here, but a coordinator that is about to
+  // boot still needs the plaintext (the on-disk record holds only a salted
+  // hash). The caller authenticated as this lane, so persist that token when
+  // the file is missing.
+  let coordToken = token;
+  if (!minted && o.authToken && agentTokenMatches(rec, String(o.authToken)) && !loadTokenFile(d.root, leadName)) {
+    coordToken = String(o.authToken);
+    saveTokenFile(d.root, leadName, coordToken);
+  }
+  if (!standing && !coordToken && !loadTokenFile(d.root, leadName)) {
+    return { action: "skipped", reason: `lane "${leadName}" has no live coordinator and no token file — pass the authenticated lead token (authToken) so the booted coordinator can act`, leadName };
+  }
   let booted = null;
   if (standing) {
     // A live coordinator is already running on the lead lane (previous
