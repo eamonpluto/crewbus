@@ -42,7 +42,7 @@
  *                  (post-compaction identity card: prints who/where/token-path
  *                   plus the inbox next step; never fails on missing files.)
  *
- * Styles: claude, codex, grok, antigravity-stop, antigravity-pre.
+ * Styles: claude, codex, grok, antigravity-stop, antigravity-pre, qwen.
  */
 
 import fs from "node:fs";
@@ -420,7 +420,7 @@ async function cmdPoll(args) {
   const agent = resolveAgent(args, "agent");
   heartbeat(root, agent);
   const style = getFlag(args, "--style") || "claude";
-  const valid = new Set(["claude", "codex", "grok", "antigravity-stop", "antigravity-pre"]);
+  const valid = new Set(["claude", "codex", "grok", "antigravity-stop", "antigravity-pre", "qwen"]);
   if (!valid.has(style)) fail(`--style must be one of ${[...valid].join("|")}, got "${style}"`);
   const idleAfter = Number(getFlag(args, "--idle-after") || 0);
   if (!(idleAfter >= 0)) fail("--idle-after must be a non-negative number of seconds");
@@ -435,7 +435,7 @@ async function cmdPoll(args) {
   } else if (style === "antigravity-pre") {
     console.log(JSON.stringify({ injectSteps: [{ ephemeralMessage: text }] }));
   } else {
-    // claude / codex / grok Stop: block envelope keeps the turn going
+    // claude / codex / grok / qwen Stop: block envelope keeps the turn going
     // with the DMs as the continuation prompt.
     console.log(JSON.stringify({ decision: "block", reason: text }));
   }
@@ -556,7 +556,7 @@ async function main() {
       console.log(
         "crewbus-hook — hook helper\n\n" +
           "  crewbus-hook session-start --from <you> [--board <path>]\n" +
-          "  crewbus-hook poll --from <you> --style claude|codex|grok|antigravity-stop|antigravity-pre [--idle-after <sec>] [--board <path>]\n" +
+          "  crewbus-hook poll --from <you> --style claude|codex|grok|antigravity-stop|antigravity-pre|qwen [--idle-after <sec>] [--board <path>]\n" +
           "    (max 5 messages per poll; --idle-after skips unless that long since last delivery)\n" +
           "  crewbus-hook wait --from <you> [--timeout <sec>] [--interval <sec>] [--max <n>] [--board <path>]\n" +
           "    (long-polls for new mail; prints it to stderr and exits 2 on arrival — the Claude Code asyncRewake wake\n" +

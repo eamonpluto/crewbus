@@ -1,6 +1,6 @@
 # Compatibility matrix
 
-Six adapters depend on fast-changing vendor surfaces (hooks, MCP behavior,
+Seven adapters depend on fast-changing vendor surfaces (hooks, MCP behavior,
 CLI flags). This table records what crewbus expects and when it was last
 verified. When a harness ships a new release, re-verify its row and update
 the date; `crewbus doctor` checks wiring presence on your machine (see
@@ -43,11 +43,12 @@ Status per harness (re-check the "no" rows when vendors change flags):
   accepted by `exec resume <id>`).
 - cursor: no — id lives in `stream-json`, spawn uses plain print mode.
 - agy: no — `--print` emits answer text, not the conversation id.
+- qwen: yes, pre-assigned (`--session-id <uuid>` minted at boot, plus `--output-format json` corroboration; mid-run kill leaves resumable id on record).
 
 ## Resume commands (used by `respawn`)
 
 Honesty authority: `packages/contracts/harness.json` (`version: 1`,
-frozen-M0). `resume:true` for opencode / claude / codex / grok
+frozen-M0). `resume:true` for opencode / claude / codex / grok / qwen
 (`harness.json:15,29,43,57`); `resume:false` for antigravity / cursor /
 UIs render resume unsupported for those
 three and never fake continuity. Flags below mirror
@@ -61,6 +62,7 @@ three and never fake continuity. Flags below mirror
 - codex: `exec <parent opts> resume <id> "<catch-up>"` (parent options
   precede the subcommand; prompt inline — `exec` has no `--file`).
 - grok: `--prompt-file <catch-up> -r <id>`.
+- qwen: `--resume <id>` (or `-r <id>`).
 - agy: `-p "<catch-up>" --conversation <id>` — HONESTLY UNSUPPORTED
   (`resume:false`): no stable conversation id on stdout, so there is
   rarely an id to pass; the flag is what `respawn` would use IF one were
@@ -165,6 +167,7 @@ automatically via `experimental.session.compacting`.
 | codex (Codex CLI) | `PreCompact` / `PostCompact` in hooks config, matcher on `trigger` = `manual`/`auto` (plain stdout ignored; JSON common-output fields) | 2026-10-05 (vendor docs: developers.openai.com/codex/hooks, codex-rs hooks source) |
 | cursor (`cursor-agent`) | `preCompact` (lowercase c) in `.cursor/hooks.json` — observational only (`user_message` output; cannot block or follow up). Claude-format `PreCompact` also maps via third-party hooks | 2026-10-05 (vendor docs: cursor.com/docs/hooks, third-party-hooks) |
 | grok-build (`grok`) | `PostCompact` in `.grok/hooks/crewbus.json` (`crewbus-hook compact` rehydration, same invocation shape as claude/codex; project hooks need folder trust — `/hooks-trust` or launch with `--trust`). Fallback for older grok builds: run `crewbus-hook compact --from <you>` as the first post-compaction step, or surface it via the `monitor` stream | 2026-10-07 (vendor docs: docs.x.ai/build/features/hooks — `PreCompact`/`PostCompact` lifecycle events, hook JSON in `~/.grok/hooks/*.json` or `<project>/.grok/hooks/*.json`, event JSON on stdin (`hookEventName`, `sessionId`, `cwd`, `workspaceRoot`) + `GROK_*` env vars, `type` `command`/`http`, project hooks require trust) |
+| qwen (Qwen Code) | `PostCompact` in `.qwen/settings.json` (`crewbus-hook compact` rehydration, same invocation shape as claude/codex) | 2026-10-25 (vendor docs: features/hooks.md) |
 
 ## Permission pre-approvals
 
@@ -181,6 +184,7 @@ or unrelated commands/tools.
 | claude (Claude Code) | `.claude/settings.json` `permissions.allow` | `mcp__crewbus__*`, `Bash(node *crewbus* *)`, `Bash(crewbus* *)`, `Read(./.crewbus/**)` | everything else (edits, network, other Bash/Read) | verified 2026-10-05 (vendor docs: code.claude.com permissions) |
 | opencode 1.18.x (v1 line) | `opencode.json` project `permission` object | `dm-send: allow`, `bash: {"*crewbus*": allow}`, `read: {"**/.crewbus/**": allow}` (absent keys/patterns only; shorthand strings left alone) | `edit`, `write`, other tools; v2 `permissions` array format not written | verified 2026-10-05 (vendor docs: opencode.ai permissions) |
 | cursor (`cursor-agent`) | `.cursor/permissions.json` | `mcpAllowlist: ["crewbus:*"]`, `terminalAllowlist: ["node:*crewbus*", "crewbus"]` | `autoRun` classifier, in-app terminal allowlist beyond bus commands | verified 2026-10-05 (vendor docs: cursor.com permissions reference) |
+| qwen (Qwen Code) | `.qwen/settings.json` `permissions.allow` | `mcp__crewbus__*`, `Bash(node *crewbus* *)`, `Bash(crewbus* *)`, `Read(./.crewbus/**)` | everything else (edits, network, other Bash/Read) | verified 2026-10-25 (vendor docs: configuration/settings.md) |
 | codex (Codex CLI) | none (project-local) — skipped | nothing (code comment in `applyHarness`) | `approval_policy`, `mcp_servers.*.approval_mode` (TOML user config; project `.codex/config.toml` needs folder trust first). Note: `spawn` injects `-c approval_policy="never"`, `--dangerously-bypass-hook-trust`, and dynamic ephemeral MCP configuration via `-c mcp_servers.crewbus.*` at runtime | verified 2026-10-21 against live Codex CLI 0.163.0 |
 | grok-build (`grok`) | none (project-local JSON) — skipped | nothing (code comment in `applyHarness`) | `[permission]` rules in `.grok/config.toml` (TOML — no zero-dep-safe merge); note grok reads Claude-compat `.claude/settings.json`, covered under `--harness claude` | unverified (vendor docs: docs.x.ai permissions; community config reference) |
 | antigravity (`agy`) | none (project-local) — skipped | nothing (code comment in `applyHarness`) | `permissions.allow` with `mcp(server/*)`, `command(...)` lives in GLOBAL `~/.gemini/antigravity-cli/settings.json`, which init never touches | unverified for project-local (vendor docs: antigravity.google permissions) |

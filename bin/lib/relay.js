@@ -198,7 +198,7 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
     return s;
   }).filter(Boolean);
   if (harnesses.length === 0) harnesses.push("opencode");
-  const validHarnesses = ["opencode", "claude", "codex", "grok", "antigravity", "cursor"];
+  const validHarnesses = ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "qwen"];
   for (const h of harnesses) {
     if (!validHarnesses.includes(h)) {
       throw webErr(400, `unknown harness "${h}" (want ${validHarnesses.join("|")})`);
@@ -206,9 +206,9 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
   }
   let harness = harnesses.join(",");
   const cmd = cleanOpt(a.cmd);
-  const maxTurns = a.maxTurns === undefined || a.maxTurns === null || String(a.maxTurns).trim() === "" ? ((harness === "claude" || harness === "grok") ? 50 : undefined) : Number(a.maxTurns);
+  const maxTurns = a.maxTurns === undefined || a.maxTurns === null || String(a.maxTurns).trim() === "" ? ((harness === "claude" || harness === "grok" || harness === "qwen") ? 50 : undefined) : Number(a.maxTurns);
   if (maxTurns !== undefined && !(maxTurns > 0)) throw webErr(400, "maxTurns must be a positive number");
-  if (maxTurns !== undefined && harness !== "claude" && harness !== "grok") throw webErr(400, `maxTurns only applies to claude/grok (got ${harness})`);
+  if (maxTurns !== undefined && harness !== "claude" && harness !== "grok" && harness !== "qwen") throw webErr(400, `maxTurns only applies to claude/grok/qwen (got ${harness})`);
   const allowTools = cleanOpt(a.allowTools);
   if (allowTools !== undefined && harness !== "claude") throw webErr(400, `allowTools only applies to claude (got ${harness})`);
   const body = cleanStr(a.body);
@@ -305,7 +305,7 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
   for (let i = 0; i < res.items.length; i++) {
     const { to, id } = res.items[i];
     const driver = harnesses[i % harnesses.length];
-    const itemMaxTurns = maxTurns === undefined ? ((driver === "claude" || driver === "grok") ? 50 : undefined) : Number(maxTurns);
+    const itemMaxTurns = maxTurns === undefined ? ((driver === "claude" || driver === "grok" || driver === "qwen") ? 50 : undefined) : Number(maxTurns);
     const itemSpawnOpts = {
       ...spawnOpts,
       harness: driver,

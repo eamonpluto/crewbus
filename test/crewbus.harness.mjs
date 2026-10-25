@@ -301,6 +301,7 @@ for (const [style, want] of [
   ["claude", '"decision":"block"'],
   ["codex", '"decision":"block"'],
   ["antigravity-stop", '"decision":"continue"'],
+  ["qwen", '"decision":"block"'],
 ]) {
   run(["cli", "send", "--from", "alice", "--to", "bob", "--body", `mail for ${style}`], henv);
   const out = run(["hook", "poll", "--from", "bob", "--style", style], henv);
@@ -438,6 +439,12 @@ const tCp = buildSpawnTarget({ harness: "claude", cwd: "/tmp", name: "w", prompt
 check("capture: claude --session-id preassign", tCp.args.includes("--session-id") && tCp.args[tCp.args.indexOf("--session-id") + 1] === PRE_UUID);
 const tGp = buildSpawnTarget({ harness: "grok", cwd: "/tmp", name: "w", promptPath: "/tmp/x.md", prompt: "p", sessionId: PRE_UUID });
 check("capture: grok -s preassign", tGp.args.includes("-s") && tGp.args[tGp.args.indexOf("-s") + 1] === PRE_UUID);
+const tQ = buildSpawnTarget({ harness: "qwen", cwd: "/tmp", name: "w", promptPath: "/tmp/x.md", prompt: "p" });
+check("capture: qwen --output-format json", tQ.args.includes("--output-format") && tQ.args[tQ.args.indexOf("--output-format") + 1] === "json");
+check("capture: qwen session_id", extractHarnessSessionId("qwen", JSON.stringify({ type: "result", session_id: "qwen-456" })) === "qwen-456");
+const tQp = buildSpawnTarget({ harness: "qwen", cwd: "/tmp", name: "w", promptPath: "/tmp/x.md", prompt: "p", sessionId: PRE_UUID });
+check("capture: qwen --session-id preassign", tQp.args.includes("--session-id") && tQp.args[tQp.args.indexOf("--session-id") + 1] === PRE_UUID);
+
 check("capture: no preassign without id", !buildSpawnTarget({ harness: "claude", cwd: "/tmp", name: "w", promptPath: "/tmp/x.md", prompt: "p" }).args.includes("--session-id"));
 check("capture: junk null", extractHarnessSessionId("codex", "plain text\nnot json") === null);
 check("capture: empty null", extractHarnessSessionId("claude", "") === null && extractHarnessSessionId("claude", null) === null);
@@ -569,6 +576,9 @@ const rtA = buildRespawnTarget({ harness: "antigravity", cwd: "/tmp", name: "w",
 check("respawn: agy --conversation", rtA.args.includes("--conversation") && rtA.args[rtA.args.indexOf("--conversation") + 1] === "SID");
 const rtCu = buildRespawnTarget({ harness: "cursor", cwd: "/tmp", name: "w", promptPath: "/p.md", prompt: "c", sessionId: "SID" });
 check("respawn: cursor --resume", rtCu.args.includes("--resume") && rtCu.args[rtCu.args.indexOf("--resume") + 1] === "SID");
+const rtQ = buildRespawnTarget({ harness: "qwen", cwd: "/tmp", name: "w", promptPath: "/p.md", prompt: "c", sessionId: "SID" });
+check("respawn: qwen --resume", rtQ.args.includes("--resume") && rtQ.args[rtQ.args.indexOf("--resume") + 1] === "SID");
+
 const rtN = buildRespawnTarget({ harness: "opencode", cwd: "/tmp", name: "w", promptPath: "/p.md", prompt: "c", sessionId: null });
 check("respawn: opencode fresh (no resume flags)", !rtN.args.join(" ").includes("resume") && !rtN.args.join(" ").includes("session"));
 const brief = buildRespawnBrief({ name: "w", attempt: 2, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: "SID", harness: "claude", lead: "boss", extraBody: "hurry" });
@@ -639,6 +649,28 @@ const detOut = run(["cli", "init"], det.e, det.p);
 check("init: auto-detects antigravity", detOut.includes("Detected harness markers: antigravity") && fs.existsSync(path.join(det.p, ".agents", "hooks.json")));
 check("init: no opencode files when not detected", !fs.existsSync(path.join(det.p, ".opencode")));
 fs.rmSync(det.p, { recursive: true, force: true });
+
+// qwen init adapter
+const qproj = mkproj();
+run(["cli", "init", "--harness", "qwen"], qproj.e, qproj.p);
+check("init: writes .qwen/settings.json", fs.existsSync(path.join(qproj.p, ".qwen", "settings.json")));
+const qSettings = JSON.parse(fs.readFileSync(path.join(qproj.p, ".qwen", "settings.json"), "utf8"));
+check("init: qwen SessionStart+Stop", !!qSettings.hooks.SessionStart && !!qSettings.hooks.Stop);
+check("init: qwen PostCompact hook", Array.isArray(qSettings.hooks.PostCompact) && qSettings.hooks.PostCompact.some((g) => g.hooks.some((h) => h.command.includes("compact"))));
+check("init: qwen MCP server", !!(qSettings.mcpServers && qSettings.mcpServers.crewbus && qSettings.mcpServers.crewbus.command));
+check("init: qwen pre-approvals", Array.isArray(qSettings.permissions.allow) && qSettings.permissions.allow.includes("mcp__crewbus__*"));
+const beforeQ = fs.readFileSync(path.join(qproj.p, ".qwen", "settings.json"), "utf8");
+run(["cli", "init", "--harness", "qwen"], qproj.e, qproj.p);
+check("init: re-run byte-identical qwen settings", fs.readFileSync(path.join(qproj.p, ".qwen", "settings.json"), "utf8") === beforeQ);
+fs.rmSync(qproj.p, { recursive: true, force: true });
+
+// auto-detect: .qwen marker -> qwen
+const qdet = mkproj();
+fs.mkdirSync(path.join(qdet.p, ".qwen"), { recursive: true });
+const qdetOut = run(["cli", "init"], qdet.e, qdet.p);
+check("init: auto-detects qwen", qdetOut.includes("Detected harness markers: qwen") && fs.existsSync(path.join(qdet.p, ".qwen", "settings.json")));
+fs.rmSync(qdet.p, { recursive: true, force: true });
+
 
 // legacy default: no markers -> opencode
 const leg = mkproj();

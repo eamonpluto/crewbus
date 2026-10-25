@@ -30,8 +30,8 @@ const check = (label, cond) => {
 };
 
 // ---- lib: drivers table ----
-check("drivers: 6 entries", launchDrivers().length === 6);
-check("drivers: all names", ["opencode", "claude", "codex", "grok", "antigravity", "cursor"].every((n) => launchDrivers().some((d) => d.driver === n)));
+check("drivers: 7 entries", launchDrivers().length === 7);
+check("drivers: all names", ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "qwen"].every((n) => launchDrivers().some((d) => d.driver === n)));
 
 // ---- lib: probe never throws ----
 const probe = probeBinary("definitely-not-a-crewbus-binary-xyz", ["--version"]);
@@ -40,7 +40,7 @@ check("probe: missing reports found=false", probe.found === false && probe.detai
 
 // ---- lib: detect shape ----
 const rows = detectHarnessBinaries();
-check("detect: 6 rows", rows.length === 6);
+check("detect: 7 rows", rows.length === 7);
 check("detect: rows carry brief+resume", rows.every((r) => r.briefDelivery && typeof r.resume === "boolean"));
 
 // ---- lib: plan validation ----
@@ -71,6 +71,7 @@ check("catalog: grok has 4.7", cat.grok.some((m) => m.id === "grok-4.7"));
 check("catalog: grok has grok-3", cat.grok.some((m) => m.id === "grok-3"));
 check("catalog: cursor has grok-4.7", cat.cursor.some((m) => m.id === "cursor/grok-4.7"));
 check("catalog: opencode has models", Array.isArray(cat.opencode) && cat.opencode.length > 0);
+check("catalog: qwen has 3.8-max", cat.qwen.some((m) => m.id === "qwen3.8-max"));
 
 // ---- lib: pair URL fragment rule ----
 const url = buildPairUrl({ envId: "env-1", routes: ["http://pc:8471"], caps: ["hlc", "launch"], pairToken: "abp-secret123" });
@@ -80,7 +81,7 @@ check("advertise: shape", (() => { const a = advertiseEnv({ envId: "e", routes: 
 
 // ---- lib: wizard parsers (pure, no TTY needed) ----
 const menuRows = detectHarnessBinaries();
-check("wizard: menu lists 6 drivers", formatHarnessMenu(menuRows).split("\n").length === 6);
+check("wizard: menu lists 7 drivers", formatHarnessMenu(menuRows).split("\n").length === 7);
 check("wizard: harness by number", parseHarnessChoice(menuRows, "2") === menuRows[1].driver);
 check("wizard: harness by name (case-insensitive)", parseHarnessChoice(menuRows, "CLAUDE") === "claude");
 check("wizard: harness by display name", parseHarnessChoice(menuRows, menuRows[0].displayName) === menuRows[0].driver);
@@ -98,8 +99,8 @@ check("wizard: @path is file ref", isBodyFileRef("@brief.md") === true && isBody
 const board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-launch-"));
 const env = { ...process.env, CREWBUS_DIR: board };
 const run = (args) => execFileSync("node", [CLI, ...args], { env, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] }).toString();
-check("cli: harnesses lists 6", run(["harnesses"]).split("\n").filter((l) => l.includes("file") || l.includes("stdin") || l.includes("inline")).length === 6);
-check("cli: harnesses --json parses", JSON.parse(run(["harnesses", "--json"])).length === 6);
+check("cli: harnesses lists 7", run(["harnesses"]).split("\n").filter((l) => l.includes("file") || l.includes("stdin") || l.includes("inline")).length === 7);
+check("cli: harnesses --json parses", JSON.parse(run(["harnesses", "--json"])).length === 7);
 
 // ---- CLI: launch dry-run (boots nothing) ----
 const dry = run(["launch", "--from", "lead", "--harness", "grok", "--body", "audit scope", "--dry-run"]);

@@ -74,7 +74,7 @@ const webAt = await web.waitFor(/crewbus web at http:\/\/(\S+)/);
 const webBase = `http://${webAt[1]}`;
 
 const harn = await httpCall(webBase, "GET", "/api/harnesses");
-check("web: GET /api/harnesses 200 x6", harn.status === 200 && Array.isArray(harn.json) && harn.json.length === 6);
+check("web: GET /api/harnesses 200 x7", harn.status === 200 && Array.isArray(harn.json) && harn.json.length === 7);
 check("web: harnesses carry brief+resume", Array.isArray(harn.json) && harn.json.every((r) => r.briefDelivery && typeof r.resume === "boolean"));
 
 const routes = await httpCall(webBase, "GET", "/api/routes");
@@ -152,7 +152,7 @@ const rRoutes = await httpCall(relayBase, "GET", "/api/routes");
 check("relay: GET /api/routes carries hints", rRoutes.status === 200 && Array.isArray(rRoutes.json.advertisedRoutes) && rRoutes.json.advertisedRoutes.length === 2);
 
 const rHarn = await httpCall(relayBase, "GET", "/api/harnesses");
-check("relay: GET /api/harnesses 200 x6", rHarn.status === 200 && Array.isArray(rHarn.json) && rHarn.json.length === 6);
+check("relay: GET /api/harnesses 200 x7", rHarn.status === 200 && Array.isArray(rHarn.json) && rHarn.json.length === 7);
 
 const hz = await httpCall(relayBase, "GET", "/healthz");
 check("relay: /healthz carries advertisedRoutes", hz.status === 200 && Array.isArray(hz.json.advertisedRoutes) && hz.json.advertisedRoutes.length === 2);

@@ -1295,7 +1295,7 @@ function installOpencodeFiles(cwd, force) {
 // marker dirs (.opencode/.claude/.codex/.agents/.grok/.cursor). No markers at all
 // keeps the legacy default (opencode) so existing checkouts don't change.
 
-const HARNESSES = ["opencode", "claude", "codex", "antigravity", "grok", "cursor"];
+const HARNESSES = ["opencode", "claude", "codex", "antigravity", "grok", "cursor", "qwen"];
 const HARNESS_MARKERS = {
   opencode: ".opencode",
   claude: ".claude",
@@ -1303,6 +1303,7 @@ const HARNESS_MARKERS = {
   antigravity: ".agents",
   grok: ".grok",
   cursor: ".cursor",
+  qwen: ".qwen",
 };
 
 function parseHarnessFlag(args) {
@@ -1871,6 +1872,23 @@ function applyHarness(cwd, h, ctx) {
         "pre-approved board-only bus I/O in .cursor/permissions.json (crewbus MCP + terminal bus commands); nothing else widened",
       ];
     }
+    case "qwen": {
+      const qwenSettingsFile = path.join(cwd, ".qwen", "settings.json");
+      const changedHooks = mergeHookGroups(qwenSettingsFile, hookAbs, boardExtra, {
+        SessionStart: "session-start",
+        Stop: "qwen",
+      }, ["PostCompact"]);
+      console.log(changedHooks ? "Wired Qwen hooks: .qwen/settings.json (SessionStart + Stop + PostCompact)" : "Qwen hooks already wired: .qwen/settings.json");
+      const entry = mcpEntry(ctx, mcpAbs);
+      const changedMcp = mergeMcpServers(qwenSettingsFile, entry);
+      console.log(changedMcp ? "Wired Qwen MCP: .qwen/settings.json (crewbus stdio)" : "Qwen MCP already wired: .qwen/settings.json");
+      const changedApprovals = mergeClaudeApprovals(qwenSettingsFile, CLAUDE_BOARD_ALLOW);
+      console.log(changedApprovals ? "Wired Qwen pre-approvals: .qwen/settings.json permissions.allow (crewbus MCP + crewbus commands + board reads)" : "Qwen pre-approvals already wired: .qwen/settings.json");
+      return [
+        "set CREWBUS_AGENT=<you> once per terminal for the hooks",
+        "pre-approved board-only bus I/O in .qwen/settings.json permissions.allow (crewbus MCP + crewbus commands + board reads); nothing else widened",
+      ];
+    }
     default:
       return [];
   }
@@ -1903,7 +1921,7 @@ function cmdInit(args) {
       ids = detectHarnesses(process.cwd());
       if (ids.length === 0) {
         ids = ["opencode"];
-        console.log("No harness markers detected (.opencode/.claude/.codex/.agents/.grok/.cursor) — defaulting to opencode (use --harness to choose)");
+        console.log("No harness markers detected (.opencode/.claude/.codex/.agents/.grok/.cursor/.qwen) — defaulting to opencode (use --harness to choose)");
       } else {
         console.log(`Detected harness markers: ${ids.join(", ")} (use --harness to override)`);
       }
@@ -2957,15 +2975,15 @@ function cmdSpawn(args) {
     return s;
   }).filter(Boolean);
   if (harnesses.length === 0) harnesses.push("opencode");
-  const validDrivers = ["opencode", "claude", "codex", "grok", "antigravity", "cursor"];
+  const validDrivers = ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "qwen"];
   for (const h of harnesses) {
     if (!validDrivers.includes(h)) fail(`unknown --harness "${h}" (want ${validDrivers.join("|")})`);
   }
   const harness = harnesses.join(",");
   const maxTurns = getFlag(args, "--max-turns");
   if (maxTurns !== undefined && !(Number(maxTurns) > 0)) fail("--max-turns must be a positive number");
-  if (maxTurns !== undefined && !harnesses.some((h) => h === "claude" || h === "grok")) fail(`--max-turns only applies to claude/grok (got --harness ${harness})`);
-  // Default budget so unattended workers terminate: 50 turns for claude/grok.
+  if (maxTurns !== undefined && !harnesses.some((h) => h === "claude" || h === "grok" || h === "qwen")) fail(`--max-turns only applies to claude/grok/qwen (got --harness ${harness})`);
+  // Default budget so unattended workers terminate: 50 turns for claude/grok/qwen.
   const maxTurnsNum = maxTurns === undefined ? undefined : Number(maxTurns);
   const allowTools = getFlag(args, "--allow-tools");
   if (allowTools !== undefined && !harnesses.includes("claude")) fail(`--allow-tools only applies to claude (got --harness ${harness})`);
@@ -3091,7 +3109,7 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
     if (!revive) {
       recipients.forEach((to, i) => {
         const driver = harnesses[i % harnesses.length];
-        const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok") ? 50 : undefined);
+        const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok" || driver === "qwen") ? 50 : undefined);
         const itemSpawnOpts = { ...spawnOpts, harness: driver, maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
         const previewPrompt = buildSpawnPrompt({ name: to, from, lead: leadTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(to, leadTarget), workbench: wbFor(to) });
         const t = buildSpawnTarget({ ...itemSpawnOpts, name: to, promptPath: `<logs>/${to}-<stamp>.prompt.md`, prompt: previewPrompt });
@@ -3144,7 +3162,7 @@ if (leadBudgetMinutesRaw !== undefined && !(leadBudgetMinutes > 0)) fail("--lead
   for (let i = 0; i < res.items.length; i++) {
     const { to, id } = res.items[i];
     const driver = harnesses[i % harnesses.length];
-    const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok") ? 50 : undefined);
+    const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok" || driver === "qwen") ? 50 : undefined);
     const itemSpawnOpts = { ...spawnOpts, harness: driver, maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
     try {
       // Per-worker isolation: provisioned after the brief lands, so a git
@@ -4940,6 +4958,23 @@ function cmdDoctor(args) {
         else no("cursor MCP .cursor/mcp.json", "run: crewbus init --harness cursor (then approve/enable it in Cursor settings)");
         break;
       }
+      case "qwen": {
+        const qSettings = path.join(cwd, ".qwen", "settings.json");
+        if (hasHookRef(qSettings, ["SessionStart", "Stop"])) ok("qwen hooks .qwen/settings.json");
+        else no("qwen hooks .qwen/settings.json", "run: crewbus init --harness qwen");
+        const qObj = readJsonFile(qSettings, null);
+        const qCompact = !!(qObj && typeof qObj.hooks === "object" && Array.isArray(qObj.hooks.PostCompact) &&
+          qObj.hooks.PostCompact.some((g) => g && g.hooks && g.hooks.some((h) => {
+            const c = String((h && h.command) || "");
+            return c.includes("crewbus-hook") && c.includes(" compact");
+          })));
+        if (qCompact) ok("qwen compact hook .qwen/settings.json (PostCompact rehydration)");
+        else no("qwen compact hook .qwen/settings.json", "run: crewbus init --harness qwen");
+        if (hasMcpServer(qSettings)) ok("qwen MCP .qwen/settings.json");
+        else no("qwen MCP .qwen/settings.json", "run: crewbus init --harness qwen");
+        break;
+      }
+
     }
   }
     // Reconcile hint (read-only): workers whose pids look recycled since a
@@ -6751,12 +6786,12 @@ const USAGE = `crewbus — DM-only minimal bus for AI agent coordination (v2)
 
 Setup:
   crewbus init [--global] [--board <path>] [--force] [--no-opencode] [--portable]
-                 [--harness opencode,claude,codex,antigravity,grok,cursor]
+                 [--harness opencode,claude,codex,antigravity,grok,cursor,qwen]
     create board in ./.crewbus, write AGENTS.md block, install harness
   crewbus install-cli
     install standalone CLI wrapper to user PATH (~/.crewbus/bin)
     wiring (hooks + MCP config + notes). Without --harness, init applies the
-    union of detected markers (.opencode/.claude/.codex/.agents/.grok/.cursor).
+    union of detected markers (.opencode/.claude/.codex/.agents/.grok/.cursor/.qwen).
     init also pre-approves board-only bus I/O (crewbus MCP server +
     crewbus commands + board reads) in harness allowlists with a stable
     project-local surface (claude/opencode/cursor); codex/grok/antigravity
@@ -6886,7 +6921,7 @@ Messaging (primitive — just a tool call, whenever you want):
     (recover mail a dead watcher consumed: clears delivered markers and
      rewinds the cursor so the next poll/push treats it as fresh;
      use after re-registering with the live session)
-    crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
+    crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
    (--budget-* cap the WORKERS; --lead-budget-* cap the auto-provisioned coordinator lane — same semantics, e.g. a 400k-token lead that posts its aggregate and exits. Unset = persistent boss-supervised coordinator (default). A standing coordinator keeps its boot-time budget; the flags cannot change it mid-flight.)
    (workers boot with cloud/AI credential vars scrubbed from their environment by default (lead's keys never leak into briefs); pass --keep-env to inherit everything or --allow-env <prefix,...> to keep listed names. CREWBUS_TOKEN is never inherited — workers claim their own identity.)
     (brief N workers AND boot them detached: the DM lands first so the brief
@@ -6971,7 +7006,7 @@ Messaging (primitive — just a tool call, whenever you want):
      watch exits and auto-replace until N total. Queue backpressure refuses
      when pending > 4*poolSize. State in pool-state/<id>.json, token-checked;
      workers appear in spawn-status --all --json. --max-turns defaults to 50
-     for claude/grok when unspecified.)
+     for claude/grok/qwen when unspecified.)
   crewbus pool-status [--json]
   crewbus pool-resume --id <pool-id> --from <you> [--cwd <dir>] [--json]
     (re-attach supervision after the supervisor died (restart, shutdown,
@@ -7528,8 +7563,8 @@ async function cmdPool(args) {
   if (!HARNESSES.includes(harness)) fail(`unknown --harness "${harness}"`);
   const maxTurnsFlag = getFlag(args, "--max-turns");
   if (maxTurnsFlag !== undefined && !(Number(maxTurnsFlag) > 0)) fail("--max-turns must be a positive number");
-  if (maxTurnsFlag !== undefined && harness !== "claude" && harness !== "grok") fail(`--max-turns only applies to claude/grok (got --harness ${harness})`);
-  const maxTurnsNum = maxTurnsFlag === undefined ? ((harness === "claude" || harness === "grok") ? 50 : undefined) : Number(maxTurnsFlag);
+  if (maxTurnsFlag !== undefined && harness !== "claude" && harness !== "grok" && harness !== "qwen") fail(`--max-turns only applies to claude/grok/qwen (got --harness ${harness})`);
+  const maxTurnsNum = maxTurnsFlag === undefined ? ((harness === "claude" || harness === "grok" || harness === "qwen") ? 50 : undefined) : Number(maxTurnsFlag);
   const model = getFlag(args, "--model");
   const auto = args.includes("--auto");
   const subject = cleanSubject(getFlag(args, "--subject"));

@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { shellChildSpec, shellChildOptions } from "../bin/lib/kidproc.js";
 
 const CLI = fileURLToPath(new URL("../bin/crewbus.js", import.meta.url));
 const board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-int-"));
@@ -23,7 +24,11 @@ const skip = (label, reason) => {
 };
 
 const hasBinary = (bin) => {
-  const r = spawnSync(bin, ["--version"], { stdio: "pipe", timeout: 15000 });
+  const isWin = process.platform === "win32";
+  const spec = isWin ? shellChildSpec(bin, ["--version"]) : { exe: bin, args: ["--version"] };
+  const opts = { stdio: "pipe", timeout: 15000 };
+  if (isWin) Object.assign(opts, shellChildOptions());
+  const r = spawnSync(spec.exe, spec.args, opts);
   return r.status === 0 || (r.error === undefined && r.stdout !== undefined && r.status !== null);
 };
 
@@ -41,9 +46,10 @@ const HARNESS_BIN = {
   antigravity: "agy",
   grok: "grok",
   cursor: "cursor-agent",
+  qwen: "qwen",
 };
 
-for (const h of ["opencode", "claude", "codex", "antigravity", "grok", "cursor"]) {
+for (const h of ["opencode", "claude", "codex", "antigravity", "grok", "cursor", "qwen"]) {
   const bin = HARNESS_BIN[h];
   let present = false;
   try {

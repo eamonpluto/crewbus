@@ -11,7 +11,7 @@ this.)
 ```powershell
 npm i -g @eamonpluto/crewbus
 cd <project>
-crewbus init --harness <opencode|claude|codex|antigravity|grok|cursor>
+crewbus init --harness <opencode|claude|codex|antigravity|grok|cursor|qwen>
 crewbus doctor   # confirm all-ok before anything else
 ```
 

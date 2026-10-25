@@ -637,7 +637,21 @@ export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowToo
     cargs.push(quoteFree(`you are '${name}': read the brief at ${promptPath} and follow it`));
     return { exe: "cursor-agent", args: cargs, shell: true };
   }
-  fail(`unknown --harness "${harness}" (want opencode|claude|codex|grok|antigravity|cursor)`);
+  if (harness === "qwen") {
+    // qwen is executed via CLI.
+    // --output-format json reports session id.
+    // --session-id pre-assigns session UUID for crash-safe resume.
+    // Positional brief prompt directs worker to read brief file.
+    const qargs = ["--output-format", "json"];
+    if (sessionId) qargs.push("--session-id", sessionId);
+    if (model) qargs.push("--model", model);
+    if (maxTurns !== undefined) qargs.push("--max-session-turns", String(maxTurns));
+    if (auto) qargs.push("-y", "--approval-mode", "yolo");
+    if (allowTools) qargs.push("--allowed-tools", allowTools);
+    qargs.push(quoteFree(`you are '${name}': read the brief at ${promptPath} and follow it`));
+    return { exe: "qwen", args: qargs, shell: true, stdinPath: promptPath };
+  }
+  fail(`unknown --harness "${harness}" (want opencode|claude|codex|grok|antigravity|cursor|qwen)`);
 }
 
 // Resume targets for `respawn` (slice 2): same worker name, same conversation,
@@ -666,8 +680,9 @@ export function buildRespawnTarget({ harness, cmd, model, auto, maxTurns, allowT
     : harness === "grok" ? ["-r", sessionId]
     : harness === "antigravity" ? ["--conversation", sessionId]
     : harness === "cursor" ? ["--resume", sessionId]
+    : harness === "qwen" ? ["--resume", sessionId]
     : null;
-  if (!flag) fail(`unknown --harness "${harness}" (want opencode|claude|codex|grok|antigravity|cursor)`);
+  if (!flag) fail(`unknown --harness "${harness}" (want opencode|claude|codex|grok|antigravity|cursor|qwen)`);
   return { ...t, args: [...t.args, ...flag] };
 }
 
@@ -722,7 +737,7 @@ function cleanSessionId(raw) {
 
 // Harness driver allowlist (mirrors packages/contracts/harness.json drivers;
 // unknown values are omitted, never invented).
-export const KNOWN_HARNESS_DRIVERS = ["opencode", "claude", "codex", "grok", "antigravity", "cursor"];
+export const KNOWN_HARNESS_DRIVERS = ["opencode", "claude", "codex", "grok", "antigravity", "cursor", "qwen"];
 
 export function cleanHarnessDriver(raw) {
   const s = String(raw === undefined || raw === null ? "" : raw).trim().toLowerCase();
@@ -1221,7 +1236,7 @@ export function bootWorker(d, spawnOpts, { to, id, from, lead, subject, body, re
   // (tests); otherwise mint fresh. opencode/codex rely on log parsing
   // (early event stream / thread.started); cursor/agy offer neither.
   let preId = sessionId && String(sessionId).trim() ? String(sessionId).trim() : undefined;
-  if (!preId && (spawnOpts.harness === "claude" || spawnOpts.harness === "grok")) {
+  if (!preId && (spawnOpts.harness === "claude" || spawnOpts.harness === "grok" || spawnOpts.harness === "qwen")) {
     try {
       preId = crypto.randomUUID();
     } catch {
@@ -1518,6 +1533,6 @@ export async function killWorkers(d, names) { // line 4529
 
 export function defaultMaxTurnsFor(harness, raw) { // line 1172
   if (raw !== undefined && raw !== null && String(raw).trim() !== "") return Number(raw);
-  if (harness === "claude" || harness === "grok") return 50;
+  if (harness === "claude" || harness === "grok" || harness === "qwen") return 50;
   return undefined;
 }

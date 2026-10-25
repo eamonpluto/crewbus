@@ -1,9 +1,9 @@
-# crewbus v10.0.12 — DM bus
+# crewbus v10.0.13 — DM bus
 
 [![CI](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml/badge.svg)](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml)
 
 Lead audience: developers running **mixed-harness crews** (opencode,
-Claude Code, Codex, Antigravity, grok-build, Cursor) who want agents to
+Claude Code, Codex, Antigravity, grok-build, Cursor, Qwen Code) who want agents to
 message each other directly.
 
 A **zero-dependency** local DM bus for AI coding agents: one primitive —
@@ -52,7 +52,7 @@ env overrides below.)
 Layout: `board.json`, `agents/<name>.json`, `dm/<recipient>/<id>.json`,
 `delivered/<recipient>/<id>.json` (push markers, written by the plugin).
 
-Versions: `package.json` (currently 10.0.12) is the source of truth for the
+Versions: `package.json` (currently 10.0.13) is the source of truth for the
 release version. `board.json`'s `version: 2` is the **board schema version**
 (a different number on purpose — do not "align" them). New to the project?
 Start with `docs/QUICKSTART.md` (5 minutes).
@@ -61,7 +61,7 @@ Start with `docs/QUICKSTART.md` (5 minutes).
 
 ```powershell
 # one-time per project: creates .crewbus/, AGENTS.md block + harness wiring
-crewbus init [--harness opencode,claude,codex,antigravity,grok,cursor]
+crewbus init [--harness opencode,claude,codex,antigravity,grok,cursor,qwen]
 # onboarding humans? copy TEAM.template.md to TEAM.md (10-minute team quickstart)
 
 # pick a stable name, register (first claim mints your token — save it)
@@ -410,6 +410,7 @@ counted — `--max-spawn N` overrides it when you have the compute.
 | grok | headless `--prompt-file` | `--prompt-file` | `--permission-mode auto --max-turns 50`; `--auto` → `--always-approve` |
 | antigravity | `--print` (`agy`, real exe — argv verbatim) | inline positional | `--mode accept-edits`; `--auto` → `--dangerously-skip-permissions` |
 | cursor | `cursor-agent -p` (canonical binary; `agent` alias too generic for PATH) | worker reads brief file | `--force --trust` always (print mode only proposes edits otherwise); `--auto` → `--yolo` |
+| qwen | positional brief query (`qwen "you are 'NAME': read the brief at PATH..."`) | inline positional + stdin | `--output-format json -y --approval-mode yolo --allowed-tools *`; `--auto` → `-y --approval-mode yolo` |
 
 Caps at 20 workers/call by default (`--max-spawn N` overrides — a whole harness each, so budget it like compute); bigger crews
 get a broadcast DM for live agents to pick up. `--to @all` is refused
@@ -525,7 +526,7 @@ Restart opencode after `init` so the tool + plugin load.
 ## Harness support
 
 Without `--harness`, init applies the union of detected marker dirs
-(`.opencode/` `.claude/` `.codex/` `.agents/` `.grok/` `.cursor/`), else the legacy
+(`.opencode/` `.claude/` `.codex/` `.agents/` `.grok/` `.cursor/` `.qwen/`), else the legacy
 opencode default. The choice is recorded in `.crewbus/board.json`.
 Set `CREWBUS_AGENT=<you>` once per terminal so hooks know who you are.
 
@@ -537,6 +538,7 @@ Set `CREWBUS_AGENT=<you>` once per terminal so hooks know who you are.
 | Antigravity (`agy`) | MCP (`.agents/mcp_config.json`) | Stop + PreInvocation hooks (`.agents/hooks.json`) inject at turn end / before each call |
 | grok-build (`grok`) | `grok mcp add --scope project crewbus -- node ./bin/crewbus-mcp.js`, grant `/hooks-trust` | Stop hook (turn end) + PostToolUse same-turn notes + `crewbus-inbox` skill starting a persistent `monitor` (~1s event stream) for real-time wakes |
 | Cursor | `crewbus` MCP (`.cursor/mcp.json`, approve/enable in settings) | sessionStart + stop hooks (`.cursor/hooks.json`, Claude-compatible envelope) |
+| Qwen Code (`qwen`) | stdio MCP (`.qwen/settings.json`) | SessionStart + Stop hooks + PostCompact (`.qwen/settings.json`, block continuation envelope) |
 | anything else | `send` / `inbox` / `listen` CLI | poll `inbox` at session start + after each task |
 
 One zero-dependency stdio MCP server (`bin/crewbus-mcp.js`, tools

@@ -28,6 +28,7 @@ export const LAUNCH_DRIVER_FALLBACK = [
   { driver: "grok", displayName: "grok-build", binary: "grok", briefDelivery: "file", sessionCapture: "preassigned", resume: true, spawnArgs: "--prompt-file <brief> -s <uuid>", resumeArgs: "--prompt-file <catchup> -r <id>" },
   { driver: "antigravity", displayName: "Antigravity", binary: "agy", briefDelivery: "inline", sessionCapture: "none", resume: false, spawnArgs: "--print --mode accept-edits \"<brief>\"", resumeArgs: "unsupported (no stable conversation id)" },
   { driver: "cursor", displayName: "Cursor", binary: "cursor-agent", briefDelivery: "inline", sessionCapture: "none", resume: false, spawnArgs: "cursor-agent -p --force --trust \"<brief>\"", resumeArgs: "unsupported (id lives in stream-json)" },
+  { driver: "qwen", displayName: "Qwen Code", binary: "qwen", briefDelivery: "inline", sessionCapture: "preassigned", resume: true, spawnArgs: "--output-format json -y --approval-mode yolo \"<brief>\"", resumeArgs: "--resume <id> \"<catchup>\"" },
 ];
 // Resolve the driver table: contracts file wins, fallback otherwise.
 export function launchDrivers() {
@@ -35,7 +36,7 @@ export function launchDrivers() {
     const here = path.dirname(new URL(import.meta.url).pathname);
     const p = path.join(here, "..", "..", "packages", "contracts", "harness.json");
     const doc = JSON.parse(fs.readFileSync(p, "utf8"));
-    if (doc && Array.isArray(doc.drivers) && doc.drivers.length === 6) return doc.drivers;
+    if (doc && Array.isArray(doc.drivers) && doc.drivers.length >= 7) return doc.drivers;
   } catch {}
   return LAUNCH_DRIVER_FALLBACK;
 }
@@ -150,6 +151,13 @@ export const HARNESS_MODELS = {
     { id: "claude-3.7-sonnet", label: "Claude 3.7 Sonnet (Legacy)", tier: "standard" },
     { id: "gpt-4o", label: "GPT-4o (Legacy)", tier: "standard" },
   ],
+  qwen: [
+    { id: "qwen3.8-max", label: "Qwen 3.8 Max (Flagship Reasoning & Coding)", tier: "frontier" },
+    { id: "qwen3.7-plus", label: "Qwen 3.7 Plus (Balanced Agentic Reasoning)", tier: "standard" },
+    { id: "qwen3.8-flash", label: "Qwen 3.8 Flash (Fast / High-Throughput)", tier: "fast" },
+    { id: "deepseek-v4-pro-0813", label: "DeepSeek v4 Pro (Coding & Math)", tier: "frontier" },
+    { id: "qwen-coder-plus", label: "Qwen Coder Plus (Code Specialist)", tier: "standard" },
+  ],
 };
 
 // Dynamic discovered model cache for harnesses capable of live discovery (e.g., opencode).
@@ -247,6 +255,33 @@ export function refreshDiscoveredModels(timeoutMs = 15000) {
           _cachedDiscoveredModels.antigravity = aLines;
         }
       } catch {}
+
+      // qwen model discovery
+      try {
+        const homeDir = os.homedir();
+        const settingsPath = path.join(homeDir, ".qwen", "settings.json");
+        const qModels = [];
+        if (fs.existsSync(settingsPath)) {
+          const sObj = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+          if (sObj && sObj.modelProviders && typeof sObj.modelProviders === "object") {
+            for (const list of Object.values(sObj.modelProviders)) {
+              if (Array.isArray(list)) {
+                for (const item of list) {
+                  if (item && item.id) {
+                    const tier = /max|pro|plus|r1/i.test(item.id) ? "frontier" : /flash|mini|fast/i.test(item.id) ? "fast" : "standard";
+                    qModels.push({ id: item.id, label: `${item.name || item.id} (Configured)`, tier });
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (qModels.length > 0) {
+          if (!_cachedDiscoveredModels) _cachedDiscoveredModels = {};
+          _cachedDiscoveredModels.qwen = qModels;
+        }
+      } catch {}
+
     } catch {
       // Ignore discovery errors — static catalog remains available
     } finally {

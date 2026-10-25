@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 10.0.13
+
+First-class Qwen Code CLI harness integration and strict lead coordinator auto-provisioning.
+
+- **Qwen Code CLI harness (`qwen`, `@qwen-code/qwen-code`)**:
+  - Full first-class driver contract specification in `packages/contracts/harness.json` (`displayName: "Qwen Code"`, `binary: "qwen"`, `briefDelivery: "inline"`, `sessionCapture: "preassigned"`, `resume: true`, `compactionHook: "verified"`).
+  - Spawn target builder in `bin/lib/spawn.js`: executes with `--output-format json`, pre-assigned `--session-id <uuid>`, `--max-session-turns` (defaults to 50), `-y --approval-mode yolo` auto mode, and `--resume <id>` respawn target generation.
+  - Launch driver metadata & model catalog in `bin/lib/launch.js`: updated driver count to 7, added Qwen model catalog (`qwen3.8-max`, `qwen3.7-plus`, `qwen3.8-flash`, `deepseek-v4-pro-0813`, `qwen-coder-plus`), and added dynamic model discovery from `~/.qwen/settings.json` and `~/.qwen/model-registry.json`.
+  - Hook integration in `bin/crewbus-hook.js`: added `--style qwen` generating the standard block continuation envelope `{"decision":"block","reason":"<DMs>"}`.
+  - Relay & mobile client allowlisting in `bin/lib/relay.js` and `apps/mobile/api/client.js`.
+  - Project initialization in `bin/crewbus.js`: `crewbus init --harness qwen` merges stdio MCP server configuration, `SessionStart`, `Stop`, and `PostCompact` lifecycle hooks, and `CLAUDE_BOARD_ALLOW` permissions into `.qwen/settings.json`. Auto-detects `.qwen` directories.
+  - Comprehensive documentation in `docs/COMPATIBILITY.md`, `README.md`, and `TEAM.template.md`.
 
 - **Removed the `spawn --from lead` bypass**: every spawn now provisions or reuses the auto-lead coordinator, even when the spawner is the `lead` lane. A standing coordinator is reused (never duplicated); a lane with no live coordinator gets the persistent coordinator booted on it. When the sender is the lead lane, `cmdSpawn`/web launch pass the authenticated token so `logs/lead.token` is persisted for the coordinator (the stored hash cannot recover the plaintext). Coordinator prompts for a self-lane spawn no longer tell the coordinator to DM itself (aggregate goes to the board instead); docs/`LEAD_ASSIGN.md` §3.4 updated, tests cover the no-bypass path.
 

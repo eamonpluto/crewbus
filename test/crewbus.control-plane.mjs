@@ -20,8 +20,8 @@ check("harness: version 1 frozen", harness.version === 1);
 const drivers = harness.drivers || [];
 const got = drivers.map((d) => d.driver).sort();
 check(
-  "harness: all 6 drivers",
-  JSON.stringify(got) === JSON.stringify(["antigravity", "claude", "codex", "cursor", "grok", "opencode"])
+  "harness: all 7 drivers",
+  JSON.stringify(got) === JSON.stringify(["antigravity", "claude", "codex", "cursor", "grok", "opencode", "qwen"])
 );
 for (const d of drivers) {
   for (const f of ["driver", "displayName", "briefDelivery", "sessionCapture", "resume", "capabilities", "permissionMap", "spawnArgs", "resumeArgs"]) {
@@ -39,7 +39,7 @@ for (const d of drivers) {
 
 // every COMPATIBILITY matrix row has a contract entry
 const compat = read("docs/COMPATIBILITY.md");
-for (const name of ["opencode", "claude", "codex", "antigravity", "grok", "cursor"]) {
+for (const name of ["opencode", "claude", "codex", "antigravity", "grok", "cursor", "qwen"]) {
   check(`compat row ${name} in contracts`, got.includes(name) && compat.includes(name));
 }
 

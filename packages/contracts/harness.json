@@ -89,6 +89,20 @@
       "permissionMap": { "supervised": "default prompts", "autoEdits": "not offered — supervised + note", "auto": "--auto adds --yolo", "full": "--yolo --i-understand-danger" },
       "spawnArgs": "cursor-agent -p --force --trust \"<brief inline>\"",
       "resumeArgs": "-p --force --resume <id> \"<catchup>\" (id rarely captured)"
+    },
+    {
+      "driver": "qwen",
+      "displayName": "Qwen Code",
+      "binary": "qwen",
+      "versionProbe": ["--version"],
+      "briefDelivery": "inline",
+      "sessionCapture": "preassigned",
+      "sessionKeys": ["session_id", "sessionId"],
+      "resume": true,
+      "capabilities": { "jsonLog": true, "preassign": true, "preassignFlag": "--session-id", "compactionHook": "verified", "autoModes": ["-y", "--approval-mode yolo"] },
+      "permissionMap": { "supervised": "default prompts", "autoEdits": "--approval-mode auto-edit", "auto": "--approval-mode auto or -y", "full": "-y --approval-mode yolo" },
+      "spawnArgs": "--output-format json -y --approval-mode yolo \"<brief inline>\"",
+      "resumeArgs": "--resume <id> \"<catchup inline>\""
     }
   ]
 }
