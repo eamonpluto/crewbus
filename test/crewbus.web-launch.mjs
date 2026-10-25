@@ -204,7 +204,15 @@ check("desktop serve: POST /api/kill succeeds without --allow-remote-spawn", dsK
 
 desktopSrv.kill();
 
-fs.rmSync(board, { recursive: true, force: true });
+// Windows can hold the worker log handle briefly after the kill response.
+for (let i = 0; i < 25; i++) {
+  try {
+    fs.rmSync(board, { recursive: true, force: true });
+    break;
+  } catch {
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);
