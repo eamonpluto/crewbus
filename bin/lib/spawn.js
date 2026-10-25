@@ -1271,7 +1271,8 @@ export function bootWorker(d, spawnOpts, { to, id, from, lead, subject, body, re
 // brief points at the original prompt file and the same reply thread, so a
 // resumed worker continues instead of restarting. Returns
 // { pid, logPath, promptPath, attempt }. Binding keeps the original
-// spawnedAt/briefId/harnessSessionId; respawnCount increments.
+// briefId/harnessSessionId; spawnedAt refreshes to the new pid launch and
+// respawnCount increments.
 export function bootRespawnedWorker(d, spawnOpts, { to, briefId, from, sessionId, attempt, origPromptPath, extraBody, logDir }) { // respawn slice 2
   const { harness, cwd } = spawnOpts;
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -1304,9 +1305,11 @@ export function bootRespawnedWorker(d, spawnOpts, { to, briefId, from, sessionId
   if (harness === "claude") childEnv.CLAUDE_CODE_RESUME_INTERRUPTED_TURN = "1";
   const target = buildRespawnTarget({ ...spawnOpts, name: to, promptPath, prompt: catchup, sessionId });
   const { pid } = launchWorkerProcess({ exe: target.exe, args: target.args, shell: target.shell, cwd, env: childEnv, logPath, stdinPath: target.stdinPath });
-  // Minimal touch: new pid only — spawnedAt/briefId/spawnedBy stay original.
-  touchAgent(d, to, { spawnedPid: pid, lastDir: cwd });
+  // New pid + new launch stamp: spawnedAt must track the process the record
+  // now points at, or the recycled-pid guard reads the fresh worker as stale.
+  // briefId/spawnedBy stay original.
   const now = new Date().toISOString();
+  touchAgent(d, to, { spawnedPid: pid, spawnedAt: now, lastDir: cwd });
   let prev = null;
   try {
     prev = readWorkerSession(d, to);
@@ -1315,7 +1318,7 @@ export function bootRespawnedWorker(d, spawnOpts, { to, briefId, from, sessionId
     fs.mkdirSync(path.join(d.root, "worker-sessions"), { recursive: true });
     writeJson(workerSessionPath(d, to), {
       ...(prev || {}),
-      name: to, spawnedPid: pid, logPath, promptPath,
+      name: to, spawnedPid: pid, spawnedAt: now, logPath, promptPath,
       respawnCount: ((prev && prev.respawnCount) || 0) + 1,
       lastRespawnAt: now,
     });

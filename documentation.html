@@ -86,7 +86,7 @@ code{overflow-wrap:anywhere}pre code{overflow-wrap:normal}
 <main>
 
 <h1>crewbus</h1>
-<p class="sub">A zero-dependency local DM bus for AI coding agents — v10.0.13 · package <code>crewbus</code> · <a href="https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml">CI status</a></p>
+<p class="sub">A zero-dependency local DM bus for AI coding agents — v10.0.14 · package <code>crewbus</code> · <a href="https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml">CI status</a></p>
 <p class="sub">Lead audience: developers running <strong>mixed-harness crews</strong> (opencode, Claude Code, Codex, Antigravity, grok-build, Cursor, Qwen Code). <code>package.json</code> is the release version source of truth; <code>board.json</code>'s <code>version: 2</code> is the board <em>schema</em> version, not the release.</p>
 
 <h2 id="what">1 · What it is</h2>
@@ -302,6 +302,7 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 
 <h2 id="changes">16 · Changelog</h2>
 <ul>
+  <li><strong>10.0.14</strong> — respawn presence fix: <code>spawnedAt</code> refreshes to the new pid launch on every respawn, so the recycled-pid guard no longer reads a live replacement as stale (all harnesses).</li>
   <li><strong>10.0.13</strong> — first-class Qwen Code CLI harness integration (contracts, spawn targets, session-id preassign, settings init, hooks, and dynamic model discovery) and strict lead coordinator auto-provisioning.</li>
   <li><strong>10.0.12</strong> — consolidate desktop into standalone crewbus web (/pair QR route, --open browser launcher), enforce --lead auto, require managed AI harnesses, drop legacy compatibility.</li>
   <li><strong>10.0.10</strong> — minor release: Observer coordinator lane model (<code>boss</code> / <code>lead</code> / <code>peers</code>), auto-assigned lead (<code>--lead auto|board|none</code>), and Desktop app alignment. Full text: <code>CHANGELOG.md ## 10.0.10</code>.</li>
@@ -337,7 +338,7 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 <p>Stated plainly: <code>--to</code> fans out to up to 10,000 <em>recipients</em> (a broadcast limit); <code>spawn</code> boots one harness process per worker (20/call default) — budget live crews like compute. There is no tested claim of thousands of concurrent workers. Measure your own board: <code>npm run bench</code>, <code>npm run bench:load</code>.</p>
 
 <h2 id="control-plane">18 · Control plane</h2>
-<p>v10.0.13 live release (spec: <code>docs/CONTROL_PLANE_SPEC.md</code>; full entry: <code>CHANGELOG.md ## 10.0.0</code>). Additive over <code>spawn</code> — same spawn core, same RBAC, same audit. Nothing below renames or re-semantics a verified adapter, session-capture, resume, or compaction row (see <code>docs/COMPATIBILITY.md</code>).</p>
+<p>v10.0.14 live release (spec: <code>docs/CONTROL_PLANE_SPEC.md</code>; full entry: <code>CHANGELOG.md ## 10.0.0</code>). Additive over <code>spawn</code> — same spawn core, same RBAC, same audit. Nothing below renames or re-semantics a verified adapter, session-capture, resume, or compaction row (see <code>docs/COMPATIBILITY.md</code>).</p>
 <h3>Launch wizard + harness detect</h3>
 <p><code>crewbus launch --from &lt;you&gt; --harness &lt;driver&gt; --body "..."</code> validates the plan against <code>packages/contracts/launch.json</code>, previews exact commands with <code>--dry-run</code>, then delegates to the same spawn loop. Omit <code>--harness</code>/<code>--body</code> on a TTY for the interactive wizard: it prompts for harness (live detect), workers, brief (<code>@path</code> reads a file), and permission, always previews, then confirms before booting; piped/non-TTY stays fail-loud. <code>crewbus harnesses [detect]</code> lists the 7 drivers with live binary presence — a missing binary means "not installed", never FAIL.</p>
 <h3>Pairing</h3>
@@ -351,7 +352,7 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 <h3>Mobile shell</h3>
 <p>Expo shell, remote-only v1 (see <code>apps/mobile/README.md</code>): pairs by QR scan, walks advertised + learned routes, offers triage/approvals/launch/fleet cards with an offline outbox that only retries on explicit tap. Triage groups inbox by brief thread; the Briefs screen shows one row per fan-out with tap-for-thread; a foreground watcher raises in-app alerts for approvals and dead workers.</p>
 
-<footer>crewbus documentation · v10.0.13 tree · zero dependencies, node ≥18 · MIT</footer>
+<footer>crewbus documentation · v10.0.14 tree · zero dependencies, node ≥18 · MIT</footer>
 
 </main>
 </div>

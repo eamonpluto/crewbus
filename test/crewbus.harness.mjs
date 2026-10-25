@@ -729,11 +729,24 @@ mustFail("respawn: multi --to refused", ["respawn", "--from", "boss", "--to", "r
 const dryRs = run(["cli", "respawn", "--from", "boss", "--to", "rs1", "--dry-run"], rsp.e, rsp.p);
 check("respawn: dry-run previews", dryRs.includes("would respawn rs1") && dryRs.includes("catch-up brief"));
 run(["cli", "spawn-kill", "--from", "boss", "--to", "rs1"], rsp.e, rsp.p);
+// Simulate a long-lived worker: the recycled-pid guard must not confuse the
+// new pid with a stranger just because the original spawn was long ago.
+const rs1AgentPath = path.join(rsp.p, ".crewbus", "agents", "rs1.json");
+const rs1Agent = JSON.parse(fs.readFileSync(rs1AgentPath, "utf8"));
+rs1Agent.spawnedAt = "2020-01-01T00:00:00.000Z";
+fs.writeFileSync(rs1AgentPath, JSON.stringify(rs1Agent));
+const rs1WsPath = path.join(rsp.p, ".crewbus", "worker-sessions", "rs1.json");
+const rs1Ws = JSON.parse(fs.readFileSync(rs1WsPath, "utf8"));
+rs1Ws.spawnedAt = "2020-01-01T00:00:00.000Z";
+fs.writeFileSync(rs1WsPath, JSON.stringify(rs1Ws));
 const r1 = run(["cli", "respawn", "--from", "boss", "--to", "rs1", "--fresh"], rsp.e, rsp.p);
 check("respawn: reboots dead worker", r1.includes("respawned rs1") && r1.includes("attempt 1") && r1.includes("fresh boot"));
-const rdoc = JSON.parse(fs.readFileSync(path.join(rsp.p, ".crewbus", "worker-sessions", "rs1.json"), "utf8"));
+const rdoc = JSON.parse(fs.readFileSync(rs1WsPath, "utf8"));
 check("respawn: binding attempt counted", rdoc.respawnCount === 1 && typeof rdoc.spawnedPid === "number" && !!rdoc.lastRespawnAt);
-check("respawn: status carries respawns", JSON.parse(run(["cli", "spawn-status", "--to", "rs1", "--json"], rsp.e, rsp.p))[0].respawnCount === 1);
+check("respawn: worker-session spawnedAt refreshed", Date.parse(rdoc.spawnedAt) > Date.parse("2020-01-01T00:00:00.000Z"));
+const rstat = JSON.parse(run(["cli", "spawn-status", "--to", "rs1", "--json"], rsp.e, rsp.p))[0];
+check("respawn: status carries respawns", rstat.respawnCount === 1);
+check("respawn: live pid is not stale after respawn", rstat.alive === true && rstat.pidStale === false && Date.parse(rstat.spawnedAt) > Date.parse("2020-01-01T00:00:00.000Z"));
 run(["cli", "spawn-kill", "--from", "boss", "--to", "rs1"], rsp.e, rsp.p);
 const r2 = run(["cli", "respawn", "--from", "boss", "--to", "rs1", "--fresh", "--body", "extra nudge"], rsp.e, rsp.p);
 check("respawn: attempt increments", r2.includes("attempt 2"));

@@ -46,7 +46,10 @@ the OS recycles pids and a dead worker could read as "running". Status
 now also resolves the process start time (`ps` elapsed on unix,
 `Get-Process` on Windows, 60s memo) and compares it against the recorded
 `spawnedAt` (±120s skew): a live pid whose process started *after* the
-spawn is a stranger, and `alive` flips to false. The verdict rides along
+spawn is a stranger, and `alive` flips to false. `spawnedAt` is the launch
+time of the currently recorded pid — it is set at spawn and refreshed on
+every respawn, so a live replacement is not mistaken for a recycled pid.
+The original registration time stays in `firstSeen`. The verdict rides along
 as `aliveVerified` (`true` corroborated, `false` contradicted, `null`
 unverifiable on this platform — the old kill-0 verdict stands). The
 override needs positive evidence (start time after spawn + skew), so a

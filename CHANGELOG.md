@@ -1,5 +1,9 @@
 # Changelog
 
+## 10.0.14
+
+- **Respawn presence fix**: `spawnedAt` now refreshes to the new pid's launch time on every `respawn` (agent record and worker-session binding), so the recycled-pid guard no longer reads a live respawned worker as stale. Applies to every harness; fixes false `spawn-status` staleness and prevents `spawn-kill` from refusing a live replacement.
+
 ## 10.0.13
 
 First-class Qwen Code CLI harness integration and strict lead coordinator auto-provisioning.
