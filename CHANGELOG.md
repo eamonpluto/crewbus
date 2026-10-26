@@ -1,5 +1,23 @@
 # Changelog
 
+## 10.0.15
+
+CLI documentation and help flags audit, layout fixes, and Windows test cleanup.
+
+- **Help text and flags audit (`crewbus --help`)**:
+  - Fixed Setup layout where `install-cli` fragmented the `init` description.
+  - Added `qwen` to project-local allowlist notes and `spawn` execution mode documentation.
+  - Added `--open` to `crewbus web` syntax.
+  - Consolidated duplicate `listen` command entries with full enterprise/watch/relay flags.
+  - Added multi-harness driver support (`opencode|claude|codex|grok|antigravity|cursor|qwen`), `--model`, `--max-turns`, `--allow-tools`, and auto mode to `crewbus pool`.
+  - Added missing `--auto` and `--i-understand-danger` flags to `crewbus respawn`.
+  - Added `--from <admin> --for <target>` and `--role` syntax to `crewbus register`.
+  - Added `--to-group` and `--body-file` options to `send` and `launch`.
+  - Relocated HA control-plane documentation under `relay status | relay promote`.
+  - Updated driver count to 7 across `serve` documentation.
+- **Test stability**:
+  - Added retry handling to temp-directory cleanup on Windows in `test/crewbus.web-launch.mjs`.
+
 ## 10.0.14
 
 - **Respawn presence fix**: `spawnedAt` now refreshes to the new pid's launch time on every `respawn` (agent record and worker-session binding), so the recycled-pid guard no longer reads a live respawned worker as stale. Applies to every harness; fixes false `spawn-status` staleness and prevents `spawn-kill` from refusing a live replacement.
