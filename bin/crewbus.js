@@ -6788,22 +6788,23 @@ Setup:
   crewbus init [--global] [--board <path>] [--force] [--no-opencode] [--portable]
                  [--harness opencode,claude,codex,antigravity,grok,cursor,qwen]
     create board in ./.crewbus, write AGENTS.md block, install harness
-  crewbus install-cli
-    install standalone CLI wrapper to user PATH (~/.crewbus/bin)
     wiring (hooks + MCP config + notes). Without --harness, init applies the
     union of detected markers (.opencode/.claude/.codex/.agents/.grok/.cursor/.qwen).
     init also pre-approves board-only bus I/O (crewbus MCP server +
     crewbus commands + board reads) in harness allowlists with a stable
-    project-local surface (claude/opencode/cursor); codex/grok/antigravity
+    project-local surface (claude/opencode/cursor/qwen); codex/grok/antigravity
     are skipped (TOML or global-only surfaces — see docs/COMPATIBILITY.md).
     Nothing else is widened.
+  crewbus install-cli
+    install standalone CLI wrapper to user PATH (~/.crewbus/bin)
   crewbus update [--check] [--yes] [--version x.y.z]
     self-update the global npm install to the registry latest
     (--check reports only; needs --yes off-TTY; runs the published
     install scripts — same trust as npm i -g @eamonpluto/crewbus)
 
 Identity (first claim wins, token after that):
-  crewbus register --from <you> [--session <opencode-session-id>] [--token <t>] [--expires-in <dur>] [--service]
+  crewbus register --from <you> [--session <opencode-session-id>] [--token <t>] [--expires-in <dur>] [--service] [--role <r>]
+  crewbus register --from <admin> --for <target> [--role <lead|worker|admin|auditor>]
   crewbus register --service <name> | register --offboard <name> --from <admin>
   crewbus recover [--session <id>] [--cwd <dir>]
     (compaction/restart amnesia triage: lists candidate identities with
@@ -6821,7 +6822,7 @@ Identity (first claim wins, token after that):
      the CLI, not local file tampering — separate boards per trust zone.)
 
 Messaging (primitive — just a tool call, whenever you want):
-  crewbus send --from <you> --to <peer> --body "..." [--subject "..."] [--reply <msg-id>] [--artifact <path-or-url>] [--priority high|normal] [--checkpoint] [--needs-by 30m] [--session <id>] [--to-file <path>] [--broadcast] [--also-channel] [--sender-type human|lead|peer] [--fwd <n>] [--yes] [--no-rate-limit]
+  crewbus send --from <you> (--to <peer> | --to-group <g> | --to-file <path>) --body "..." [--subject "..."] [--reply <msg-id>] [--artifact <path-or-url>] [--priority high|normal] [--checkpoint] [--needs-by 30m] [--session <id>] [--broadcast] [--also-channel] [--sender-type human|lead|peer] [--fwd <n>] [--yes] [--no-rate-limit]
     (--to accepts a comma list for broadcast: --to alice,bob,carol — one DM
      each, same brief, shared batch id, up to 10000 recipients; --to-file reads
      the list from a file for large fan-outs; --to @all reaches every
@@ -6913,15 +6914,16 @@ Messaging (primitive — just a tool call, whenever you want):
      the retry/reassign hint — it writes nothing.)
   crewbus thread --id <msg-id> [--json]
     (board-wide: the message plus everything answering it, across inboxes)
-  crewbus listen --from <you> [--timeout <ms>] [--json] [--with http://peer:port]
+  crewbus listen --from <you> [--timeout <ms>] [--json] [--watch] [--with http(s)://peer:port] [--insecure] [--mtls-cert <pem> --mtls-key <pem>] [--bearer <jwt>]
     (prints backlog, then blocks and prints new DMs as they arrive;
      opencode plugin injects into context automatically instead of polling.
-     --with long-polls a relay instead — no local board needed, token required.)
+     --watch uses fs.watch with no polling loop (default keeps 500ms poll
+     fallback); --with long-polls a relay instead — no local board needed, token required.)
   crewbus redeliver --from <you> (--id <msg-id> | --all)
     (recover mail a dead watcher consumed: clears delivered markers and
      rewinds the cursor so the next poll/push treats it as fresh;
      use after re-registering with the live session)
-    crewbus spawn --from <you> (--to <workers> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--sender-type human|lead|peer] [--dry-run]
+    crewbus spawn --from <you> (--to <workers> | --to-group <g> | --to-file <path> | --count <n> [--prefix <p>]) --body "..." [--subject "..."] [--reply <msg-id>] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--lead-budget-tokens N] [--lead-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--also-channel] [--sender-type human|lead|peer] [--dry-run]
    (--budget-* cap the WORKERS; --lead-budget-* cap the auto-provisioned coordinator lane — same semantics, e.g. a 400k-token lead that posts its aggregate and exits. Unset = persistent boss-supervised coordinator (default). A standing coordinator keeps its boot-time budget; the flags cannot change it mid-flight.)
    (workers boot with cloud/AI credential vars scrubbed from their environment by default (lead's keys never leak into briefs); pass --keep-env to inherit everything or --allow-env <prefix,...> to keep listed names. CREWBUS_TOKEN is never inherited — workers claim their own identity.)
     (brief N workers AND boot them detached: the DM lands first so the brief
@@ -6954,7 +6956,7 @@ Messaging (primitive — just a tool call, whenever you want):
   crewbus spawn-kill --from <you> (--to <worker,...> | --all)
     (the kill switch: closing the terminal does NOT stop detached workers.
      Terminates by recorded pid, confirms death, reports. Needs your token.)
-  crewbus respawn --from <you> --to <worker> [--body "..."] [--force] [--fresh] [--cwd <dir>] [--cmd "..."] [--keep-env] [--allow-env ...] [--dry-run]
+  crewbus respawn --from <you> --to <worker> [--body "..."] [--force] [--fresh] [--cwd <dir>] [--cmd "..."] [--auto --i-understand-danger] [--keep-env] [--allow-env ...] [--dry-run]
     (reboot one DEAD worker in its SAME harness conversation: needs the
       captured session id (spawn-status shows it; respawn --fresh re-boots without prior context).
       --fresh skips the resume requirement when the id can't be captured
@@ -7001,7 +7003,7 @@ Messaging (primitive — just a tool call, whenever you want):
      Surviving markers are kept, so nothing replays. Pruned ids leave
      tombstones/ entries replicated via sync so deletes don't return.
      Refused while a legal hold is active — see hold.)
-  crewbus pool --from <you> --count N --pool-size S --body "..." [--harness opencode] [--prefix p] [--queue a,b] [--json]
+  crewbus pool --from <you> --count N --pool-size S --body "..." [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--prefix p] [--queue a,b] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--auto] [--subject "..."] [--cwd <dir>] [--keep-env] [--allow-env ...] [--json]
     (lean async runner: brief N workers but boot at most S concurrently,
      watch exits and auto-replace until N total. Queue backpressure refuses
      when pending > 4*poolSize. State in pool-state/<id>.json, token-checked;
@@ -7050,10 +7052,7 @@ Messaging (primitive — just a tool call, whenever you want):
      docs/TENANCY.md. No cross-board queries.)
   crewbus bench-poll --agents N --iters N [--json]
     (measure dm/ directory scans/sec for N fake agents — polling cost.)
-  crewbus listen --from <you> [--timeout <ms>] [--json] [--watch] [--with http(s)://peer:port] [--insecure] [--mtls-cert <pem> --mtls-key <pem>] [--bearer <jwt>]
-    (--watch uses fs.watch with no polling loop; default keeps the 500ms
-     poll as fallback alongside the watchers. --with long-polls a relay.)
-  crewbus web [--port 0] [--host 127.0.0.1]
+  crewbus web [--port 0] [--host 127.0.0.1] [--open]
     (local dashboard: workers, presence, broadcasts, recent mail. Reads are
      open; the per-worker kill button POSTs /api/kill with your name+token.
       JSON at /api/board. Fleet console: read-only /api/fleet|channels|
@@ -7092,15 +7091,15 @@ Messaging (primitive — just a tool call, whenever you want):
       risk — see docs/HA.md). GET /healthz {role, lagMs, uptimeSec} is the
       load-balancer check. Standby and primary share the relay secret.)
   crewbus relay status [--json] | relay promote [--force] [--fence <path-or-url>] | relay pair --from <admin> [--label <device>] [--ttl 10m] | relay devices [--json] | relay revoke-device <id> [--from <admin>]
+    (HA control plane: status shows role/primary lag/promotion from
+     relay.json (no server needed); promote flips a standby to primary,
+     fence-checked unless --force — a running standby notices without
+     restart. Manual failover recommended; see docs/HA.md.)
     (per-device pairing: pair mints a single-use TTL'd token; the device swaps it once via sync --pair-token for a long-lived credential used as --device/CREWBUS_DEVICE instead of the shared --secret. pairing/ + devices/ stay on the relay — never synced, never exported.)
   crewbus crew survey --relays <url1,url2> [--json]
     (fleet placement view: role, weight, live workers, lag per relay.)
   crewbus crew dispatch --from <you> --relays <url1,url2> [--weights <w1,w2>] [--relay-auth <url=cred>...] --count N [--prefix p] [--harness ...] --body "..." [--dry-run] [--json]
     (weighted elastic crew across reachable primaries (largest remainder); standbys and unreachable relays skip loudly. --relay-auth takes per-relay creds (abd-… or shared secret); bare --secret/--device apply to all. Needs your token: boots land under your identity on each relay.)
-    (HA control plane: status shows role/primary lag/promotion from
-     relay.json (no server needed); promote flips a standby to primary,
-     fence-checked unless --force — a running standby notices without
-     restart. Manual failover recommended; see docs/HA.md.)
   crewbus sync --with http(s)://peer:port [--once] [--interval <sec>] [--dry-run] [--secret <s>] [--device <abd-cred>] [--pair-token <abp-...> [--pair-label <l>]] [--insecure] [--mtls-cert <pem> --mtls-key <pem>] [--bearer <jwt>]
     (peer sync, both directions: message files union by id (immutable, no
      conflicts); channel logs merge union-by-id per line; presence/cursors/groups/holds
@@ -7113,7 +7112,7 @@ Messaging (primitive — just a tool call, whenever you want):
      capabilities[] negotiated (mixed-version peers degrade with warnings).)
   crewbus doctor [--harness <list>] [--board <path>]
 
-  crewbus launch --from <you> --harness <driver> --body "..." [--to <a,b> | --count N [--prefix p]] [--subject ...] [--priority high|normal] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--permission supervised|autoEdits|auto|full] [--isolate] [--worktree <prefix>|--branch <prefix>] [--oneshot|--persistent] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--cmd "..."] [--cwd <dir>] [--sender-type ...] [--dry-run] [--yes] [--json]
+  crewbus launch --from <you> --harness <driver> (--body "..." | --body-file <path>) [--to <a,b> | --count N [--prefix p]] [--subject ...] [--priority high|normal] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--permission supervised|autoEdits|auto|full] [--isolate] [--worktree <prefix>|--branch <prefix>] [--oneshot|--persistent] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--cmd "..."] [--cwd <dir>] [--sender-type ...] [--dry-run] [--yes] [--i-understand-danger] [--json]
     (control-plane launch: validates the plan against packages/contracts
      (permission full needs --i-understand-danger); --dry-run prints the
      exact spawn commands via formatSpawnCmd without booting; otherwise
@@ -7129,7 +7128,7 @@ Messaging (primitive — just a tool call, whenever you want):
   crewbus relay pair qr --from <admin> [--label <device>] [--ttl 10m] [--routes <url,url>] [--json]
     (prints the one-time crewbus://pair URL (secret in #fragment, never
      query) alongside the plain pairing token. Scan/paste into the mobile
-     or desktop client to pair.)
+     or web /pair console to pair.)
 
 Tips:
   set CREWBUS_AGENT=<name> to skip --from on every command
