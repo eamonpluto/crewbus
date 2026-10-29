@@ -302,9 +302,10 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 
 <h2 id="changes">16 · Changelog</h2>
 <ul>
+  <li><strong>11.1.0</strong> — Per-worker models: <code>--model a,b,c</code> assigns a different model per spawned worker (cycled in worker order; a single value still applies to all), across <code>spawn</code>, <code>launch</code>, <code>pool</code>, web/RPC, and remote relay boots.</li>
+  <li><strong>11.0.0</strong> - Two-role control plane: one <code>orchestrator</code> plus workers. Removed <code>boss</code>/<code>admin</code>/<code>lead</code>/<code>auditor</code>; <code>spawn "brief" --count N</code> runs as the orchestrator (no <code>--from</code>/<code>--lead</code>); <code>crewbus orchestrator init|show</code>; approvals pin to <code>--to orchestrator</code>; docs/contracts/tests updated.</li>
   <li><strong>10.0.15</strong> — CLI documentation and help flags audit, layout fixes, and Windows test cleanup.</li>
   <li><strong>10.0.14</strong> — respawn presence fix: <code>spawnedAt</code> refreshes to the new pid launch on every respawn, so the recycled-pid guard no longer reads a live replacement as stale (all harnesses).</li>
-  <li><strong>11.0.0</strong> - Two-role control plane: one <code>orchestrator</code> plus workers. Removed <code>boss</code>/<code>admin</code>/<code>lead</code>/<code>auditor</code>; <code>spawn "brief" --count N</code> runs as the orchestrator (no <code>--from</code>/<code>--lead</code>); <code>crewbus orchestrator init|show</code>; approvals pin to <code>--to orchestrator</code>; docs/contracts/tests updated.</li>
   <li><strong>10.0.13</strong> — first-class Qwen Code CLI harness integration (contracts, spawn targets, session-id preassign, settings init, hooks, and dynamic model discovery) and strict lead coordinator auto-provisioning.</li>
   <li><strong>10.0.12</strong> — consolidate desktop into standalone crewbus web (/pair QR route, --open browser launcher), enforce --lead auto, require managed AI harnesses, drop legacy compatibility.</li>
   <li><strong>10.0.10</strong> — minor release: Observer coordinator lane model (<code>boss</code> / <code>lead</code> / <code>peers</code>), auto-assigned lead (<code>--lead auto|board|none</code>), and Desktop app alignment. Full text: <code>CHANGELOG.md ## 10.0.10</code>.</li>

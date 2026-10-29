@@ -1,5 +1,22 @@
 # Changelog
 
+## 11.1.0
+
+Per-worker models for spawned crews.
+
+- `--model` on `spawn`, `launch`, and `pool` now accepts a comma list
+  (`--model a,b,c`) applied in worker order and cycled when there are more
+  workers than models — the same semantics as `--harness`. A single value
+  keeps the previous apply-to-all behavior; the orchestrator lane uses the
+  first model.
+- Wired through every boot path: CLI `spawn`/`pool`/`pool-resume`, `launch`
+  (dry-run + live), the web/RPC `/api/launch`, and relay `/api/spawn`.
+  `worker-sessions` records each worker's own model, so `respawn` reproduces
+  it.
+- RPC/contracts accept a `models[]` array alongside `model`.
+- Tests cover parsing/cycling, spawn dry-run assignment, launch dry-run
+  distribution, and invalid empty lists.
+
 ## 11.0.0
 
 Two-role control plane: every board has exactly one **orchestrator** and any

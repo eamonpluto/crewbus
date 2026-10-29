@@ -111,6 +111,11 @@ check("cli: dry-run --json shape", dryJson.ok === true && dryJson.dryRun === tru
 const multiDry = JSON.parse(run(["launch", "--harness", "claude,antigravity", "--model", "claude-3-7-sonnet", "--body", "x", "--count", "2", "--dry-run", "--json"]));
 check("cli: multi-harness dry-run distributes drivers", multiDry.ok === true && multiDry.commands[0].harness === "claude" && multiDry.commands[1].harness === "antigravity");
 check("cli: multi-harness dry-run formats model", multiDry.commands[0].command.includes("claude-3-7-sonnet"));
+const multiModelDry = JSON.parse(run(["launch", "--harness", "claude", "--model", "m1,m2", "--body", "x", "--count", "3", "--dry-run", "--json"]));
+check("cli: multi-model dry-run cycles models per worker", multiModelDry.ok === true
+  && multiModelDry.commands[0].command.includes("--model m1")
+  && multiModelDry.commands[1].command.includes("--model m2")
+  && multiModelDry.commands[2].command.includes("--model m1"));
 let genericRefused = false;
 try {
   run(["launch", "--harness", "generic", "--body", "x", "--dry-run"]);

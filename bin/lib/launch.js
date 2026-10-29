@@ -356,12 +356,26 @@ export function validateLaunchPlan(raw) {
     }
   }
 
-  const model = r.model === undefined || r.model === null || String(r.model).trim() === "" ? undefined : String(r.model).trim();
-  if (model && model.length > 100) errors.push("model name too long (max 100 chars)");
+  // Per-worker models: "--model a,b,c" (or a models[] array over the RPC)
+  // applies a/b/c to workers in order, cycling when there are more workers
+  // than models — same semantics as --harness. A single value applies to all.
+  const modelList = Array.isArray(r.models)
+    ? r.models
+    : (r.model === undefined || r.model === null ? [] : String(r.model).split(","));
+  const models = modelList
+    .map((m) => (m === undefined || m === null ? "" : String(m).trim()))
+    .filter(Boolean);
+  if (models.length === 0 && r.model !== undefined && r.model !== null && String(r.model).trim() !== "") {
+    errors.push("invalid model (empty after splitting on commas)");
+  }
+  for (const m of models) {
+    if (m.length > 100) errors.push("model name too long (max 100 chars)");
+  }
+  const model = models.length > 0 ? models.join(",") : undefined;
 
   const plan = {
     harness, harnesses: harnesses.length > 0 ? harnesses : ["opencode"],
-    model, body, count: Number.isInteger(count) && count > 0 ? count : 1,
+    model, models, body, count: Number.isInteger(count) && count > 0 ? count : 1,
     prefix: r.prefix === undefined ? undefined : String(r.prefix),
     to: r.to === undefined ? undefined : String(r.to),
     subject: r.subject === undefined ? undefined : String(r.subject),

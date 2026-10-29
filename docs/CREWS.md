@@ -29,7 +29,8 @@ crewbus crew dispatch --from orchestrator \
 
 Flags mirror `spawn` (`--harness/--cmd/--cwd/--model/--max-turns/
 --allow-tools/--auto/--subject/--priority/--sender-type/--keep-env/
---allow-env`, budgets stay local-only). `--dry-run` prints the shares
+--allow-env`, budgets stay local-only). `--model` also takes a comma list
+(`a,b,c`) cycled in worker order. `--dry-run` prints the shares
 without booting.
 
 Remote boots run as each relay board's orchestrator. The relay secret or a

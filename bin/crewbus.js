@@ -46,7 +46,9 @@ import { VALID_ROLES, agentTokenMatches, assertMintWon, authorize, authorizeChec
 import { saveTokenFile, loadTokenFile } from "./lib/tokenfile.js";
 import { CLIENT_TLS, SYNC_LWW, cleanSyncRel, clientInsecureFromArgs, crewSurvey, httpJson, readPemFlag, readSyncState, readTombstones, relayAuthEntries, relayCredFor, relayCredHeaders, setupClientTls, splitByWeight, syncRound, syncWalk, warnInsecureOnce, writeSyncState, writeTombstone, SYNC_SUBS, SYNC_UNION, RELAY_CAPS, SUB_CAP, SUB_CAP_NOTE, tombstoneIdForRel, readSyncDoc } from "./lib/sync.js";
 import { devicePath, isLoopbackHost, newDeviceCred, newPairToken, pairingPath, parseDeviceCred, readDevice, readRelayState, relaySecretFromArgs, remoteSpawn, requireRelayClientCert, requireRelaySecret, requireScope, tryAcquireFence, verifyOidcJwt, writeRelayState, relayStatePath, bearerFromReq, getOidcConfig, getOidcJwks, b64urlDecode, b64urlJson, jwsRawToDer, oidcGetJson, OIDC_SKEW_SEC, OIDC_JWKS_TTL_MS, OIDC_ALG_HASH, OIDC_EC_SIZE, deviceFromReq } from "./lib/relay.js";
-import { assertGitCheckout, bootRespawnedWorker, bootWorker, buildOrchestratorPrompt, buildCrewContext, buildRespawnBrief, buildRespawnTarget, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, isPidStale, killWorkers, ORCHESTRATOR_NAME, maybeIsolate, opencodeStorageStatus, parseAllowEnv, pidAlive, provisionOrchestrator, provisionBranch, provisionWorktree, readWorkerSession, requireAutoConfirm, resolveOpencodeExe, sandboxPresent, scrubChildEnv, syncWorkerSession, workerStatus, worktreeStamp, defaultMaxTurnsFor, ensureBoardCliShim, installCliToUserPath } from "./lib/spawn.js";
+import { assertGitCheckout, bootRespawnedWorker, bootWorker, buildOrchestratorPrompt, buildCrewContext, buildRespawnBrief, buildRespawnTarget, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, isPidStale, killWorkers, ORCHESTRATOR_NAME, maybeIsolate, opencodeStorageStatus, parseAllowEnv, pidAlive, provisionOrchestrator, provisionBranch, provisionWorktree, readWorkerSession, requireAutoConfirm, resolveOpencodeExe, sandboxPresent, scrubChildEnv, syncWorkerSession, workerStatus, worktreeStamp,
+           defaultMaxTurnsFor, ensureBoardCliShim, installCliToUserPath, parseModelList, modelForIndex,
+           modelListErrors, MODEL_NAME_MAX } from "./lib/spawn.js";
 import { appendChainRecord, auditHmacKey, boardTotalBytes, chainFilePath, countChannels, dirSize, doExportToFile, enforceAgentQuota, enforceBytesQuota, enforceChannelQuota, holdActive, holdDocPath, holdRefusal, parseQuotaBytes, parseQuotaCount, readBackupInner, readBoardQuotas, readChainRecords, readHold, readSnapshotSchedule, resolveBackupKeyMaterial, setAuditForward, snapshotStamp, startAuditForwarder, verifyChainRecords, collectBoardFiles, encryptBackupPayload, decryptBackupPayload, rawKeyFromMaterial, deriveBackupKey, toAuditExport, spoolAuditEvent, postAuditEvent, auditSpoolDir, drainAuditSpool, enqueueAuditForward, signAuditRecord, chainRecordHash, AUDIT_FORWARD_URL, AUDIT_FORWARD_KEY } from "./lib/export.js";
 import { ackedIds, checkSendRateLimit, deliverDMs, enforceMaxChars, filterDigest, findDuplicateSend, findMessageById, heartbeat, isVerified, loadManifest, manifestPath, msgTimeMs, parseRecipients, printDigest, printMsg, readDMs, readVisible, recordBroadcastManifest, requireFanoutConfirm, resolveFwdDepth, runVerifier, verifyMessageSig, isHigh, signMessage, untrustedEnvelope, relTime, rateFilePath, broadcastTargets, readBroadcastsFor, formatTo, msgHeader, readAckMarker, splitCommand, readRecipientsFile } from "./lib/mail.js";
 import { batchReplyIds, collectBatch, contributingGroups, expandGroups, expandGroupsOrFail, gatherTelemetry, groupTelemetryData, heuristicSenderType, readGroup, ensureGroupCreatedAt, readResultRecord, writeResultRecord, findFirstVerifiedReply } from "./lib/groups.js";
@@ -3031,7 +3033,18 @@ function cmdSpawn(args) {
   // ensured and booted after the crew boots.
   if (getFlag(args, "--lead") !== undefined) fail("spawn always provisions the board orchestrator; --lead is not supported");
   const orchestratorTarget = ORCHESTRATOR_NAME;
-  const model = getFlag(args, "--model");
+  // Per-worker models: `--model a,b,c` cycles by worker order (like --harness).
+  // A single value still applies to every worker; the orchestrator lane takes
+  // the first model.
+  const modelRaw = getFlag(args, "--model");
+  const models = parseModelList(modelRaw);
+  if (modelRaw !== undefined && String(modelRaw).trim() !== "" && models.length === 0) {
+    fail("invalid --model (empty after splitting on commas)");
+  }
+  {
+    const modelErr = modelListErrors(models)[0];
+    if (modelErr) fail(modelErr);
+  }
   const auto = args.includes("--auto");
   requireAutoConfirm(args);
   const dry = args.includes("--dry-run");
@@ -3109,7 +3122,7 @@ if (orchestratorBudgetMinutesRaw !== undefined && !(orchestratorBudgetMinutes > 
   const at = new Date().toISOString();
   const logDir = path.join(d.root, "logs");
   if (!dry) fs.mkdirSync(logDir, { recursive: true });
-  const spawnOpts = { harness, model, auto, maxTurns: maxTurnsNum, allowTools, cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
+  const spawnOpts = { harness, model: models[0], models, auto, maxTurns: maxTurnsNum, allowTools, cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
   if (dry) {
     // Preview only: nothing touches the board (ids below are illustrative).
     const previewBatch = !revive && recipients.length > 1 ? newId("batch") : undefined;
@@ -3117,7 +3130,7 @@ if (orchestratorBudgetMinutesRaw !== undefined && !(orchestratorBudgetMinutes > 
       recipients.forEach((to, i) => {
         const driver = harnesses[i % harnesses.length];
         const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok" || driver === "qwen") ? 50 : undefined);
-        const itemSpawnOpts = { ...spawnOpts, harness: driver, maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
+        const itemSpawnOpts = { ...spawnOpts, harness: driver, model: modelForIndex(models, i), maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
         const previewPrompt = buildSpawnPrompt({ name: to, orchestrator: orchestratorTarget, subject, body: body.trim(), replyId: previewBatch || "msg-<id>", rev, cwd, root, crew: crewFor(to, orchestratorTarget), workbench: wbFor(to) });
         const t = buildSpawnTarget({ ...itemSpawnOpts, name: to, promptPath: `<logs>/${to}-<stamp>.prompt.md`, prompt: previewPrompt });
         const wtNote = worktreePrefix !== undefined ? ` worktree ../${to}-<stamp> (branch ${worktreePrefix}/${to}-<stamp>)` : branchPrefix !== undefined ? ` branch ${branchPrefix}/${to}-<stamp>` : "";
@@ -3168,7 +3181,7 @@ if (orchestratorBudgetMinutesRaw !== undefined && !(orchestratorBudgetMinutes > 
     const { to, id } = res.items[i];
     const driver = harnesses[i % harnesses.length];
     const itemMaxTurns = maxTurnsNum !== undefined ? maxTurnsNum : ((driver === "claude" || driver === "grok" || driver === "qwen") ? 50 : undefined);
-    const itemSpawnOpts = { ...spawnOpts, harness: driver, maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
+    const itemSpawnOpts = { ...spawnOpts, harness: driver, model: modelForIndex(models, i), maxTurns: itemMaxTurns, allowTools: driver === "claude" ? allowTools : undefined };
     try {
       // Per-worker isolation: provisioned after the brief lands, so a git
       // failure reads like a boot failure (brief still waits on the board).
@@ -3234,12 +3247,13 @@ function printLaunchDryRun(v, args, from, root, asJson, cmdOpt) {
   const names = p.to ? String(p.to).split(",").map((s) => s.trim()).filter(Boolean)
     : Array.from({ length: p.count }, (_, i) => `${p.prefix || "w"}-${i + 1}`);
   const harnesses = Array.isArray(p.harnesses) && p.harnesses.length > 0 ? p.harnesses : [p.harness || "opencode"];
+  const models = Array.isArray(p.models) ? p.models : parseModelList(p.model);
   const rev = gitRevForBoard(root);
   const rows = names.map((to, i) => {
     const driver = harnesses[i % harnesses.length];
     const previewPrompt = buildSpawnPrompt({ name: to, from, subject: p.subject, body: p.body.trim(), replyId: "msg-<id>", rev, cwd: getFlag(args, "--cwd") || process.cwd(), root });
     const t = buildSpawnTarget({
-      harness: driver, cmd: cmdOpt, model: p.model,
+      harness: driver, cmd: cmdOpt, model: modelForIndex(models, i),
       auto: p.permission === "auto" || p.permission === "full" ? true : undefined,
       maxTurns: p.maxTurns, allowTools: p.allowTools, cwd: getFlag(args, "--cwd") || process.cwd(),
       name: to, promptPath: path.join("<board>", "logs", `${to}-<stamp>.prompt.md`), prompt: previewPrompt,
@@ -6916,7 +6930,7 @@ Messaging (primitive — just a tool call, whenever you want):
     (recover mail a dead watcher consumed: clears delivered markers and
      rewinds the cursor so the next poll/push treats it as fresh;
      use after re-registering with the live session)
-    crewbus spawn --body "..." [--count <n> [--prefix <p>] | --to <workers> | --to-group <g> | --to-file <path>] [--subject "..."] [--reply <msg-id>] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--orchestrator-budget-tokens N] [--orchestrator-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--also-channel] [--sender-type human|orchestrator|peer] [--dry-run]
+    crewbus spawn --body "..." [--count <n> [--prefix <p>] | --to <workers> | --to-group <g> | --to-file <path>] [--subject "..."] [--reply <msg-id>] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m[,m2,...]>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--orchestrator-budget-tokens N] [--orchestrator-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--also-channel] [--sender-type human|orchestrator|peer] [--dry-run]
    (--budget-* cap the WORKERS; --orchestrator-budget-* cap the auto-provisioned coordinator lane — same semantics, e.g. a 400k-token orchestrator that posts its aggregate and exits. Unset = persistent orchestrator (default). A standing coordinator keeps its boot-time budget; the flags cannot change it mid-flight.)
    (workers boot with cloud/AI credential vars scrubbed from their environment by default (the orchestrator's keys never leak into briefs); pass --keep-env to inherit everything or --allow-env <prefix,...> to keep listed names. CREWBUS_TOKEN is never inherited — workers claim their own identity.)
     (brief N workers AND boot them detached: the DM lands first so the brief
@@ -6935,6 +6949,9 @@ Messaging (primitive — just a tool call, whenever you want):
      branch). Workers are oneshot by default (finish, reply, exit);
      --persistent marks long-lived peers. Finished headless workers cannot
      receive mail — their replies wait on the board for pull (inbox/gather).
+     --model takes one model (applies to every worker) or a comma list
+     (a,b,c) applied in worker order and cycled — like --harness — so each
+     worker can run a different model; the orchestrator lane uses the first.
      --auto maps to each harness's
      unattended mode (dangerous); --dry-run prints the exact command without
      touching the board. --count 0 is the ORCHESTRATOR REVIVE path: boots nothing
@@ -6996,7 +7013,7 @@ Messaging (primitive — just a tool call, whenever you want):
      Surviving markers are kept, so nothing replays. Pruned ids leave
      tombstones/ entries replicated via sync so deletes don't return.
      Refused while a legal hold is active — see hold.)
-  crewbus pool --from <you> --count N --pool-size S --body "..." [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--prefix p] [--queue a,b] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--auto] [--subject "..."] [--cwd <dir>] [--keep-env] [--allow-env ...] [--json]
+  crewbus pool --from <you> --count N --pool-size S --body "..." [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--prefix p] [--queue a,b] [--model <m[,m2,...]>] [--max-turns <n>] [--allow-tools "..."] [--auto] [--subject "..."] [--cwd <dir>] [--keep-env] [--allow-env ...] [--json]
     (lean async runner: brief N workers but boot at most S concurrently,
      watch exits and auto-replace until N total. Queue backpressure refuses
      when pending > 4*poolSize. State in pool-state/<id>.json, token-checked;
@@ -7105,7 +7122,7 @@ Messaging (primitive — just a tool call, whenever you want):
      capabilities[] negotiated (mixed-version peers degrade with warnings).)
   crewbus doctor [--harness <list>] [--board <path>]
 
-  crewbus launch --from <you> --harness <driver> (--body "..." | --body-file <path>) [--to <a,b> | --count N [--prefix p]] [--subject ...] [--priority high|normal] [--model <m>] [--max-turns <n>] [--allow-tools "..."] [--permission supervised|autoEdits|auto|full] [--isolate] [--worktree <prefix>|--branch <prefix>] [--oneshot|--persistent] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--cmd "..."] [--cwd <dir>] [--sender-type ...] [--dry-run] [--yes] [--i-understand-danger] [--json]
+  crewbus launch --from <you> --harness <driver> (--body "..." | --body-file <path>) [--to <a,b> | --count N [--prefix p]] [--subject ...] [--priority high|normal] [--model <m[,m2,...]>] [--max-turns <n>] [--allow-tools "..."] [--permission supervised|autoEdits|auto|full] [--isolate] [--worktree <prefix>|--branch <prefix>] [--oneshot|--persistent] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--cmd "..."] [--cwd <dir>] [--sender-type ...] [--dry-run] [--yes] [--i-understand-danger] [--json]
     (control-plane launch: validates the plan against packages/contracts
      (permission full needs --i-understand-danger); --dry-run prints the
      exact spawn commands via formatSpawnCmd without booting; otherwise
@@ -7557,7 +7574,16 @@ async function cmdPool(args) {
   if (maxTurnsFlag !== undefined && !(Number(maxTurnsFlag) > 0)) fail("--max-turns must be a positive number");
   if (maxTurnsFlag !== undefined && harness !== "claude" && harness !== "grok" && harness !== "qwen") fail(`--max-turns only applies to claude/grok/qwen (got --harness ${harness})`);
   const maxTurnsNum = maxTurnsFlag === undefined ? ((harness === "claude" || harness === "grok" || harness === "qwen") ? 50 : undefined) : Number(maxTurnsFlag);
-  const model = getFlag(args, "--model");
+  const modelRaw = getFlag(args, "--model");
+  // Per-worker models cycle by queue order, same as spawn/launch.
+  const models = parseModelList(modelRaw);
+  if (modelRaw !== undefined && String(modelRaw).trim() !== "" && models.length === 0) {
+    fail("invalid --model (empty after splitting on commas)");
+  }
+  {
+    const modelErr = modelListErrors(models)[0];
+    if (modelErr) fail(modelErr);
+  }
   const auto = args.includes("--auto");
   const subject = cleanSubject(getFlag(args, "--subject"));
   const cwd = path.resolve(getFlag(args, "--cwd") || path.dirname(root));
@@ -7569,11 +7595,11 @@ async function cmdPool(args) {
   fs.mkdirSync(logDir, { recursive: true });
   const poolId = newId("pool");
   const statePath = path.join(d.root, "pool-state", `${poolId}.json`);
-  const spawnOpts = { harness, model, auto, maxTurns: maxTurnsNum, allowTools: getFlag(args, "--allow-tools"), cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
+  const spawnOpts = { harness, model: models[0], models, auto, maxTurns: maxTurnsNum, allowTools: getFlag(args, "--allow-tools"), cwd, root: d.root, prompt: null, keepEnv: args.includes("--keep-env"), allowEnv: parseAllowEnv(getFlag(args, "--allow-env")) };
   // Resumable state: queue/cursor/idByName let a later `pool resume` pick up
   // supervision; spawnOpts/body/subject/rev reproduce relaunches exactly.
   // `pending` stays a frozen full-queue snapshot for old readers.
-  const state = { id: poolId, from, total: queue.length, poolSize, harness, createdAt: at, launched: 0, done: 0, active: {}, pending: queue.slice(), results: [], body: body.trim(), subject, queue: queue.slice(), cursor: 0, idByName: {}, spawnOpts: { harness, model, auto, maxTurns: maxTurnsNum, allowTools: getFlag(args, "--allow-tools"), cwd }, rev };
+  const state = { id: poolId, from, total: queue.length, poolSize, harness, createdAt: at, launched: 0, done: 0, active: {}, pending: queue.slice(), results: [], body: body.trim(), subject, queue: queue.slice(), cursor: 0, idByName: {}, spawnOpts: { harness, model: models[0], models, auto, maxTurns: maxTurnsNum, allowTools: getFlag(args, "--allow-tools"), cwd }, rev };
   const saveState = () => {
     try {
       const { v, hlc } = stampSyncDoc(null);
@@ -7589,7 +7615,8 @@ async function cmdPool(args) {
   saveState();
   const launchOne = (name) => {
     try {
-      const r = bootWorker(d, spawnOpts, { to: name, id: idByName.get(name), from, subject, body: body.trim(), rev, logDir });
+      const itemOpts = models.length ? { ...spawnOpts, model: modelForIndex(models, queue.indexOf(name)) } : spawnOpts;
+      const r = bootWorker(d, itemOpts, { to: name, id: idByName.get(name), from, subject, body: body.trim(), rev, logDir });
       state.active[name] = r.pid;
       state.launched++;
       state.results.push({ to: name, id: idByName.get(name), pid: r.pid, log: r.logPath, promptPath: r.promptPath });
@@ -7692,7 +7719,10 @@ async function cmdPoolResume(args) {
   if ((state.spawnOpts.auto || false) && !args.includes("--auto")) fail(`pool ${poolId} runs --auto (fully-unattended) — pass --auto to confirm resumed launches carry the same danger (see docs/ISOLATION.md)`);
   if (args.includes("--auto")) requireAutoConfirm(args);
   const cwd = getFlag(args, "--cwd") ? path.resolve(getFlag(args, "--cwd")) : (state.spawnOpts.cwd || path.dirname(root));
-  const spawnOpts = { ...state.spawnOpts, cwd, root: d.root, prompt: null };
+  // Old pool state stored a single model; new state stores the list. Either
+  // way, resolve per worker by queue position (same as the fresh pool run).
+  const models = parseModelList(state.spawnOpts.models !== undefined ? state.spawnOpts.models : state.spawnOpts.model);
+  const spawnOpts = { ...state.spawnOpts, model: models[0], models, cwd, root: d.root, prompt: null };
   const logDir = path.join(d.root, "logs");
   fs.mkdirSync(logDir, { recursive: true });
   const scope = `pool/${state.id}`;
@@ -7710,7 +7740,8 @@ async function cmdPoolResume(args) {
   let lastRenew = Date.now();
   const launchOne = (name) => {
     try {
-      const r = bootWorker(d, spawnOpts, { to: name, id: state.idByName[name], from: state.from, subject: state.subject, body: state.body, rev: state.rev, logDir });
+      const itemOpts = models.length ? { ...spawnOpts, model: modelForIndex(models, state.queue.indexOf(name)) } : spawnOpts;
+      const r = bootWorker(d, itemOpts, { to: name, id: state.idByName[name], from: state.from, subject: state.subject, body: state.body, rev: state.rev, logDir });
       state.active[name] = r.pid;
       state.launched++;
       state.results.push({ to: name, id: state.idByName[name], pid: r.pid, log: r.logPath, promptPath: r.promptPath, resumed: true });

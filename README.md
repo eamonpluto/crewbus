@@ -1,4 +1,4 @@
-# crewbus v10.0.15 — DM bus
+# crewbus v11.1.0 — DM bus
 
 [![CI](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml/badge.svg)](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml)
 
@@ -52,7 +52,7 @@ env overrides below.)
 Layout: `board.json`, `agents/<name>.json`, `dm/<recipient>/<id>.json`,
 `delivered/<recipient>/<id>.json` (push markers, written by the plugin).
 
-Versions: `package.json` (currently 10.0.15) is the source of truth for the
+Versions: `package.json` (currently 11.1.0) is the source of truth for the
 release version. `board.json`'s `version: 2` is the **board schema version**
 (a different number on purpose — do not "align" them). New to the project?
 Start with `docs/QUICKSTART.md` (5 minutes).
@@ -391,6 +391,9 @@ crewbus spawn --harness cursor --to alice --body "..."
 
 # any command, same board env (CREWBUS_DIR + CREWBUS_AGENT)
 crewbus spawn --harness opencode --to alice --body "..."
+
+# per-worker models: comma list applies in worker order (cycled if shorter)
+crewbus spawn --to alice,bob,carol --model qwen3.8-max,kimi-k3,glm-5.3-prime --body "..."
 
 crewbus spawn --to alice --body "..." --dry-run  # preview prompt + exact command, touch nothing
 

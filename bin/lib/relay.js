@@ -42,7 +42,7 @@ import https from "node:https";
 import { readJson, writeJson, listJson, getFlag, cleanWebName, gitRevForBoard, MAX_BODY_CHARS, MAX_FWD_DEPTH, webErr } from "./store.js";
 import { readAgent, agentTokenMatches, mintToken, newSalt, hashToken, timingSafeEqualStr, writeAgentFile, isBoardFrozen, defaultRoleForNew, authorizeThrow, authorizeCheck, touchAgent, ensureOrchestrator, ORCHESTRATOR_NAME } from "./identity.js";
 import { httpJson } from "./sync.js";
-import { killWorkers, pidAlive, bootWorker, parseAllowEnv, isPidStale } from "./spawn.js";
+import { killWorkers, pidAlive, bootWorker, parseAllowEnv, isPidStale, parseModelList, modelForIndex, modelListErrors } from "./spawn.js";
 import { expandGroups, heuristicSenderType } from "./groups.js";
 import { deliverDMs, findMessageById } from "./mail.js";
 import { appendChainRecord } from "./export.js";
@@ -220,7 +220,14 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
   const cleanSub = subject ? subject.slice(0, 120) : undefined;
   const replyTo = cleanOpt(a.replyTo);
   const cleanRep = replyTo ? replyTo.slice(0, 80) : undefined;
-  const model = cleanOpt(a.model);
+  const modelList = parseModelList(a.models !== undefined ? a.models : a.model);
+  if (a.models === undefined && a.model !== undefined && a.model !== null && String(a.model).trim() !== "" && modelList.length === 0) {
+    throw webErr(400, "invalid model (empty after splitting on commas)");
+  }
+  const modelErr = modelListErrors(modelList)[0];
+  if (modelErr) throw webErr(400, modelErr);
+  const models = modelList;
+  const model = models[0];
   const auto = a.auto === true;
   const lifetime = a.lifetime === "persistent" ? "persistent" : "oneshot";
   if (a.lifetime !== undefined && a.lifetime !== null && !["oneshot", "persistent"].includes(String(a.lifetime))) throw webErr(400, "lifetime must be oneshot|persistent");
@@ -255,7 +262,7 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
   const at = new Date().toISOString();
   const logDir = path.join(d.root, "logs");
   fs.mkdirSync(logDir, { recursive: true });
-  const spawnOpts = { harness, cmd, model, auto, maxTurns, allowTools, cwd, root: d.root, prompt: null, keepEnv: a.keepEnv === true, allowEnv: parseAllowEnv(a.allowEnv) };
+  const spawnOpts = { harness, cmd, model, models, auto, maxTurns, allowTools, cwd, root: d.root, prompt: null, keepEnv: a.keepEnv === true, allowEnv: parseAllowEnv(a.allowEnv) };
   const senderType = (() => {
     const t = a.senderType !== undefined ? String(a.senderType).toLowerCase() : (a.sender_type !== undefined ? String(a.sender_type).toLowerCase() : undefined);
     if (t !== undefined && !["human", "orchestrator", "peer"].includes(t)) throw webErr(400, "senderType must be human|orchestrator|peer");
@@ -285,6 +292,7 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
     const itemSpawnOpts = {
       ...spawnOpts,
       harness: driver,
+      model: modelForIndex(models, i),
       maxTurns: itemMaxTurns,
       allowTools: driver === "claude" ? allowTools : undefined,
     };

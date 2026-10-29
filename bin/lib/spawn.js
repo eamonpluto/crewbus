@@ -461,6 +461,35 @@ export function resolveHarnessExe(harness) {
   return _harnessExeCache[harness];
 }
 
+// Per-worker model lists: `--model a,b,c` applies a/b/c to workers in order
+// and cycles when there are more workers than models (same semantics as
+// `--harness`). A single value keeps the old apply-to-all behavior. Model IDs
+// do not contain commas today (provider/model, dashes, dots, colons are all
+// fine), so the comma is the list separator.
+export const MODEL_NAME_MAX = 100;
+
+export function parseModelList(raw) {
+  if (raw === undefined || raw === null) return [];
+  const list = Array.isArray(raw) ? raw : String(raw).split(",");
+  return list
+    .map((m) => (m === undefined || m === null ? "" : String(m).trim()))
+    .filter(Boolean);
+}
+
+export function modelForIndex(models, i) {
+  if (!Array.isArray(models) || models.length === 0) return undefined;
+  const n = models.length;
+  return models[((i % n) + n) % n];
+}
+
+export function modelListErrors(models) {
+  const errors = [];
+  for (const m of Array.isArray(models) ? models : []) {
+    if (String(m).length > MODEL_NAME_MAX) errors.push(`model name too long (max ${MODEL_NAME_MAX} chars)`);
+  }
+  return errors;
+}
+
 export function buildSpawnTarget({ harness, cmd, model, auto, maxTurns, allowTools, cwd, name, promptPath, prompt, sessionId }) { // line 4114
   const quoteFree = (s) => String(s).replace(/"/g, "'");
   if (harness === "opencode") {

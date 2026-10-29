@@ -288,6 +288,25 @@ const dryCur = run(["spawn", "--harness", "cursor", "--to", "cw1", "--body", "x"
 check("spawn cursor builds headless command", dryCur.includes("cmd: cursor-agent -p") && dryCur.includes("--force") && dryCur.includes("--trust") && dryCur.includes("--workspace"));
 check("spawn cursor+auto maps to yolo", run(["spawn", "--harness", "cursor", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--yolo"));
 check("spawn agy alias resolves", run(["spawn", "--harness", "agy", "--to", "cw1", "--body", "x", "--dry-run"]).includes("[antigravity]"));
+const dryModels = run(["spawn", "--harness", "claude", "--to", "mw1,mw2,mw3", "--model", "qwen3.8-max,kimi-k3,glm-5.3-prime", "--body", "x", "--dry-run"]);
+const dryModelLines = dryModels.split("\n").filter((l) => l.startsWith("would spawn mw"));
+check("spawn assigns a different model per worker", dryModelLines.length === 3
+  && dryModelLines[0].includes("--model qwen3.8-max")
+  && dryModelLines[1].includes("--model kimi-k3")
+  && dryModelLines[2].includes("--model glm-5.3-prime"));
+const dryModelCycle = run(["spawn", "--harness", "claude", "--to", "cy1,cy2,cy3", "--model", "m1,m2", "--body", "x", "--dry-run"]);
+const dryCycleLines = dryModelCycle.split("\n").filter((l) => l.startsWith("would spawn cy"));
+check("spawn cycles a shorter model list", dryCycleLines.length === 3
+  && dryCycleLines[0].includes("--model m1 ")
+  && dryCycleLines[1].includes("--model m2 ")
+  && dryCycleLines[2].includes("--model m1 "));
+let spawnBadModel = false;
+try {
+  run(["spawn", "--to", "mx1", "--model", ",", "--body", "x", "--dry-run"]);
+} catch {
+  spawnBadModel = true;
+}
+check("spawn invalid empty model refused", spawnBadModel);
 check("spawn claude+auto maps to skip-permissions", run(["spawn", "--harness", "claude", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--dangerously-skip-permissions"));
 check("spawn codex+auto maps to danger-full-access", run(["spawn", "--harness", "codex", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("danger-full-access"));
 check("spawn grok+auto maps to always-approve", run(["spawn", "--harness", "grok", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--always-approve"));

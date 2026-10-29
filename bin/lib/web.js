@@ -20,7 +20,8 @@ import { fileURLToPath } from "node:url";
 import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, readBoardMeta, writeBoardMeta, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS } from "./store.js";
 import { readAgent, agentTokenMatches, authorizeCheck, ensureOrchestrator, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
 import { readDMs, readVisible, ackedIds, ackedIdSet, findMessageById, deliverDMs, parseRecipients } from "./mail.js";
-import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim, buildOrchestratorPrompt, provisionOrchestrator, ORCHESTRATOR_NAME, isPidStale } from "./spawn.js";
+import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim, buildOrchestratorPrompt, provisionOrchestrator,
+           ORCHESTRATOR_NAME, isPidStale, parseModelList, modelForIndex } from "./spawn.js";
 import { groupTelemetryData, collectBatch, gatherTelemetry, listBatches } from "./groups.js";
 import { httpJson } from "./sync.js";
 import { readChainRecords, verifyChainRecords, appendChainRecord, readHold, readBoardQuotas } from "./export.js";
@@ -2786,6 +2787,7 @@ export async function handleApiLaunch(d, body) {
   if (!v.ok) return { status: 400, payload: { error: "launch plan invalid", errors: v.errors, warnings: v.warnings } };
   const p = v.plan;
   const harnesses = Array.isArray(p.harnesses) && p.harnesses.length > 0 ? p.harnesses : [p.harness || "opencode"];
+  const models = Array.isArray(p.models) ? p.models : parseModelList(p.model);
   const orchestratorMode = "auto";
   const orchestratorTarget = ORCHESTRATOR_NAME;
   const names = p.to ? String(p.to).split(",").map((s) => cleanWebName(s)).filter(Boolean)
@@ -2802,7 +2804,7 @@ export async function handleApiLaunch(d, body) {
       const driver = harnesses[i % harnesses.length];
       const previewPrompt = buildSpawnPrompt({ name: to, orchestrator: orchestratorTarget, subject: p.subject, body: p.body.trim(), replyId: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", rev, cwd, root: d.root });
       const t = buildSpawnTarget({
-        harness: driver, model: p.model,
+        harness: driver, model: modelForIndex(models, i),
         auto: p.permission === "auto" || p.permission === "full" ? true : undefined,
         maxTurns: p.maxTurns, allowTools: p.allowTools, cwd,
         name: to, promptPath: path.join("<board>", "logs", `${to}-<stamp>.prompt.md`), prompt: previewPrompt,
@@ -2849,7 +2851,7 @@ export async function handleApiLaunch(d, body) {
   for (let i = 0; i < res.items.length; i++) {
     const { to, id } = res.items[i];
     const driver = harnesses[i % harnesses.length];
-    const spawnOpts = { harness: driver, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model, auto, maxTurns: p.maxTurns, allowTools: p.allowTools, cwd, root: d.root, prompt: null };
+    const spawnOpts = { harness: driver, cmd: body && body.cmd ? String(body.cmd) : undefined, model: modelForIndex(models, i), auto, maxTurns: p.maxTurns, allowTools: p.allowTools, cwd, root: d.root, prompt: null };
     try {
       const r = bootWorker(d, spawnOpts, { to, id, from, orchestrator: orchestratorTarget, subject: p.subject, body: p.body.trim(), rev, logDir });
       workers.push({ name: to, pid: r.pid, replyId: id, log: r.logPath, driver });
@@ -2860,7 +2862,7 @@ export async function handleApiLaunch(d, body) {
   let coordinator = undefined;
   if (orchestratorMode === "auto") {
     const coordHarness = harnesses[0] || "opencode";
-    const coordSpawnOpts = { harness: coordHarness, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model, auto, cwd, root: d.root, prompt: null };
+    const coordSpawnOpts = { harness: coordHarness, cmd: body && body.cmd ? String(body.cmd) : undefined, model: modelForIndex(models, 0), auto, cwd, root: d.root, prompt: null };
     try {
       coordinator = provisionOrchestrator(d, {
         spawnOpts: coordSpawnOpts,

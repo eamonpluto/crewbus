@@ -27,7 +27,7 @@ if (process.platform === "win32") {
 }
 process.env.PATH = `${shimDir}${path.delimiter}${process.env.PATH || ""}`;
 process.env.OPENCODE_EXE = "";
-import { buildSpawnTarget, buildSpawnPrompt, buildCrewContext, buildRespawnTarget, buildRespawnBrief, extractHarnessSessionId, isPidStale, readWorkerSession, syncWorkerSession, workerStatus, bootWorker, pidStartTime, parsePsEtime, probeOpencodeStorage, resolveOpencodeExe } from "../bin/lib/spawn.js";
+import { buildSpawnTarget, buildSpawnPrompt, buildCrewContext, buildRespawnTarget, buildRespawnBrief, extractHarnessSessionId, isPidStale, readWorkerSession, syncWorkerSession, workerStatus, bootWorker, pidStartTime, parsePsEtime, probeOpencodeStorage, resolveOpencodeExe, parseModelList, modelForIndex, modelListErrors } from "../bin/lib/spawn.js";
 import { mergeAgentDoc } from "../bin/lib/identity.js";
 import { boardSnapshot } from "../bin/lib/web.js";
 import { ensureBoard } from "../bin/lib/store.js";
@@ -430,6 +430,15 @@ await watcher.dispose();
 if (savedBoardDir === undefined) delete process.env.CREWBUS_DIR;
 else process.env.CREWBUS_DIR = savedBoardDir;
 fs.rmSync(xBoard, { recursive: true, force: true });
+
+// ------------------------------------------------------- per-worker model lists
+check("models: comma list parsed + trimmed", JSON.stringify(parseModelList("a, b ,c")) === JSON.stringify(["a", "b", "c"]));
+check("models: array accepted", JSON.stringify(parseModelList(["a", " b "])) === JSON.stringify(["a", "b"]));
+check("models: single stays single", JSON.stringify(parseModelList("solo")) === JSON.stringify(["solo"]));
+check("models: undefined/blank empty", parseModelList(undefined).length === 0 && parseModelList("").length === 0);
+check("models: index cycles", modelForIndex(["a", "b"], 0) === "a" && modelForIndex(["a", "b"], 2) === "a" && modelForIndex(["a", "b"], 3) === "b");
+check("models: empty -> undefined", modelForIndex([], 0) === undefined);
+check("models: too long flagged", modelListErrors(["x".repeat(101)]).length === 1 && modelListErrors(["ok"]).length === 0);
 
 // ------------------------------------------------------- harness session-id capture (respawn slice 1)
 const tO = buildSpawnTarget({ harness: "opencode", cwd: "/tmp", name: "w", promptPath: "/tmp/x.md", prompt: "p" });

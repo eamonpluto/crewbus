@@ -6,7 +6,7 @@
   "note": "Same validation as CLI launch wizard. Thin over bootWorker (local) or remoteSpawn (per relay). dryRun previews exact commands without booting.",
   "request": {
     "required": ["harness", "body"],
-    "optional": ["board", "count", "prefix", "to", "subject", "priority", "model", "maxTurns", "allowTools", "permission", "isolate", "worktree", "branch", "lifetime", "budgetTokens", "budgetMinutes", "timeout", "target", "dryRun"],
+    "optional": ["board", "count", "prefix", "to", "subject", "priority", "model", "models", "maxTurns", "allowTools", "permission", "isolate", "worktree", "branch", "lifetime", "budgetTokens", "budgetMinutes", "timeout", "target", "dryRun"],
     "defaults": { "count": 1, "permission": "supervised", "lifetime": "oneshot", "target": "local", "dryRun": false },
     "constraints": {
       "harness": "one of harness.json drivers",
