@@ -302,6 +302,7 @@ crewbus init --harness &lt;name&gt; --portable   # portable wiring
 
 <h2 id="changes">16 · Changelog</h2>
 <ul>
+  <li><strong>11.2.1</strong> — Kill robustness on Windows: <code>spawn-kill</code> / <code>/api/kill</code> re-check liveness after a failed <code>taskkill</code> and report <code>already-exited</code> instead of a false <code>kill-failed</code>.</li>
   <li><strong>11.2.0</strong> — Orchestrator model selection: <code>--orchestrator-model &lt;m&gt;</code> sets the coordinator lane's model on <code>spawn</code>, <code>launch</code>, and <code>pool</code> when the lane is provisioned (standing coordinators keep their boot-time model).</li>
   <li><strong>11.1.0</strong> — Per-worker models: <code>--model a,b,c</code> assigns a different model per spawned worker (cycled in worker order; a single value still applies to all), across <code>spawn</code>, <code>launch</code>, <code>pool</code>, web/RPC, and remote relay boots.</li>
   <li><strong>11.0.0</strong> - Two-role control plane: one <code>orchestrator</code> plus workers. Removed <code>boss</code>/<code>admin</code>/<code>lead</code>/<code>auditor</code>; <code>spawn "brief" --count N</code> runs as the orchestrator (no <code>--from</code>/<code>--lead</code>); <code>crewbus orchestrator init|show</code>; approvals pin to <code>--to orchestrator</code>; docs/contracts/tests updated.</li>

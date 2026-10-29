@@ -1,5 +1,14 @@
 # Changelog
 
+## 11.2.1
+
+Kill robustness on Windows.
+
+- `spawn-kill` and `/api/kill` re-check liveness after a failed `taskkill`
+  (the process exited between the liveness check and the kill, or taskkill
+  returns non-zero for a dying tree) and report `already-exited` instead of a
+  false `kill-failed`. Kill tests accept a worker that exited on its own.
+
 ## 11.2.0
 
 Orchestrator model selection.

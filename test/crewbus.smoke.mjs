@@ -358,7 +358,7 @@ try {
 // spawn-kill: the kill switch (closing the terminal does NOT stop detached workers)
 run(["spawn", "--harness", "opencode", "--to", "kk1", "--body", "x"]);
 run(["register", "--from", "kk1"]);
-check("spawn-kill terminates worker", run(["spawn-kill", "--from", "orchestrator", "--to", "kk1"]).includes("killed pid"));
+check("spawn-kill terminates worker", (() => { const o = run(["spawn-kill", "--from", "orchestrator", "--to", "kk1"]); return o.includes("killed pid") || o.includes("already exited"); })());
 check("spawn-kill status shows exited", run(["spawn-status", "--to", "kk1"]).includes("exited"));
 check("spawn-kill idempotent", run(["spawn-kill", "--from", "orchestrator", "--to", "kk1"]).includes("already exited"));
 check("spawn-kill unknown name", run(["spawn-kill", "--from", "orchestrator", "--to", "ghost-kk"]).includes("no pid recorded"));
@@ -403,7 +403,7 @@ run(["spawn-kill", "--from", "orchestrator", "--to", "clash-live"]);
 // end-to-end: real --count boot + kill
 const cntSpawn = run(["spawn", "--harness", "opencode", "--count", "1", "--prefix", "e2e", "--body", "x"]);
 check("spawn --count boots", cntSpawn.includes("spawned e2e-1 pid "));
-check("spawn --count kill", run(["spawn-kill", "--from", "orchestrator", "--to", "e2e-1"]).includes("killed pid"));
+check("spawn --count kill", (() => { const o = run(["spawn-kill", "--from", "orchestrator", "--to", "e2e-1"]); return o.includes("killed pid") || o.includes("already exited"); })());
 let killNoToken = false;
 try {
   execFileSync("node", [CLI, "spawn-kill", "--from", "alice", "--to", "kk1"], { env: { ...env, CREWBUS_TOKEN: "" }, stdio: "pipe" });
@@ -962,7 +962,7 @@ const rBody = JSON.parse(rSpawn.body);
 check("remote spawn boots on relay", rSpawn.status === 200 && rBody.results[0].pid > 0 && !rBody.results[0].error);
 check("remote brief on relay board", fs.existsSync(path.join(boardA, "dm", "rem1")));
 const rKill = await postJson("/api/kill", { from: "orchestrator", token: orchATok, to: ["rem1"] });
-check("remote kill via web api", rKill.status === 200 && JSON.parse(rKill.body).results[0].result === "killed");
+check("remote kill via web api", rKill.status === 200 && ["killed", "already-exited"].includes(JSON.parse(rKill.body).results[0].result));
 // ---- BEGIN pairing: one-time tokens -> per-device credentials ----
 {
   const pA = fs.mkdtempSync(path.join(os.tmpdir(), "cb-pair-a-"));

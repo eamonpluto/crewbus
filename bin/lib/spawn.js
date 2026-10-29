@@ -1460,6 +1460,18 @@ export async function killWorkers(d, names) { // line 4529
         process.kill(pid);
       }
     } catch (e) {
+      // The process may have exited between the liveness check and the kill
+      // call (taskkill also returns non-zero for a dying tree). Re-check
+      // before reporting failure — a dead pid is not a kill failure.
+      let dead = false;
+      for (let i = 0; i < 20 && !dead; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        dead = !pidAlive(pid);
+      }
+      if (dead) {
+        out.push({ name, result: "already-exited", pid });
+        continue;
+      }
       out.push({ name, result: "kill-failed", pid, detail: String((e && e.code) || e) });
       continue;
     }
