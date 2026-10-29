@@ -128,11 +128,11 @@ try {
   check("cli: register --from unknown refuses", !g1.ok && /reserved sentinel/.test(g1.out));
 
   // Guard 2: admin --for unknown refuses likewise.
-  const bossOut = run(["register", "--from", "boss"]);
+  const bossOut = run(["orchestrator", "init"]);
   const bossTok = (bossOut.match(/token (abt-[0-9a-f]+)/) || [])[1];
-  check("cli: boss registers with minted token", !!bossTok);
-  const g2 = runFail(["register", "--from", "boss", "--token", bossTok, "--for", "unknown", "--role", "worker"]);
-  check("cli: admin --for unknown refuses", !g2.ok && /reserved sentinel/.test(g2.out));
+  check("cli: orchestrator registers with minted token", !!bossTok);
+  const g2 = runFail(["register", "--from", "orchestrator", "--token", bossTok, "--for", "unknown", "--role", "worker"]);
+  check("cli: orchestrator --for unknown refuses", !g2.ok && /reserved sentinel/.test(g2.out));
 
   // Guard 3: send --from unknown refuses (before any identity mint).
   const g3 = runFail(["send", "--from", "unknown", "--to", "somebody", "--body", "hi"]);
@@ -144,7 +144,7 @@ try {
   ensureBoard(path.join(freshDir, ".crewbus"));
   const freshEnv = { ...process.env, CREWBUS_DIR: path.join(freshDir, ".crewbus") };
   const fresh = execFileSync("node", [CLI, "recover"], { env: freshEnv, cwd: freshDir, stdio: ["ignore", "pipe", "pipe"] }).toString();
-  check("cli: recover on empty board prints no-candidates guidance", fresh.includes("no identity candidates") && /register --from <admin> --for <name>/.test(fresh));
+  check("cli: recover on empty board prints no-candidates guidance", fresh.includes("no identity candidates") && /register --from <orchestrator> --for <name>/.test(fresh));
   for (let i = 0; i < 15; i++) { try { fs.rmSync(freshDir, { recursive: true, force: true }); break; } catch { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100); } }
 
   // recover with a register-bound identity: proven + resume script.
@@ -175,7 +175,7 @@ try {
   const carlOut = run(["register", "--from", "carl"]);
   const carlTok = (carlOut.match(/token (abt-[0-9a-f]+)/) || [])[1];
   run(["register", "--from", "carl", "--token", carlTok]); // touch carl
-  run(["register", "--from", "boss", "--token", bossTok, "--offboard", "carl"]);
+  run(["register", "--from", "orchestrator", "--token", bossTok, "--offboard", "carl"]);
   const r5 = run(["recover"]);
   check("cli: offboarded carl excluded from recover", !r5.includes("carl"));
 } catch (e) {

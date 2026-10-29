@@ -16,7 +16,7 @@ const check = (label, cond) => {
   if (!cond) failures++;
 };
 
-import { buildCoordinatorPrompt, provisionAutoLead, killWorkers, LEAD_NAME } from "../bin/lib/spawn.js";
+import { buildOrchestratorPrompt, provisionOrchestrator, killWorkers, ORCHESTRATOR_NAME } from "../bin/lib/spawn.js";
 import { ensureBoard } from "../bin/lib/store.js";
 
 // ---------------------------------------------------------------------------
@@ -25,38 +25,38 @@ import { ensureBoard } from "../bin/lib/store.js";
 const cwdU = path.join(os.tmpdir(), "cb-leadbudget-unit");
 const rootU = path.join(cwdU, ".crewbus");
 const baseArgs = {
-  name: LEAD_NAME, from: "boss", subject: "s", body: "m", batch: "b-1",
+  name: ORCHESTRATOR_NAME, subject: "s", body: "m", batch: "b-1",
   workers: [{ name: "w-1", id: "msg-1", harness: "opencode" }],
   crew: [], cwd: cwdU, root: rootU, auto: false,
 };
-const plain = buildCoordinatorPrompt({ ...baseArgs });
+const plain = buildOrchestratorPrompt({ ...baseArgs });
 check("prompt: no-budget coordinator mentions no mandate", !plain.includes("Budget mandate:"));
-const capped = buildCoordinatorPrompt({ ...baseArgs, budgetTokens: 400000, budgetMinutes: 30 });
+const capped = buildOrchestratorPrompt({ ...baseArgs, budgetTokens: 400000, budgetMinutes: 30 });
 check("prompt: budgeted coordinator states tokens", capped.includes("Budget mandate:") && capped.includes("400000 est. tokens total"));
 check("prompt: budgeted coordinator states minutes + reap warning", capped.includes("30 wall-clock minutes total") && capped.includes("reaped at the cap"));
-const onlyMin = buildCoordinatorPrompt({ ...baseArgs, budgetMinutes: 30 });
+const onlyMin = buildOrchestratorPrompt({ ...baseArgs, budgetMinutes: 30 });
 check("prompt: minutes-only budget reads cleanly", onlyMin.includes("Budget mandate:") && onlyMin.includes("30 wall-clock minutes total") && !onlyMin.includes("est. tokens"));
 
 // ---------------------------------------------------------------------------
-// Unit: provisionAutoLead plumbs the budget into bootWorker's stamp
+// Unit: provisionOrchestrator plumbs the budget into bootWorker's stamp
 // ---------------------------------------------------------------------------
 const dirU = fs.mkdtempSync(path.join(os.tmpdir(), "cb-leadbudget-prov-"));
 const dU = ensureBoard(path.join(dirU, ".crewbus"));
 try {
-  const prov = provisionAutoLead(dU, {
+  const prov = provisionOrchestrator(dU, {
     spawnOpts: { harness: "opencode", cwd: dirU, root: dU.root },
-    from: "boss", subject: "budget UA", body: "coord budget check", rev: "r0",
+    subject: "budget UA", body: "coord budget check", rev: "r0",
     logDir: path.join(dU.root, "logs"),
     workers: [{ name: "w-1", id: "msg-1", harness: "opencode" }],
     batch: "b-ua", crew: [], workbench: [], auto: false,
     budgetTokens: 1000, budgetMinutes: 3,
   });
-  check("prov: coordinator minted+booted", prov.action === "minted" && typeof prov.pid === "number");
-  const doc = JSON.parse(fs.readFileSync(path.join(dU.agents, `${LEAD_NAME}.json`), "utf8"));
+  check("prov: coordinator minted+booted", prov.action === "created" && typeof prov.pid === "number");
+  const doc = JSON.parse(fs.readFileSync(path.join(dU.agents, `${ORCHESTRATOR_NAME}.json`), "utf8"));
   check("prov: budget tokens stamped on the lane", doc.budgetTokens === 1000);
   check("prov: budget minutes stamped on the lane", doc.budgetMinutes === 3);
   check("prov: budget clock (budgetSince) flipped at boot", typeof doc.budgetSince === "string" && !Number.isNaN(Date.parse(doc.budgetSince)));
-  try { await killWorkers(dU, [LEAD_NAME]); } catch {}
+  try { await killWorkers(dU, [ORCHESTRATOR_NAME]); } catch {}
 } catch (e) {
   check(`prov suite failed (unexpected): ${e.message}`, false);
 }
@@ -74,11 +74,11 @@ const runFail = (args) => {
     return { ok: false, out: String((e && e.stderr) || "") };
   }
 };
-const g1 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--lead-budget-tokens", "not-a-number"]);
-check("cli: --lead-budget-tokens rejects non-numbers", !g1.ok && /--lead-budget-tokens must be a positive number/.test(g1.out));
-const g2 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--lead-budget-minutes", "0"]);
-check("cli: --lead-budget-minutes rejects 0", !g2.ok && /--lead-budget-minutes must be a positive number/.test(g2.out));
-const g3 = runFail(["spawn", "--from", "boss", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--lead-budget-tokens", "1000", "--budget-minuts", "30"]);
+const g1 = runFail(["spawn", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--orchestrator-budget-tokens", "not-a-number"]);
+check("cli: --orchestrator-budget-tokens rejects non-numbers", !g1.ok && /--orchestrator-budget-tokens must be a positive number/.test(g1.out));
+const g2 = runFail(["spawn", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--orchestrator-budget-minutes", "0"]);
+check("cli: --orchestrator-budget-minutes rejects 0", !g2.ok && /--orchestrator-budget-minutes must be a positive number/.test(g2.out));
+const g3 = runFail(["spawn", "--count", "1", "--harness", "opencode", "--body", "x", "--dry-run", "--orchestrator-budget-tokens", "1000", "--budget-minuts", "30"]);
 check("cli: known limitation — typo'd budget flag is silently ignored (crewbus lenient-argv; strict-unknown flags is a repo-wide policy item)", g3.ok === true || (!g3.ok && /unknown/i.test(g3.out)));
 
 for (const d of [dirU, dirE]) {

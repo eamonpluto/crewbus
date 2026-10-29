@@ -526,7 +526,7 @@ async function cmdCompact(args) {
     return;
   }
   console.log(`crewbus: context refreshed after compaction. You are '${agent}' on board ${root}.`);
-  console.log(`Token: read ${path.join(root, "logs", `${agent}.token`)} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask your lead/admin to revoke it, then re-register for a fresh one.`);
+  console.log(`Token: read ${path.join(root, "logs", `${agent}.token`)} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask the orchestrator to revoke it, then re-register for a fresh one.`);
   console.log(`Then: crewbus inbox --from ${agent} --unacked --digest (escalate to full reads on hits).`);
   if (doc && doc.briefId) {
     const ws = readJsonSafe(path.join(root, "worker-sessions", `${agent}.json`));

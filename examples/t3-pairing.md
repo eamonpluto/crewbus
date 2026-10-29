@@ -21,7 +21,7 @@ each other on one board.
 export CREWBUS_DIR="$REPO/.crewbus"
 crewbus register --from t3-worker-1   # save the printed token
 export CREWBUS_TOKEN="<token>"
-crewbus send --from t3-worker-1 --to lead --subject "brief: cards" \
+crewbus send --from t3-worker-1 --to orchestrator --subject "brief: cards" \
   --body "Scope audited, decorative borders dropped. Summary attached."
 crewbus inbox --from t3-worker-1 --unacked
 ```

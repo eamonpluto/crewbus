@@ -8,10 +8,10 @@ output, does **not** ack, and exits 1.
 
 ```sh
 # worker replies with a checkable artifact reference
-crewbus send --from w1 --to lead --reply <brief-id> --artifact out/w1.json --body "done"
+crewbus send --from w1 --to orchestrator --reply <brief-id> --artifact out/w1.json --body "done"
 
-# lead verifies (no shell: command is argv-split, run via execFile, 60s timeout)
-crewbus ack --from lead --id <reply-msg-id> --verify "node test/check.mjs --input out/w1.json"
+# the orchestrator verifies (no shell: command is argv-split, run via execFile, 60s timeout)
+crewbus ack --from orchestrator --id <reply-msg-id> --verify "node test/check.mjs --input out/w1.json"
 ```
 
 Environment for the command: `CREWBUS_MSG=<msg-id>`,
@@ -37,18 +37,18 @@ MCP: `dm_ack({agent, id, verify, token})` runs the same hook.
 
 ```sh
 export CREWBUS_DIR="$(mktemp -d)/ab-verify-demo"
-crewbus register --from lead
-export CREWBUS_TOKEN="<lead-token-from-above>"  # printed once at claim
+crewbus register --from orchestrator
+export CREWBUS_TOKEN="<orchestrator-token-from-above>"  # printed once at claim
 crewbus register --from w1   # save w1's token; w1 passes --token per call
 crewbus group create demo --add w1
-crewbus send --from lead --to w1 --body "write 42 to answer.txt"
-crewbus send --from w1 --token <w1-token> --to lead --reply <brief> --artifact answer.txt --body "done"
+crewbus send --from orchestrator --to w1 --body "write 42 to answer.txt"
+crewbus send --from w1 --token <w1-token> --to orchestrator --reply <brief> --artifact answer.txt --body "done"
 # check.mjs exits 0 iff answer.txt contains exactly "42":
 #   import fs from 'node:fs';
 #   if (fs.readFileSync('answer.txt','utf8').trim() !== '42') process.exit(1)
 # fails: file does not satisfy the checker → NOT acked, exit 1
-crewbus ack --from lead --id <reply> --verify "node check.mjs"
+crewbus ack --from orchestrator --id <reply> --verify "node check.mjs"
 # after the worker fixes it → acked+verified
-crewbus ack --from lead --id <reply> --verify "node check.mjs"
-crewbus result record --group demo --msg <reply> --artifact answer.txt --from lead
+crewbus ack --from orchestrator --id <reply> --verify "node check.mjs"
+crewbus result record --group demo --msg <reply> --artifact answer.txt --from orchestrator
 ```

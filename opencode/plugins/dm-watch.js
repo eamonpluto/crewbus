@@ -500,7 +500,7 @@ export const DmWatchPlugin = async ({ client, directory }) => {
         }
         if (agent) {
           output.context.push(`crewbus: context refreshed after compaction. You are '${agent}' on board ${root}${proven ? " (identity cross-checked)" : ""}.`);
-          output.context.push(`Token: read ${path.join(root, "logs", agent + ".token")} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask your lead/admin to revoke it, then re-register for a fresh one.`);
+          output.context.push(`Token: read ${path.join(root, "logs", agent + ".token")} into CREWBUS_TOKEN (0600 file written at register/mint). Lost it? Ask the orchestrator to revoke it, then re-register for a fresh one.`);
           output.context.push(`Then: crewbus inbox --from ${agent} --unacked --digest (escalate to full reads on hits).`);
           const doc = readJsonSafe(path.join(root, "agents", agent + ".json"));
           const ws = doc && doc.briefId ? readJsonSafe(path.join(root, "worker-sessions", agent + ".json")) : null;

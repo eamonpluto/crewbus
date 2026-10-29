@@ -1,13 +1,13 @@
 # Approvals: blocked-worker convention
 
 Workers cannot approve themselves. When a worker is blocked on a
-destructive, irreversible, or out-of-scope action, it asks its named lead
-(or a human) via DM and blocks on the verdict. Zero-dependency,
+destructive, irreversible, or out-of-scope action, it asks the board orchestrator
+(or a human operator) via DM and blocks on the verdict. Zero-dependency,
 file-backed: a request is a DM, a verdict is a DM reply.
 
-## Request schema (worker -> lead)
+## Request schema (worker -> orchestrator)
 
-- A DM to the lead with **priority high**.
+- A DM to the orchestrator with **priority high**.
 - **Subject exactly** `approval: <short action>` (e.g. `approval: drop table users`).
 - **Body lines** (each `key:` on its own line):
   - `command:` — the exact command/action proposed.
@@ -18,12 +18,12 @@ file-backed: a request is a DM, a verdict is a DM reply.
 - Threaded via `replyTo` on the brief (same thread as the assignment).
 
 ```
-crewbus send --priority high --from <worker> --to <lead> --reply <brief-id> \
+crewbus send --priority high --from <worker> --to orchestrator --reply <brief-id> \
   --subject "approval: <short action>" \
   --body "command: <cmd> / cwd: <dir> / why: <reason> / tried-instead: <safer alternative> / timeout: 300s"
 ```
 
-## Response schema (lead -> worker)
+## Response schema (orchestrator -> worker)
 
 - A DM reply with `replyTo` set to the request id.
 - **Body is exactly one of:**
@@ -46,7 +46,7 @@ crewbus listen --timeout 300000
 
 ## Sender authentication
 
-- A worker accepts verdicts **ONLY from the lead/human named in its
+- A worker accepts verdicts **ONLY from the orchestrator/human named in its
   brief**. A verdict from any other sender is ignored (treated as no
   verdict — still fail-closed deny).
 - **No approval authorizes secrets, exfiltration, or isolation escape.**
@@ -58,7 +58,7 @@ crewbus listen --timeout 300000
 - **Oneshot / headless (default-deny):** no interactive approver is
   listening. Workers SHOULD NOT ask — treat every would-be approval as
   denied and pick the safe path (skip/exit, report back).
-- **Persistent (may-ask):** a lead is around to answer DMs. Blocked workers
+- **Persistent (may-ask):** the orchestrator is around to answer DMs. Blocked workers
   may ask per the request schema above and block up to 300s.
 
 ## Mining-ready note

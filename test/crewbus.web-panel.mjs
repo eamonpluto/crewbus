@@ -21,6 +21,7 @@ const run = (args) =>
 
 run(["init", "--board", board]);
 const wleadTok = run(["register", "--from", "wlead"]).match(/token (abt-[0-9a-f]+)/)[1];
+  const orchTok = run(["orchestrator", "init"]).match(/token (abt-[0-9a-f]+)/)[1];
 
 function startServer(args) {
   const child = spawn("node", [CLI, ...args], { env, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] });
@@ -93,7 +94,7 @@ check("panel: existing kill/ack wiring untouched", page.text.includes("/api/kill
   check("panel: gather client wiring", page.text.includes("/api/gather?batch=") && page.text.includes("showBrief("));
 
   // Briefs view end to end: one fan-out -> batch row -> gathered thread.
-  run(["group", "create", "wg", "--from", "wlead", "--token", wleadTok, "--add", "w1,w2"]);
+  run(["group", "create", "wg", "--from", "orchestrator", "--token", orchTok, "--add", "w1,w2"]);
   const briefOut = run(["send", "--from", "wlead", "--token", wleadTok, "--to-group", "wg", "--subject", "brief: widgets", "--body", "build widgets"]);
   const batchId = briefOut.match(/batch (\S+):/)[1];
   const w1Tok = run(["register", "--from", "w1"]).match(/token (abt-[0-9a-f]+)/)[1];

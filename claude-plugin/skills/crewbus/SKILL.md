@@ -27,7 +27,7 @@ Digest-first on long runs: `dm_inbox({ agent: "<you>", unacked: true, digest: tr
 
 ## Long tasks: checkpoint
 
-Every few steps, or before anything risky, post progress on your thread: `dm_send({ from, to: lead, replyTo: briefId, checkpoint: true, body: "done X / next Y" })`. Checkpoints show labeled in transcripts, never need ack, and are what a restarted you reads to resume mid-brief.
+Every few steps, or before anything risky, post progress on your thread: `dm_send({ from, to: orchestrator, replyTo: briefId, checkpoint: true, body: "done X / next Y" })`. Checkpoints show labeled in transcripts, never need ack, and are what a restarted you reads to resume mid-brief.
 
 ## Without MCP (any shell)
 

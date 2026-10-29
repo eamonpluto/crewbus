@@ -12,8 +12,8 @@ HMAC-signed for independent off-box verification.
   "v": 1,
   "seq": 4,
   "at": "2026-10-02T23:04:27.106Z",
-  "actor": "boss",
-  "role": "admin",
+  "actor": "orchestrator",
+  "role": "orchestrator",
   "action": "send",
   "target": "aud1",
   "board": "C:/data/.crewbus",
@@ -31,7 +31,7 @@ HMAC-signed for independent off-box verification.
 | `seq` | 1-based per-stream sequence (`chain` and `audit` number independently) |
 | `at` | ISO-8601 UTC timestamp |
 | `actor` | agent (or `system`/`unknown`) that caused the event |
-| `role` | actor role at write time (`admin`/`lead`/`worker`/`auditor`/`unknown`) |
+| `role` | actor role at write time (`orchestrator`/`worker`/`unknown`) |
 | `action` | stable verb — the existing audit action names (`register`, `role-grant`, `offboard`, `acl-set`, `login`, `token-revoke`, `token-rotate`, `send`, `spawn`, `spawn-kill`, `remote-spawn`, `api-spawn`, `api-kill`, `hold-place`, `hold-lift`, …) |
 | `target` | primary target (`to`/`target`/`agent`, comma-joined, max 200 chars; `""` when none) |
 | `board` | board root path the event was written on |
@@ -90,13 +90,13 @@ Env equivalents: `CREWBUS_AUDIT_FORWARD`,
 ## Legal hold
 
 ```sh
-crewbus hold place --from <admin> [--reason "..."]
-crewbus hold lift --from <admin>
+crewbus hold place --from orchestrator [--reason "..."]
+crewbus hold lift --from orchestrator
 crewbus hold status [--from <you>] [--json]
 ```
 
-- `place`/`lift` are admin-only (token-checked + authorized).
-- `status` is a read — any role, including `auditor`, may call it
+- `place`/`lift` are orchestrator-only (token-checked + authorized).
+- `status` is a read — any role, including workers, may call it
   (with `--from` it is token-checked; without, it is an operator read).
 - While a hold is active, `prune` (dm/broadcast + logs) is **refused**
   loudly and names the hold:

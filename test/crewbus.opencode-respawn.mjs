@@ -28,6 +28,9 @@ const run = (args, extraEnv) => {
   const merged = { ...env, ...(extraEnv || {}) };
   const fi = args.indexOf("--from");
   const who = fi !== -1 && args[fi + 1] && !String(args[fi + 1]).startsWith("--") ? String(args[fi + 1]).toLowerCase() : null;
+  if (who === "orchestrator" && !TOK[who]) {
+    try { const tf = path.join(board, "logs", "orchestrator.token"); if (fs.existsSync(tf)) TOK[who] = fs.readFileSync(tf, "utf8").trim(); } catch {}
+  }
   if (who && TOK[who] && !merged.CREWBUS_TOKEN) merged.CREWBUS_TOKEN = TOK[who];
   const out = execFileSync("node", [CLI, ...args], { env: merged }).toString();
   const m = out.match(/token (abt-[0-9a-f]+)/);
@@ -42,11 +45,11 @@ const check = (label, cond) => {
 };
 
 run(["init", "--board", board]);
-run(["register", "--from", "boss"]);
+run(["orchestrator", "init"]);
 
 const worker = "rb1";
 run([
-  "spawn", "--from", "boss", "--to", worker,
+  "spawn", "--to", worker,
   "--harness", "opencode", "--cwd", board,
   "--auto", "--i-understand-danger", "--keep-env",
   "--body", "Reply to this brief with one short line, then stop.",
@@ -59,7 +62,7 @@ const poll = run; // invoking spawn-status inside syncWorkerSession's caller flo
 try {
   const deadline = Date.now() + 90 * 1000;
   while (Date.now() < deadline) {
-    execFileSync("node", [CLI, "spawn-status", "--from", "boss", "--to", worker], { env }).toString(); // triggers sync incl. storage probe
+    execFileSync("node", [CLI, "spawn-status", "--to", worker], { env }).toString(); // triggers sync incl. storage probe
     try { doc = JSON.parse(fs.readFileSync(docPath, "utf8")); } catch { doc = null; }
     if (doc && doc.harnessSessionId) break;
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500);
@@ -76,13 +79,13 @@ try {
       if (lp && fs.existsSync(lp)) console.error(`log tail:\n${fs.readFileSync(lp, "utf8").slice(-1500)}`);
     } catch {}
   } else {
-    const dry = run(["respawn", "--from", "boss", "--to", worker, "--auto", "--i-understand-danger", "--dry-run"]);
+    const dry = run(["respawn", "--from", "orchestrator", "--to", worker, "--auto", "--i-understand-danger", "--dry-run"]);
     check("respawn: dry-run previews instead of refusing", dry.includes(`would respawn ${worker}`) && !dry.includes("no harness session id recorded"));
     console.log(`dry-run shape: ${dry.split("\n")[0]}`);
   }
 } finally {
   // never leave a detached opencode worker behind
-  try { poll(["spawn-kill", "--from", "boss", "--all"]); } catch (e) {
+  try { poll(["spawn-kill", "--from", "orchestrator", "--all"]); } catch (e) {
     console.error(`cleanup: spawn-kill failed (${String((e && e.message) || e).split("\n")[0].slice(0, 120)})`);
     try {
       const fallbackDoc = doc || JSON.parse(fs.readFileSync(docPath, "utf8"));

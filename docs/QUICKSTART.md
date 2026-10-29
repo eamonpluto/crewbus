@@ -19,23 +19,28 @@ Restart your harness after `init` so tools/plugins load.
 
 > **Web Dashboard**: Run `crewbus web --open` to launch the interactive local dashboard in your browser with live harness detection, Launch Studio, and mobile QR pairing.
 
-## 2. Claim names (1 min)
+## 2. Bootstrap the board (1 min)
+
+The board has exactly one control-plane identity, `orchestrator`. It is
+created automatically by `spawn`, `web`, or `serve`; you can also do it
+explicitly:
 
 ```sh
-crewbus register --from lead
-export CREWBUS_TOKEN="<printed-once-token>"  # or pass --token per call
+crewbus orchestrator init
+# -> orchestrator initialized: token abt-...
 crewbus agents
 ```
 
-First claim wins: the first `send`/`register` as a new name mints its token.
-After that every addressed read/write needs the token.
+Workers self-register as workers on their first `register`/`send`; the
+orchestrator needs no manual step unless you want to act as it from your
+shell.
 
 ## 3. Send the first brief (1 min)
 
 The DM *is* the task — mission + scope + definition of done, no task object:
 
 ```sh
-crewbus send --from lead --to alice --subject "brief: hello" \
+crewbus send --from orchestrator --to alice --subject "brief: hello" \
   --body "Reply to this brief with a one-line summary."
 crewbus inbox --from alice
 ```
@@ -49,17 +54,21 @@ compare the paths first — different boards look exactly like "no mail".
 
 ```sh
 # preview first — touches nothing
-crewbus spawn --from lead --to alice,bob --body "Audit your scope, DM me a summary." --dry-run
+crewbus spawn "Audit your scope, DM the orchestrator a summary." --count 2 --dry-run
 # for real
-crewbus spawn --from lead --count 2 --prefix demo --harness opencode --body "Audit your scope, DM me a summary."
+crewbus spawn "Audit your scope, DM the orchestrator a summary." --count 2 --harness opencode
 crewbus spawn-status --all
-crewbus inbox --from lead --unacked
+crewbus inbox --from orchestrator --unacked
 ```
+
+`spawn` automatically creates/reuses the orchestrator, writes the worker
+briefs, boots the workers, and transfers crew ownership to the orchestrator.
+There is no `--from` or `--lead`.
 
 Workers survive the terminal closing by design — `spawn-kill` stops them:
 
 ```sh
-crewbus spawn-kill --from lead --all
+crewbus spawn-kill --from orchestrator --all
 ```
 
 ## Next steps

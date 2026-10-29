@@ -11,7 +11,7 @@ inboxes, no tenant-aware routing — a board IS the tenant boundary.
   access to the board files can read everything on that board (tokens stop
   CLI-level `--from` spoofing, not local file tampering) — separate
   directories per trust zone.
-- Name the tenant: `quota set --from <admin> --tenant acme` stores
+- Name the tenant: `quota set --from orchestrator --tenant acme` stores
   `tenant: "acme"` in `board.json`. `quota show` and `storage --json`
   report it. It is a label, not an enforcement mechanism; the directory
   is the enforcement.
@@ -21,10 +21,10 @@ inboxes, no tenant-aware routing — a board IS the tenant boundary.
 `board export` is the tenant-move vehicle:
 
 ```
-# on board A (admin or auditor)
-crewbus board export --from <admin> --out ./acme.abbackup.json
+# on board A (orchestrator)
+crewbus board export --from orchestrator --out ./acme.abbackup.json
 # creates board B
-crewbus board import --from <admin> --in ./acme.abbackup.json --into <dir-B> --force
+crewbus board import --from orchestrator --in ./acme.abbackup.json --into <dir-B> --force
 ```
 
 Exports are encrypted with AES-256-GCM (key = 32-byte hex/base64 used raw,
@@ -40,28 +40,28 @@ warning, encrypt the file, store it like a password).
 unlimited).
 
 ```
-crewbus quota set --from <admin> --max-bytes 10mb --max-agents 50 --max-channels 20
-crewbus quota set --from <admin> --max-bytes unlimited   # clear one
-crewbus quota set --from <admin> --clear                 # clear all
+crewbus quota set --from orchestrator --max-bytes 10mb --max-agents 50 --max-channels 20
+crewbus quota set --from orchestrator --max-bytes unlimited   # clear one
+crewbus quota set --from orchestrator --clear                 # clear all
 crewbus quota show [--json]
 ```
 
 Enforcement is check-then-write, best-effort (races under parallel writers
 may overshoot; the single-writer case refuses loudly BEFORE the write):
 
-- `register` (including admin grants) refuses new identities at `maxAgents`
+- `register` (including orchestrator grants) refuses new identities at `maxAgents`
   (re-registering an existing name never counts as new).
 - `send` refuses when the estimated new mail would push total board bytes
   past `maxBytes`.
 - `channel post` refuses on `maxBytes`; `channel create` refuses at
   `maxChannels`.
-- `quota-set` is admin-only; `quota show` and `storage [--json]` are reads
+- `quota-set` is orchestrator-only; `quota show` and `storage [--json]` are reads
   (`storage --json` reports `quotas`/`tenant`/`quota` limit-vs-actual).
 
 ## Scheduled snapshots (no daemon)
 
 ```
-crewbus snapshot schedule --from <admin> --every 24h --keep 7 --out-dir /var/backups/ab
+crewbus snapshot schedule --from orchestrator --every 24h --keep 7 --out-dir /var/backups/ab
 crewbus snapshot run   # from cron / systemd / Task Scheduler
 ```
 

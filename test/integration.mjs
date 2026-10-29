@@ -33,7 +33,7 @@ const hasBinary = (bin) => {
 };
 
 execFileSync("node", [CLI, "init", "--harness", "opencode"], { env });
-const leadTok = execFileSync("node", [CLI, "register", "--from", "lead"], { env })
+const leadTok = execFileSync("node", [CLI, "orchestrator", "init"], { env })
   .toString()
   .match(/token (abt-[0-9a-f]+)/)[1];
 const LEAD = { ...env, CREWBUS_TOKEN: leadTok };
@@ -64,7 +64,7 @@ for (const h of ["opencode", "claude", "codex", "antigravity", "grok", "cursor",
   try {
     const out = execFileSync(
       "node",
-      [CLI, "spawn", "--from", "lead", "--harness", h, "--to", `int-${h}`, "--body", "integration probe", "--dry-run"],
+      [CLI, "spawn", "--harness", h, "--to", `int-${h}`, "--body", "integration probe", "--dry-run"],
       { env: LEAD }
     ).toString();
     check(`integration: spawn --dry-run --harness ${h} previews command`, out.length > 0 && /dry|command|would/i.test(out));
@@ -77,7 +77,7 @@ for (const h of ["opencode", "claude", "codex", "antigravity", "grok", "cursor",
 {
   const out = execFileSync(
     "node",
-    [CLI, "spawn", "--from", "lead", "--harness", "opencode", "--to", "int-dry", "--body", "integration probe", "--dry-run"],
+    [CLI, "spawn", "--harness", "opencode", "--to", "int-dry", "--body", "integration probe", "--dry-run"],
     { env: LEAD }
   ).toString();
   check("integration: spawn --dry-run --harness opencode previews command", out.length > 0);
@@ -381,13 +381,13 @@ if (!hasOpenssl) {
   let fsrv = null;
   try {
     execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: FENV });
-    const fwdReg = execFileSync("node", [CLI, "register", "--from", "boss"], { env: FENV }).toString();
+    const fwdReg = execFileSync("node", [CLI, "orchestrator", "init"], { env: FENV }).toString();
     const fwdTok = fwdReg.match(/token (abt-[0-9a-f]+)/)[1];
     const FADM = { ...FENV, CREWBUS_TOKEN: fwdTok };
     fsrv = await startServe(["serve", "--board", boardF, "--port", "0", "--audit-forward", `${stubBase}/hook`, "--audit-forward-key", "siem-bearer-1"], FENV);
     check("phase2a: serve comes up with --audit-forward", !!fsrv.addr);
-    execFileSync("node", [CLI, "hold", "place", "--board", boardF, "--from", "boss", "--reason", "fwd probe"], { env: FADM, timeout: 60000 });
-    execFileSync("node", [CLI, "send", "--board", boardF, "--from", "boss", "--to", "w1", "--body", "fwd hello"], { env: FADM, timeout: 60000 });
+    execFileSync("node", [CLI, "hold", "place", "--board", boardF, "--from", "orchestrator", "--reason", "fwd probe"], { env: FADM, timeout: 60000 });
+    execFileSync("node", [CLI, "send", "--board", boardF, "--from", "orchestrator", "--to", "w1", "--body", "fwd hello"], { env: FADM, timeout: 60000 });
     let got = [];
     for (let i = 0; i < 60; i++) {
       await new Promise((r) => setTimeout(r, 500));
@@ -399,7 +399,7 @@ if (!hasOpenssl) {
     }
     const bodies = got.map((g) => { try { return JSON.parse(g.body); } catch { return null; } }).filter(Boolean);
     check("phase2a: forwarder POSTs audit events off-box", bodies.some((b) => b.action === "hold-place" && b.v === 1 && typeof b.sig === "string" && b.sig.length === 64));
-    check("phase2a: forwarded envelope carries role/auth/board", bodies.some((b) => b.action === "hold-place" && b.role === "admin" && b.authMethod === "token" && b.board === boardF));
+    check("phase2a: forwarded envelope carries role/auth/board", bodies.some((b) => b.action === "hold-place" && b.role === "orchestrator" && b.authMethod === "token" && b.board === boardF));
     check("phase2a: bearer key sent", got.length > 0 && got.every((g) => g.auth === "Bearer siem-bearer-1"));
     let spoolLeft = -1;
     for (let i = 0; i < 40; i++) {
@@ -468,10 +468,10 @@ if (!hasOpenssl) {
   try {
     execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: PENV });
     execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: SENV });
-    const pReg = execFileSync("node", [CLI, "register", "--from", "boss"], { env: PENV }).toString();
+    const pReg = execFileSync("node", [CLI, "orchestrator", "init"], { env: PENV }).toString();
     const pTok = pReg.match(/token (abt-[0-9a-f]+)/)[1];
     const PADM = { ...PENV, CREWBUS_TOKEN: pTok };
-    execFileSync("node", [CLI, "send", "--board", boardP, "--from", "boss", "--to", "w1", "--body", "ha hello"], { env: PADM });
+    execFileSync("node", [CLI, "send", "--board", boardP, "--from", "orchestrator", "--to", "w1", "--body", "ha hello"], { env: PADM });
     prim = await startServe(["serve", "--board", boardP, "--port", "0"], PENV);
     check("phase3: primary serve comes up", !!prim.addr);
     const primaryUrl = `http://${prim.addr}`;

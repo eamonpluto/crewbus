@@ -162,11 +162,11 @@ export function checkToken(d, agent, token) { // line 361
 // as register, zero extra round-trip). Returns { created } so callers can
 // print the token exactly once — it is never shown again via send.
 export function ensureSender(d, agent, token) { // line 387
-  const sentinel = reservedNameReason(agent);
-  if (sentinel) fail(sentinel);
   const rec = readAgent(d, agent);
   if (!rec) {
-    if (isBoardFrozen(d)) fail(`board is frozen — new registrations refused (ask an admin to register --from <admin> --for ${agent})`);
+    const sentinel = reservedNameReason(agent);
+    if (sentinel) fail(sentinel);
+    if (isBoardFrozen(d)) fail(`board is frozen — new registrations refused (ask the orchestrator to register --from orchestrator --for ${agent})`);
     const fresh = mintToken();
     const salt = newSalt();
     // Fresh claims race (parallel first sends): exactly one may win, via
@@ -325,46 +325,41 @@ export const RESERVED_SENTINELS = ["unknown", "me", "you"];
 
 export function reservedNameReason(agent) {
   const s = String(agent || "").trim().toLowerCase();
+  if (s === ORCHESTRATOR_NAME) {
+    return `"${agent}" is reserved for the board orchestrator (auto-provisioned by spawn; do not register it)`;
+  }
   return RESERVED_SENTINELS.includes(s)
-    ? `"${agent}" is a reserved sentinel name (amnesia-throwaway) — identity lost? run: crewbus recover, then re-register/claim your real name`
+    ? `"${agent}" is a reserved sentinel name (amnesia-throwaway) - identity lost? run: crewbus recover, then re-register/claim your real name`
     : null;
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1b RBAC + per-board ACLs + group-scoped send permissions.
+// RBAC: two roles only.
 //
-// Composes with the token crew: call authorize() AFTER checkToken() passes
-// (never before, never instead). checkToken proves WHO you are; authorize
-// decides WHAT your role may do. Do not merge into checkToken.
+//   orchestrator — the board's single control-plane identity. Reads and writes
+//                  everything: spawn/respawn/kill, approvals, groups, channels,
+//                  ACLs, pairing, admin operations. The board bootstraps exactly
+//                  one, named `orchestrator` (see ensureOrchestrator).
+//   worker       — the data plane. send/inbox/ack/redeliver/lock, artifacts,
+//                  lessons, member-scoped channel posts. No control-plane acts.
 //
-// Roles (agent record `role` in {admin, lead, worker, auditor}):
-//   - first-registered agent on a board becomes admin, everyone else gets
-//     acl.defaultRole (default "worker"). `register --role` is only honored
-//     when the caller is admin, else ignored-with-warning.
-//   - legacy records without `role` map to `lead` so existing crews keep
-//     working (documented in docs/RBAC.md).
-// Permission matrix (minimal):
-//   - admin: all, incl. role grants / offboard / prune / acl set /
-//     group restrict / serve --allow-remote-spawn.
-//   - lead: send / spawn / respawn / pool / spawn-kill (OWN crew only:
-//     target.spawnedBy must equal caller, or target never spawned;
-//     respawn --force reuses the spawn-kill scope check) / group manage /
-//     result record / race close / channel post / lock / inbox / ack /
-//     redeliver + all reads.
-//   - worker: send / inbox / ack / redeliver / lock (scoped: release still
-//     requires ownership) / channel tail (read) + all reads. No spawn,
-//     no kills, no group mgmt, no channel post, no result/race writes.
-//   - auditor: read-only everything (inbox / gather / thread / log /
-//     channel tail / group show / result show / spawn-status, ...). Zero
-//     writes: send/spawn/kill/prune/ack/lock/channel-post all refused.
-// Reads not listed above default-allow (fail-closed only for writes).
+// Records with any other/missing role are treated as workers (safe fallback:
+// an unknown role can never gain orchestrator powers).
+// Reads that are not routed through authorize() stay default-open.
 // ---------------------------------------------------------------------------
 
-export const VALID_ROLES = ["admin", "lead", "worker", "auditor"]; // line 470
+export const ORCHESTRATOR_NAME = "orchestrator";
+export const VALID_ROLES = ["orchestrator", "worker"];
+
+// Worker-allowed write/read actions. Everything else is orchestrator-only.
+const WORKER_ACTIONS = new Set([
+  "send", "inbox", "ack", "redeliver", "lock", "artifact-write", "lesson-write",
+  "hold-status",
+]);
 
 export function cleanRole(raw) { // line 472
   const r = String(raw || "").trim().toLowerCase();
-  if (!VALID_ROLES.includes(r)) fail(`invalid --role "${raw}" (want admin|lead|worker|auditor)`);
+  if (!VALID_ROLES.includes(r)) fail(`invalid --role "${raw}" (want orchestrator|worker)`);
   return r;
 }
 
@@ -372,7 +367,7 @@ export function roleOfRecord(rec) { // line 478
   if (rec && typeof rec.role === "string" && VALID_ROLES.includes(String(rec.role).toLowerCase())) {
     return String(rec.role).toLowerCase();
   }
-  return "lead"; // back-compat: boards/agents predating roles act as lead
+  return "worker"; // unknown/missing role: never grant control-plane powers
 }
 
 export function getRole(d, agent) { // line 485
@@ -395,10 +390,7 @@ export function readBoardAcl(d) { // line 497
     meta = null;
   }
   const acl = (meta && typeof meta.acl === "object" && meta.acl) || {};
-  const def = typeof acl.defaultRole === "string" && VALID_ROLES.includes(String(acl.defaultRole).toLowerCase())
-    ? String(acl.defaultRole).toLowerCase()
-    : "worker";
-  return { defaultRole: def, frozen: acl.frozen === true };
+  return { defaultRole: "worker", frozen: acl.frozen === true };
 }
 
 export function writeBoardAcl(d, acl) { // line 511
@@ -417,75 +409,46 @@ export function isBoardFrozen(d) { // line 523
   return readBoardAcl(d).frozen === true;
 }
 
-// Role for a brand-new agent record: first agent on the board becomes admin,
-// everyone else gets acl.defaultRole (default "worker").
+// Every self-registering identity is a worker. The orchestrator is minted only
+// by ensureOrchestrator (spawn/bootstrap) or an explicit orchestrator grant.
 export function defaultRoleForNew(d) { // line 529
-  return countAgentRecords(d) === 0 ? "admin" : readBoardAcl(d).defaultRole;
+  return "worker";
 }
 
 // Core RBAC decision: returns { ok, reason }. Never exits (CLI authorize()
 // turns !ok into fail(); relay/MCP turn it into 403/throw). Restricted-group
-// scope is checked here too when scope.toGroups is present: a send/spawn
-// addressing a restricted group is allowed only for admin/lead or a member.
+// scope is checked here too when scope.toGroups is present.
 export function authorizeCheck(d, agent, action, scope) { // line 537
   const role = getRole(d, agent);
   const act = String(action || "");
-  const ADMIN_ONLY = new Set(["prune", "acl-set", "role-grant", "offboard", "group-restrict", "serve-remote", "import", "snapshot-schedule", "quota-set", "hold-place", "hold-lift", "pairing"]);
-  const LEAD_PLUS = new Set(["spawn", "respawn", "pool", "group-manage", "result-record", "race-close"]);
-  const WORKER_WRITES = new Set(["send", "ack", "redeliver", "lock", "artifact-write", "lesson-write"]);
-  const EXPORT_ROLES = new Set(["admin", "auditor"]);
-  if (act === "export") {
-    if (!EXPORT_ROLES.has(role)) return { ok: false, reason: `role "${role}" cannot export (need admin|auditor)` };
-  } else if (role === "admin") {
-    // admins still honor restricted groups? No: admin/lead bypass membership.
-  } else if (ADMIN_ONLY.has(act)) {
-    return { ok: false, reason: `role "${role}" cannot ${act} (need admin)` };
-  } else if (LEAD_PLUS.has(act)) {
-    if (role !== "lead") return { ok: false, reason: `role "${role}" cannot ${act} (need lead|admin)` };
-  } else if (act === "channel-post") {
-    // Member-scoped channel posting (C4, default-on): workers may post to the
-    // channels of groups they are a MEMBER of (scope.channelGroup); lead/admin
-    // post anywhere (board channels + every group channel). Everyone else,
-    // and workers targeting a foreign group's channel or a board channel with
-    // no member mapping, are refused.
-    if (role === "admin" || role === "lead") {
-      // board-wide + group channels
-    } else if (role !== "worker") {
-      return { ok: false, reason: `role "${role}" cannot ${act} (member-posting is scoped to group members; need lead|admin)` };
-    } else {
+  if (role === "orchestrator") {
+    // Full control plane.
+  } else if (role === "worker") {
+    if (act === "channel-post") {
+      // Member-scoped: a worker may post only to a group channel it belongs to.
       const targetGroup = scope && scope.channelGroup ? String(scope.channelGroup) : undefined;
       if (!targetGroup) {
-        return { ok: false, reason: `role "worker" may post only to a group channel it belongs to (${targetGroup === undefined ? "board channels are lead|admin" : "need lead|admin"})` };
+        return { ok: false, reason: `role "worker" may post only to a group channel it belongs to (board channels are orchestrator-only)` };
       }
       const gdoc = readGroup(d, targetGroup);
-      if (!gdoc) return { ok: false, reason: `channel group "${targetGroup}" not found (groups register their channels — board channels are lead|admin)` };
+      if (!gdoc) return { ok: false, reason: `channel group "${targetGroup}" not found (board channels are orchestrator-only)` };
       const members = Array.isArray(gdoc.members) ? gdoc.members : [];
-      if (!members.includes(agent)) return { ok: false, reason: `group channel "${targetGroup}" — members only (member or lead|admin)` };
+      if (!members.includes(agent)) return { ok: false, reason: `group channel "${targetGroup}" — members only` };
+    } else if (!WORKER_ACTIONS.has(act)) {
+      return { ok: false, reason: `role "worker" cannot ${act} (orchestrator only)` };
     }
-  } else if (act === "spawn-kill") {
-    if (role !== "lead") return { ok: false, reason: `role "${role}" cannot spawn-kill (need lead|admin)` };
-    const targets = (scope && Array.isArray(scope.targets)) ? scope.targets : [];
-    for (const t of targets) {
-      const rec = readAgent(d, t);
-      if (rec && rec.spawnedBy && rec.spawnedBy !== agent) {
-        return { ok: false, reason: `lead "${agent}" cannot kill "${t}" (spawned by ${rec.spawnedBy}; own crew only)` };
-      }
-    }
-  } else if (WORKER_WRITES.has(act)) {
-    if (role !== "lead" && role !== "worker") return { ok: false, reason: `role "${role}" cannot ${act} (auditor is read-only)` };
   } else {
-    // reads (inbox/gather/thread/log/channel-tail/group-show/result-show/
-    // race-start/spawn-status/agents/...) default-allow for all roles.
+    return { ok: false, reason: `unknown role "${role}" (want orchestrator|worker)` };
   }
-  // Group-scoped sends: restricted groups need admin/lead or membership.
+  // Group-scoped sends: restricted groups need the orchestrator or membership.
   const toGroups = (scope && Array.isArray(scope.toGroups)) ? scope.toGroups : [];
   if ((act === "send" || act === "spawn" || act === "pool") && toGroups.length > 0) {
     for (const g of toGroups) {
       const doc = readGroup(d, g);
       if (doc && doc.restricted === true) {
         const members = Array.isArray(doc.members) ? doc.members : [];
-        if (role !== "admin" && role !== "lead" && !members.includes(agent)) {
-          return { ok: false, reason: `group "${g}" is restricted (member or lead|admin only)` };
+        if (role !== "orchestrator" && !members.includes(agent)) {
+          return { ok: false, reason: `group "${g}" is restricted (member or orchestrator only)` };
         }
       }
     }
@@ -526,65 +489,64 @@ export function mergeAgentDoc(prev, patch) {
   return base;
 }
 
-// Loopback operator auto-provision (desktop plug-and-play):
-// `serve`/`web` on 127.0.0.1 auto-creates an operator identity on first boot so
-// the dashboard can launch without any terminal step. First agent on the
-// board becomes admin (see defaultRoleForNew), so this is the board owner.
-// Under the 3-lane model (boss / lead / peers), fresh boards mint `boss` as the
-// desktop human operator, allowing crew bursts to auto-provision `lead` as the
-// autonomous coordinator. Existing boards that already claimed `lead` (or `boss`)
-// are kept without disruption.
-// CLI boards are untouched: this only fires when operator is missing AND the
-// bind is loopback. Returns { from, token } or null when not applicable.
-export function ensureLoopbackOperator(d, host) {
-  const loop = String(host || "127.0.0.1");
-  if (loop !== "127.0.0.1" && loop !== "localhost" && loop !== "::1") return null;
-  let recBoss = null, recLead = null;
-  try { recBoss = readAgent(d, "boss"); } catch { recBoss = null; }
-  try { recLead = readAgent(d, "lead"); } catch { recLead = null; }
-  if (recBoss && (recBoss.tokenHash || recBoss.token)) return null; // already provisioned
-  if (recLead && recLead.tokenHash) return null; // already provisioned (legacy board)
-  if (countAgentRecords(d) > 0) return null; // board already has registered agents
+// One standing control-plane identity per board. Called by spawn and by the
+// local web/serve servers. Reads the existing token file when it still matches
+// the record; otherwise mints (or rotates) and persists logs/orchestrator.token.
+// Never fails for bookkeeping reasons; returns { from, token, created }.
+export function ensureOrchestrator(d) {
+  const name = ORCHESTRATOR_NAME;
+  const tokenPath = path.join(d.root, "logs", `${name}.token`);
+  const readTokenFile = () => {
+    try {
+      const t = fs.readFileSync(tokenPath, "utf8").trim();
+      return t || null;
+    } catch { return null; }
+  };
+  const writeTokenFile = (token) => {
+    try {
+      fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+      fs.writeFileSync(tokenPath, token + "\n", "utf8");
+      try { fs.chmodSync(tokenPath, 0o600); } catch {}
+    } catch {}
+  };
+  let prev = null;
+  try { prev = readAgent(d, name); } catch { prev = null; }
+  if (prev && prev.tokenHash) {
+    const tok = readTokenFile();
+    if (tok && agentTokenMatches(prev, tok)) return { from: name, token: tok, created: false };
+  }
   const fresh = mintToken();
   const salt = newSalt();
   const now = new Date().toISOString();
-  let prev = null;
-  try { prev = readJson(path.join(d.agents, "boss.json")); } catch { prev = null; }
   const { v, hlc } = stampSyncDoc(prev);
   const doc = mergeAgentDoc(prev, {
-    name: "boss",
+    name,
     firstSeen: (prev && prev.firstSeen) || now,
     lastSeen: now,
     tokenHash: hashToken(fresh, salt),
     salt,
     revokedAt: undefined,
     offboarded: undefined,
-    role: "admin",
+    role: "orchestrator",
     v, hlc,
   });
-  // Atomic first-claim: exactly one boot may win. Losers re-read below.
-  let won = false;
-  try {
-    if (!prev) {
-      won = writeExclusiveJson(path.join(d.agents, "boss.json"), doc);
-    } else {
-      writeAgentFile(d, "boss", doc);
-      won = true;
+  // Fresh record: atomic first claim. Existing record (or lost race): rewrite
+  // only when the token file is missing/stale, otherwise reuse the winner.
+  if (!prev) {
+    let won = false;
+    try { won = writeExclusiveJson(path.join(d.agents, `${name}.json`), doc); } catch { won = false; }
+    if (!won) {
+      const again = readAgent(d, name);
+      const tok = readTokenFile();
+      if (again && again.tokenHash && tok && agentTokenMatches(again, tok)) {
+        return { from: name, token: tok, created: false };
+      }
     }
-  } catch { won = false; }
-  if (!won && !prev) {
-    // Lost the race (parallel boot): read the winner, no token to return.
-    return null;
+  } else {
+    writeAgentFile(d, name, doc);
   }
-  if (won) {
-    try { chmodAgentFile(path.join(d.agents, "boss.json")); } catch {}
-    try {
-      fs.mkdirSync(path.join(d.root, "logs"), { recursive: true });
-      fs.writeFileSync(path.join(d.root, "logs", "boss.token"), fresh + "\n", "utf8");
-      try { fs.chmodSync(path.join(d.root, "logs", "boss.token"), 0o600); } catch {}
-    } catch {}
-  }
-  return won ? { from: "boss", token: fresh } : null;
+  writeTokenFile(fresh);
+  return { from: name, token: fresh, created: true };
 }
 
 export function touchAgent(d, name, extra) { // line 2647

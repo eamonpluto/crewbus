@@ -1,5 +1,37 @@
 # Changelog
 
+## 11.0.0
+
+Two-role control plane: every board has exactly one **orchestrator** and any
+number of **workers**.
+
+- **Breaking — roles collapsed**: `boss`, `admin`, `lead`, and `auditor` are
+  removed. Agent records carry `role` in `{orchestrator, worker}`; any other or
+  missing role reads as worker. The orchestrator is the single control-plane
+  identity (spawn/respawn/kill, approvals, groups, channels, ACLs, pairing,
+  admin operations); workers keep send/inbox/ack/lock/artifacts/lessons and
+  member-scoped channel posts.
+- **Breaking — `spawn` takes a brief and a count**: `crewbus spawn "brief"
+  --count N` (positional or `--body`) is enough. `--from` is rejected (spawn
+  runs as the board orchestrator) and `--lead` is rejected (orchestrator
+  provisioning is always on). `--count 0` revives only the orchestrator.
+- `ensureOrchestrator` bootstraps the identity automatically on `spawn`,
+  `web`, and `serve`; `crewbus orchestrator init|show` exposes it explicitly.
+  Token lives at `logs/orchestrator.token`.
+- Worker prompts, approvals, checkpoints, and respawn briefs pin to
+  `--to orchestrator`; sender type is `human|orchestrator|peer`.
+- `--lead-budget-tokens/--lead-budget-minutes` renamed to
+  `--orchestrator-budget-tokens/--orchestrator-budget-minutes`.
+- Relay `/api/spawn` and `/api/launch` run as the relay board's orchestrator;
+  the relay secret or a device credential with `launch:spawn` is the auth
+  boundary. `/api/operator-creds` and dashboard launch use the orchestrator.
+- MCP RBAC mirrors the two-role model; unknown roles never gain control-plane
+  powers.
+- Docs (RBAC, quickstart, lane model, approvals, verifier, crews, tenancy,
+  pairing, identity, groups, threat model, audit export, cert readiness,
+  consolidator, templates, examples, HTML reference) updated for the new
+  model; tests rewritten and passing.
+
 ## 10.0.15
 
 CLI documentation and help flags audit, layout fixes, and Windows test cleanup.

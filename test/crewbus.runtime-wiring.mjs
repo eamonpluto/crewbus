@@ -63,13 +63,13 @@ function httpGet(base, p) {
 
 try {
   run(["init", "--board", board]);
-  const leadReg = run(["register", "--from", "lead"]);
+  const leadReg = run(["orchestrator", "init"]);
   leadTok = ((leadReg.match(/token (abt-[0-9a-f]+)/) || [])[1]) || "";
-  check("setup: lead token minted", !!leadTok);
+  check("setup: orchestrator token minted", !!leadTok);
 
   // Slow opencode worker stays alive long enough to inspect (instant-exit
   // opencode is too fast to catch via /api/board).
-  run(["spawn", "--from", "lead", "--token", leadTok, "--to", workerName,
+  run(["spawn", "--to", workerName,
     "--harness", "opencode", "--body", "wiring check"]);
   spawned = true;
 
@@ -106,7 +106,7 @@ try {
   check(`harness: no exception (${String((e && e.message) || e).slice(0, 160)})`, false);
 } finally {
   try {
-    if (spawned) run(["spawn-kill", "--from", "lead", "--token", leadTok, "--to", workerName]);
+    if (spawned) run(["spawn-kill", "--from", "orchestrator", "--token", leadTok, "--to", workerName]);
   } catch {}
   try { if (web) web.kill(); } catch {}
   try { fs.rmSync(board, { recursive: true, force: true }); } catch {}

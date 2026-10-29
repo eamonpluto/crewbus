@@ -103,17 +103,17 @@ check("cli: harnesses lists 7", run(["harnesses"]).split("\n").filter((l) => l.i
 check("cli: harnesses --json parses", JSON.parse(run(["harnesses", "--json"])).length === 7);
 
 // ---- CLI: launch dry-run (boots nothing) ----
-const dry = run(["launch", "--from", "lead", "--harness", "grok", "--body", "audit scope", "--dry-run"]);
+const dry = run(["launch", "--harness", "grok", "--body", "audit scope", "--dry-run"]);
 check("cli: dry-run names harness+count", dry.includes("grok x1"));
 check("cli: dry-run shows command", dry.includes("grok --prompt-file"));
-const dryJson = JSON.parse(run(["launch", "--from", "lead", "--harness", "claude", "--body", "x", "--count", "2", "--dry-run", "--json"]));
+const dryJson = JSON.parse(run(["launch", "--harness", "claude", "--body", "x", "--count", "2", "--dry-run", "--json"]));
 check("cli: dry-run --json shape", dryJson.ok === true && dryJson.dryRun === true && dryJson.commands.length === 2);
-const multiDry = JSON.parse(run(["launch", "--from", "lead", "--harness", "claude,antigravity", "--model", "claude-3-7-sonnet", "--body", "x", "--count", "2", "--dry-run", "--json"]));
+const multiDry = JSON.parse(run(["launch", "--harness", "claude,antigravity", "--model", "claude-3-7-sonnet", "--body", "x", "--count", "2", "--dry-run", "--json"]));
 check("cli: multi-harness dry-run distributes drivers", multiDry.ok === true && multiDry.commands[0].harness === "claude" && multiDry.commands[1].harness === "antigravity");
 check("cli: multi-harness dry-run formats model", multiDry.commands[0].command.includes("claude-3-7-sonnet"));
 let genericRefused = false;
 try {
-  run(["launch", "--from", "lead", "--harness", "generic", "--body", "x", "--dry-run"]);
+  run(["launch", "--harness", "generic", "--body", "x", "--dry-run"]);
 } catch (e) {
   genericRefused = String((e.stdout || "") + (e.stderr || "")).includes("launch plan invalid");
 }
@@ -122,7 +122,7 @@ check("cli: generic harness refused", genericRefused);
 // ---- CLI: validation failures ----
 let badFails = false;
 try {
-  run(["launch", "--from", "lead", "--harness", "nope", "--body", "x", "--dry-run"]);
+  run(["launch", "--harness", "nope", "--body", "x", "--dry-run"]);
 } catch (e) {
   badFails = String((e.stdout || "") + (e.stderr || "")).includes("unknown harness");
 }
@@ -131,7 +131,7 @@ check("cli: unknown harness fails loud", badFails);
 // ---- CLI: wizard never prompts headless (stdin ignored = non-TTY) ----
 let headlessFails = false;
 try {
-  run(["launch", "--from", "lead"]);
+  run(["launch", ]);
 } catch (e) {
   const out = String((e.stdout || "") + (e.stderr || ""));
   headlessFails = out.includes("missing harness") && out.includes("missing body");
@@ -139,7 +139,7 @@ try {
 check("cli: missing fields fail loud without prompting (non-TTY)", headlessFails);
 const headlessJson = (() => {
   try {
-    run(["launch", "--from", "lead", "--json"]);
+    run(["launch", "--json"]);
     return null;
   } catch (e) {
     try {
@@ -152,20 +152,20 @@ const headlessJson = (() => {
 check("cli: --json missing fields errors as JSON (never prompts)", !!headlessJson && headlessJson.ok === false && Array.isArray(headlessJson.errors));
 
 // ---- CLI: --yes is the headless danger confirm for --permission full ----
-const yesDry = run(["launch", "--from", "lead", "--harness", "grok", "--body", "x", "--permission", "full", "--yes", "--dry-run"]);
+const yesDry = run(["launch", "--harness", "grok", "--body", "x", "--permission", "full", "--yes", "--dry-run"]);
 check("cli: full + --yes dry-runs (no --i-understand-danger)", yesDry.includes("grok x1"));
 
 // ---- CLI: live launch delegates to spawn (instant-exit generic) ----
-const leadReg = run(["register", "--from", "lead"]);
+const leadReg = run(["orchestrator", "init"]);
 const leadTok = ((leadReg.match(/token (abt-[0-9a-f]+)/) || [])[1]) || "";
 const tokM = run(["register", "--from", "lead2"]).match(/token (abt-[0-9a-f]+)/);
 const lead2Tok = tokM ? tokM[1] : "";
-const live = run(["launch", "--from", "lead", "--token", leadTok, "--harness", "opencode", "--to", "lw1", "--body", "quick check"]);
+const live = run(["launch", "--token", leadTok, "--harness", "opencode", "--to", "lw1", "--body", "quick check"]);
 check("cli: live launch delegates (spawned)", live.includes("spawned lw1 pid"));
-execFileSync("node", [CLI, "spawn-kill", "--from", "lead", "--token", leadTok, "--to", "lw1"], { env, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] });
+execFileSync("node", [CLI, "spawn-kill", "--from", "orchestrator", "--token", leadTok, "--to", "lw1"], { env, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] });
 
 // ---- CLI: relay pair qr (lead is first-registered = admin) ----
-const qr = JSON.parse(run(["relay", "pair", "qr", "--from", "lead", "--token", leadTok, "--routes", "http://pc:8471", "--json"]));
+const qr = JSON.parse(run(["relay", "pair", "qr", "--from", "orchestrator", "--token", leadTok, "--routes", "http://pc:8471", "--json"]));
 check("cli: pair qr url fragment secret", !!qr.pairUrl && qr.pairUrl.includes("#abp-") && !qr.pairUrl.split("#")[0].includes("abp-"));
 
 fs.rmSync(board, { recursive: true, force: true });

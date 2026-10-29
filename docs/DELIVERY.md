@@ -66,7 +66,7 @@ Long briefs die mid-way; re-deriving progress from files wastes the
 resume. Workers checkpoint every few steps (or before anything risky):
 
 ```sh
-crewbus send --from <you> --to <lead> --reply <brief-id> --checkpoint --body "done X / next Y"
+crewbus send --from <you> --to orchestrator --reply <brief-id> --checkpoint --body "done X / next Y"
 ```
 
 (`dm_send` takes `checkpoint: true`; same on the opencode `dm-send`
@@ -92,7 +92,7 @@ of restarting. Checkpoints are unverified progress: they never feed
 
 `pool` briefs all workers up front, boots at most `--pool-size`
 concurrently, and replaces exits until N total — but the supervision loop
-runs inside the invoking CLI process. If that process dies (lead restart,
+runs inside the invoking CLI process. If that process dies (orchestrator restart,
 shutdown, supervision-window timeout), `pool-resume --id <pool> --from
 <you>` re-attaches: it reconciles every launched worker (replied → done,
 live → re-adopted, dead w/o reply → done with a `respawn` hint), then
@@ -101,7 +101,7 @@ by id, never duplicated; one supervisor at a time via an advisory pool
 lock (TTL expiry lets a later attach take over after a crash).
 `finishedAt` marks true completion only — a timed-out pool stays
 resumable. Pools created before the resumable schema (no queue cursor)
-are refused with guidance. Lead/admin only.
+are refused with guidance. Orchestrator-only.
 
 Windows note: console-less detached `cmd.exe` wrappers linger up to ~60s
 after their payload exits, so natural-exit detection on `shell:true`
@@ -125,10 +125,10 @@ nobody accepted. The reassign pattern:
 
 ```sh
 # what is still open — and how long has it waited?
-crewbus inbox --from lead --unacked --older-than 10m
+crewbus inbox --from orchestrator --unacked --older-than 10m
 
 # the brief is a file: re-brief a fresh worker on the same thread
-crewbus send --from lead --to w9 --reply <brief-id> --body "picking this up (w3 went silent)"
+crewbus send --from orchestrator --to w9 --reply <brief-id> --body "picking this up (w3 went silent)"
 
 # the dead watcher's mail, if any, can be replayed
 crewbus redeliver --from w3 --all
@@ -180,7 +180,7 @@ terminates everything when the whole run is lost.
   has no pre-set flag (its id arrives in the first stream event — the
   residual window is milliseconds); codex relies on `thread.started`;
   cursor/agy offer neither.
-- **Respawn (`respawn --from <lead> --to <worker>`).** Reboots one dead
+- **Respawn (`respawn --from orchestrator --to <worker>`).** Reboots one dead
   worker in its *same* harness conversation: `opencode run --session`,
   `claude -p --resume` (+ `CLAUDE_CODE_RESUME_INTERRUPTED_TURN=1` so a
   killed turn continues), `codex exec resume`, `grok -r`, agy
@@ -191,7 +191,7 @@ terminates everything when the whole run is lost.
   prompt can't attach files). Refuses live workers unless `--force`
   (kills first, own-crew scoped like `spawn-kill`); refuses unknown,
   never-captured, and pre-capture-era workers with re-brief guidance.
-  Attempts count on the binding; `--dry-run` previews. Lead/admin only.
+  Attempts count on the binding; `--dry-run` previews. Orchestrator-only.
 
 ## Poll discipline (long runs)
 

@@ -56,7 +56,7 @@ export function holdRefusal(d) { // line 5588
   const who = h.placedBy || "unknown";
   const when = h.placedAt || "unknown time";
   const why = h.reason ? `: ${h.reason}` : "";
-  return `prune REFUSED — legal hold ACTIVE (placed by ${who} at ${when}${why}) [board ${d.root}] — lift with: hold lift --from <admin>`;
+  return `prune REFUSED — legal hold ACTIVE (placed by ${who} at ${when}${why}) [board ${d.root}] — lift with: hold lift --from orchestrator`;
 }
 
 // readBoardMeta/writeBoardMeta/writeAtomicFile live in store.js (canonical home).

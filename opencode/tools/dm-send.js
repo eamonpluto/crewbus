@@ -4,7 +4,7 @@
 //
 // Usage from the agent (just a tool call, whenever you want):
 //   dm-send({ from: "alice", to: "bob", body: "the parser accepts ISO dates only" })
-//   dm-send({ from: "lead", to: "alice,bob,carol", subject: "brief: cards", body: "..." })
+//   dm-send({ from: "orchestrator", to: "alice,bob,carol", subject: "brief: cards", body: "..." })
 //
 // Fanning out work ("assign N agents"): there is no task object — the DM *is*
 // the task. `to` accepts a comma list (one copy each, shared batch id); each

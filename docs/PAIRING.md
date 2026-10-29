@@ -1,14 +1,14 @@
 # Per-device relay pairing
 
 One shared relay secret for every machine is a password that cannot be
-un-shared. Pairing replaces it with per-device credentials: an admin mints a
+un-shared. Pairing replaces it with per-device credentials: the orchestrator mints a
 single-use token, the new device swaps it once for a long-lived credential,
 and either side can kill it independently.
 
 ## Flow
 
 ```sh
-# on the relay (admin, token-checked):
+# on the relay (orchestrator, token-checked):
 crewbus relay pair --from ops --label laptop --ttl 10m
 # -> pairing token abp-... (single-use, TTL'd, printed once)
 
@@ -24,7 +24,7 @@ crewbus sync --with http://relay:8471 --secret s3 --once \
 crewbus sync --with http://relay:8471 --device $CREWBUS_DEVICE --once
 ```
 
-## Management (admin)
+## Management (orchestrator)
 
 ```sh
 crewbus relay devices --from ops [--json]   # id, label, by, lastSeen, revoked?
@@ -41,14 +41,14 @@ Same mint/exchange/revoke cores as the CLI, over the relay (`bin/crewbus.js`
 serve handler; secret travels in the `crewbus://pair` URL `#fragment` only,
 never query):
 
-- `POST /api/pair/issue` (admin token-checked: `from` + agent token, then
+- `POST /api/pair/issue` (orchestrator token-checked: `from` + agent token, then
   `authorizeCheck` `pairing`) → `{pairUrl, expiresAt}`.
 - `POST /api/pair/exchange` (unauthenticated — the one-time token IS the
   credential; narrow-only scope check before the single-use claim) →
   `{deviceId, credential}`.
-- `GET /api/pair/devices` (admin token-checked; a read, so it serves locally
+- `GET /api/pair/devices` (orchestrator token-checked; a read, so it serves locally
   even on a standby) → device list.
-- `POST /api/pair/revoke` (admin token-checked, immediate) → `{ok: true}`.
+- `POST /api/pair/revoke` (orchestrator token-checked, immediate) → `{ok: true}`.
 - Standby behavior: writes 503 (`issue`/`exchange`/`revoke`); reads
   (`devices`) serve locally.
 
@@ -72,7 +72,7 @@ never query):
   control-plane RPCs only). Issuance is narrow-only: requested ⊆ granted,
   checked before the single-use claim (`bin/crewbus.js` `/api/pair/exchange`
   handler), so a widen attempt never burns the token. Narrowed or not, a
-  device never grants board admin — agent identity is still token-checked
+  device never grants board control-plane powers — agent identity is still token-checked
   per command.
 - **Audit.** `pair`, `device-issue`, and `device-revoke` all land in the
   tamper-evident log with actor + label; `devices` shows `lastSeen` per

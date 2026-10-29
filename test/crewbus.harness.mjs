@@ -43,13 +43,24 @@ const run = (args, env, cwd) => {
   const merged = { ...env };
   const fi = args.indexOf("--from");
   const who = fi !== -1 && args[fi + 1] && !String(args[fi + 1]).startsWith("--") ? args[fi + 1] : null;
-  if (who && TOK[tokKey(merged, who)] && !merged.CREWBUS_TOKEN) merged.CREWBUS_TOKEN = TOK[tokKey(merged, who)];
+  const rootGuess = merged.CREWBUS_DIR || path.join(cwd || process.cwd(), ".crewbus");
+  const key = who ? `${rootGuess}\n${who}` : null;
+  if (who === "orchestrator" && !TOK[key]) {
+    try {
+      const tf = path.join(rootGuess, "logs", "orchestrator.token");
+      if (fs.existsSync(tf)) TOK[key] = fs.readFileSync(tf, "utf8").trim();
+    } catch {}
+  }
+  if (who && TOK[key] && !merged.CREWBUS_TOKEN) merged.CREWBUS_TOKEN = TOK[key];
   const out = execFileSync("node", [args[0] === "hook" ? HOOK : CLI, ...args.slice(1)], {
     env: merged,
     cwd: cwd || process.cwd(),
   }).toString();
   const m = out.match(/token (abt-[0-9a-f]+)/);
-  if (m && who && !TOK[tokKey(merged, who)]) TOK[tokKey(merged, who)] = m[1];
+  if (m) {
+    const tk = `${rootGuess}\n${args.includes("orchestrator") ? "orchestrator" : who || "orchestrator"}`;
+    if (!TOK[tk]) TOK[tk] = m[1];
+  }
   return out;
 };
 
@@ -581,13 +592,13 @@ check("respawn: qwen --resume", rtQ.args.includes("--resume") && rtQ.args[rtQ.ar
 
 const rtN = buildRespawnTarget({ harness: "opencode", cwd: "/tmp", name: "w", promptPath: "/p.md", prompt: "c", sessionId: null });
 check("respawn: opencode fresh (no resume flags)", !rtN.args.join(" ").includes("resume") && !rtN.args.join(" ").includes("session"));
-const brief = buildRespawnBrief({ name: "w", attempt: 2, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: "SID", harness: "claude", lead: "boss", extraBody: "hurry" });
+const brief = buildRespawnBrief({ name: "w", attempt: 2, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: "SID", harness: "claude", orchestrator: "orchestrator", extraBody: "hurry" });
 check("respawn: brief threads + attempt", brief.includes("attempt 2") && brief.includes("/l/w.prompt.md") && brief.includes("--reply msg-1") && brief.includes("hurry") && brief.includes("SID"));
-const briefG = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: null, harness: "opencode", lead: "boss" });
+const briefG = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: null, harness: "opencode", orchestrator: "orchestrator" });
 check("respawn: opencode brief fresh", briefG.includes("fresh session"));
-const briefO = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: null, harness: "opencode", lead: "boss" });
+const briefO = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: null, harness: "opencode", orchestrator: "orchestrator" });
 check("respawn: opencode fresh brief wording", briefO.includes("fresh session (opencode session id could not be captured") && !briefO.includes("prior context intact") && briefO.includes("checkpoints are your memory"));
-const briefR2 = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: "SID", harness: "opencode", lead: "boss" });
+const briefR2 = buildRespawnBrief({ name: "w", attempt: 1, origPromptPath: "/l/w.prompt.md", briefId: "msg-1", harnessSessionId: "SID", harness: "opencode", orchestrator: "orchestrator" });
 check("respawn: opencode resumed brief unchanged", briefR2.includes("resumed opencode session SID") && briefR2.includes("prior context intact"));
 const rtNoF = buildRespawnTarget({ harness: "opencode", cwd: "/tmp", name: "w", promptPath: "/p.md", prompt: "c", sessionId: null });
 check("respawn: missing id boots fresh (no --session)", !rtNoF.args.includes("--session") && !rtNoF.args.join(" ").includes("undefined"));
@@ -706,9 +717,9 @@ check("plugin: skill", fs.existsSync(path.join(plugDir, "skills", "crewbus", "SK
 // respawn e2e (opencode harness — real processes)
 const rsp = mkproj();
 run(["cli", "init", "--harness", "opencode"], rsp.e, rsp.p);
-run(["cli", "register", "--from", "boss"], rsp.e, rsp.p);
+run(["cli", "orchestrator", "init"], rsp.e, rsp.p);
 run(["cli", "register", "--from", "work1"], rsp.e, rsp.p);
-run(["cli", "spawn", "--from", "boss", "--harness", "opencode", "--to", "rs1", "--body", "sleep brief"], rsp.e, rsp.p);
+run(["cli", "spawn", "--harness", "opencode", "--to", "rs1", "--body", "sleep brief"], rsp.e, rsp.p);
 const rs1Doc = JSON.parse(fs.readFileSync(path.join(rsp.p, ".crewbus", "worker-sessions", "rs1.json"), "utf8"));
 rs1Doc.harnessSessionId = "ses-12345";
 rs1Doc.idSource = "test";
@@ -722,13 +733,13 @@ const mustFail = (label, args) => {
   }
   check(label, bad);
 };
-mustFail("respawn: refuses live worker", ["respawn", "--from", "boss", "--to", "rs1"]);
+mustFail("respawn: refuses live worker", ["respawn", "--from", "orchestrator", "--to", "rs1"]);
 mustFail("respawn: worker role refused", ["respawn", "--from", "work1", "--to", "rs1"]);
-mustFail("respawn: unknown worker refused", ["respawn", "--from", "boss", "--to", "ghost-rs"]);
-mustFail("respawn: multi --to refused", ["respawn", "--from", "boss", "--to", "rs1,rs2"]);
-const dryRs = run(["cli", "respawn", "--from", "boss", "--to", "rs1", "--dry-run"], rsp.e, rsp.p);
+mustFail("respawn: unknown worker refused", ["respawn", "--from", "orchestrator", "--to", "ghost-rs"]);
+mustFail("respawn: multi --to refused", ["respawn", "--from", "orchestrator", "--to", "rs1,rs2"]);
+const dryRs = run(["cli", "respawn", "--from", "orchestrator", "--to", "rs1", "--dry-run"], rsp.e, rsp.p);
 check("respawn: dry-run previews", dryRs.includes("would respawn rs1") && dryRs.includes("catch-up brief"));
-run(["cli", "spawn-kill", "--from", "boss", "--to", "rs1"], rsp.e, rsp.p);
+run(["cli", "spawn-kill", "--from", "orchestrator", "--to", "rs1"], rsp.e, rsp.p);
 // Simulate a long-lived worker: the recycled-pid guard must not confuse the
 // new pid with a stranger just because the original spawn was long ago.
 const rs1AgentPath = path.join(rsp.p, ".crewbus", "agents", "rs1.json");
@@ -739,7 +750,7 @@ const rs1WsPath = path.join(rsp.p, ".crewbus", "worker-sessions", "rs1.json");
 const rs1Ws = JSON.parse(fs.readFileSync(rs1WsPath, "utf8"));
 rs1Ws.spawnedAt = "2020-01-01T00:00:00.000Z";
 fs.writeFileSync(rs1WsPath, JSON.stringify(rs1Ws));
-const r1 = run(["cli", "respawn", "--from", "boss", "--to", "rs1", "--fresh"], rsp.e, rsp.p);
+const r1 = run(["cli", "respawn", "--from", "orchestrator", "--to", "rs1", "--fresh"], rsp.e, rsp.p);
 check("respawn: reboots dead worker", r1.includes("respawned rs1") && r1.includes("attempt 1") && r1.includes("fresh boot"));
 const rdoc = JSON.parse(fs.readFileSync(rs1WsPath, "utf8"));
 check("respawn: binding attempt counted", rdoc.respawnCount === 1 && typeof rdoc.spawnedPid === "number" && !!rdoc.lastRespawnAt);
@@ -747,15 +758,15 @@ check("respawn: worker-session spawnedAt refreshed", Date.parse(rdoc.spawnedAt) 
 const rstat = JSON.parse(run(["cli", "spawn-status", "--to", "rs1", "--json"], rsp.e, rsp.p))[0];
 check("respawn: status carries respawns", rstat.respawnCount === 1);
 check("respawn: live pid is not stale after respawn", rstat.alive === true && rstat.pidStale === false && Date.parse(rstat.spawnedAt) > Date.parse("2020-01-01T00:00:00.000Z"));
-run(["cli", "spawn-kill", "--from", "boss", "--to", "rs1"], rsp.e, rsp.p);
-const r2 = run(["cli", "respawn", "--from", "boss", "--to", "rs1", "--fresh", "--body", "extra nudge"], rsp.e, rsp.p);
+run(["cli", "spawn-kill", "--from", "orchestrator", "--to", "rs1"], rsp.e, rsp.p);
+const r2 = run(["cli", "respawn", "--from", "orchestrator", "--to", "rs1", "--fresh", "--body", "extra nudge"], rsp.e, rsp.p);
 check("respawn: attempt increments", r2.includes("attempt 2"));
 // no-id harness worker: crafted binding without a captured session id
 fs.writeFileSync(path.join(rsp.p, ".crewbus", "agents", "rs2.json"), JSON.stringify({ name: "rs2", spawnedPid: 999999997, spawnedBy: "boss", briefId: "msg-rs2" }));
 fs.writeFileSync(path.join(rsp.p, ".crewbus", "worker-sessions", "rs2.json"), JSON.stringify({ name: "rs2", harness: "claude", spawnedPid: 999999997, briefId: "msg-rs2", logPath: path.join(rsp.p, ".crewbus", "logs", "rs2-x.log") }));
-mustFail("respawn: no-id refused with guidance", ["respawn", "--from", "boss", "--to", "rs2"]);
+mustFail("respawn: no-id refused with guidance", ["respawn", "--from", "orchestrator", "--to", "rs2"]);
 // cleanup: kill sleepers (Windows holds log handles briefly — retry rm)
-run(["cli", "spawn-kill", "--from", "boss", "--to", "rs1"], rsp.e, rsp.p);
+run(["cli", "spawn-kill", "--from", "orchestrator", "--to", "rs1"], rsp.e, rsp.p);
 for (let i = 0; i < 10; i++) {
   try {
     fs.rmSync(rsp.p, { recursive: true, force: true });
@@ -776,11 +787,11 @@ check("presence: etime dd-hh:mm:ss", parsePsEtime("1-02:03:04") === 93784000);
 check("presence: etime junk null", parsePsEtime("bogus") === null && parsePsEtime("") === null);
 const pv = mkproj();
 run(["cli", "init", "--harness", "opencode"], pv.e, pv.p);
-run(["cli", "register", "--from", "pvboss"], pv.e, pv.p);
-run(["cli", "spawn", "--from", "pvboss", "--harness", "opencode", "--to", "pv1", "--body", "presence probe"], pv.e, pv.p);
+run(["cli", "orchestrator", "init"], pv.e, pv.p);
+run(["cli", "spawn", "--harness", "opencode", "--to", "pv1", "--body", "presence probe"], pv.e, pv.p);
 const pvLive = JSON.parse(run(["cli", "spawn-status", "--to", "pv1", "--json"], pv.e, pv.p))[0];
 check("presence: live worker verified", pvLive.alive === true && pvLive.aliveVerified === true);
-run(["cli", "spawn-kill", "--from", "pvboss", "--to", "pv1"], pv.e, pv.p);
+run(["cli", "spawn-kill", "--from", "orchestrator", "--to", "pv1"], pv.e, pv.p);
 const pvDead = JSON.parse(run(["cli", "spawn-status", "--to", "pv1", "--json"], pv.e, pv.p))[0];
 check("presence: dead worker unverified", pvDead.alive === false && pvDead.aliveVerified === null);
 for (let i = 0; i < 10; i++) {
@@ -820,7 +831,7 @@ check("crew: names my group + members", crewA.some((l) => l.includes("camera (ca
 check("crew: names other group + members", crewA.some((l) => l.includes("gps (gps-1,gps-2,gps-3)")));
 check("crew: points at other group channels", crewA.some((l) => l.includes("grp-gps")));
 check("crew: peer-DM norm uses own name, lead only for approvals", crewA.some((l) => l.includes("crewbus send --from cam-1 --to-group") && l.includes("approvals")));
-check("crew: channel reads free, posts need lead rights", crewA.some((l) => l.includes("channel tail") && l.includes("lead rights")));
+check("crew: channel reads free, posts are orchestrator-only", crewA.some((l) => l.includes("channel tail") && l.includes("orchestrator-only")));
 check("crew: boot habit names discovery commands", crewA.some((l) => l.includes("crewbus agents") && l.includes("crewbus group list")));
 const crewPrompt = buildSpawnPrompt({ name: "cam-1", from: "lead", subject: "brief: camera lane", body: "b", replyId: "msg-1", cwd: "/tmp", root: "/tmp/.crewbus", crew: crewA });
 check("crew: prompt renders block under Crew:", crewPrompt.includes("Crew:") && crewPrompt.includes("your group(s): camera"));
@@ -954,7 +965,7 @@ for (let i = 0; i < 10; i++) {
 // pool resume (supervisor re-attach) + reconcile wiring
 const pl = mkproj();
 run(["cli", "init", "--harness", "opencode"], pl.e, pl.p);
-const plBossTok = run(["cli", "register", "--from", "plboss"], pl.e, pl.p).match(/token (abt-[0-9a-f]+)/)[1];
+const plBossTok = run(["cli", "orchestrator", "init"], pl.e, pl.p).match(/token (abt-[0-9a-f]+)/)[1];
 const supEnv = { ...pl.e, CREWBUS_TOKEN: plBossTok };
 const bgCli = (args, outName) => {
   const fd = fs.openSync(path.join(pl.p, outName), "a");
@@ -1002,7 +1013,7 @@ const waitPoolFile = async (exclude = [], tries = 60) => {
 // still mid-run when read — instant-exit workers would already be finished
 // on fast boxes (and linger ~60s on Windows detached shells), making any
 // mid-run snapshot assertion platform-flaky either way.
-const supA = bgCli(["pool", "--from", "plboss", "--count", "3", "--pool-size", "2", "--harness", "opencode", "--prefix", "plw", "--body", "pool brief", "--json"], "supA.log");
+const supA = bgCli(["pool", "--from", "orchestrator", "--count", "3", "--pool-size", "2", "--harness", "opencode", "--prefix", "plw", "--body", "pool brief", "--json"], "supA.log");
 const poolId = await waitPoolFile();
 check("pool: one state file", !!poolId);
 const poolFiles = poolId ? [poolId + ".json"] : [];
@@ -1020,19 +1031,19 @@ const plMustFail = (label, args) => {
   }
   check(label, bad);
 };
-plMustFail("pool-resume: unknown refused", ["pool-resume", "--from", "plboss", "--id", "pool-nope"]);
+plMustFail("pool-resume: unknown refused", ["pool-resume", "--from", "orchestrator", "--id", "pool-nope"]);
 fs.writeFileSync(path.join(pl.p, ".crewbus", "pool-state", "legacy.json"), JSON.stringify({ id: "legacy", from: "plboss", total: 1, poolSize: 1, harness: "opencode", done: 0, active: {}, results: [] }));
-plMustFail("pool-resume: legacy refused", ["pool-resume", "--from", "plboss", "--id", "legacy"]);
+plMustFail("pool-resume: legacy refused", ["pool-resume", "--from", "orchestrator", "--id", "legacy"]);
 fs.rmSync(path.join(pl.p, ".crewbus", "pool-state", "legacy.json"));
 // single-flight: crafted live lock refuses a second supervisor
 const lockFile = path.join(pl.p, ".crewbus", "locks", crypto.createHash("sha256").update(`pool/${poolId}`).digest("hex").slice(0, 16) + ".json");
 fs.mkdirSync(path.join(pl.p, ".crewbus", "locks"), { recursive: true });
 fs.writeFileSync(lockFile, JSON.stringify({ scope: `pool/${poolId}`, owner: "someone-else", createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString() }) + "\n");
-plMustFail("pool-resume: locked refused", ["pool-resume", "--from", "plboss", "--id", poolId]);
+plMustFail("pool-resume: locked refused", ["pool-resume", "--from", "orchestrator", "--id", poolId]);
 fs.rmSync(lockFile, { force: true });
 // Pool B (reconcile-finish): supervisor dies, both replies land, resume
 // finishes immediately — no launches, no waiting on exits.
-const supB = bgCli(["pool", "--from", "plboss", "--count", "2", "--pool-size", "2", "--harness", "opencode", "--prefix", "plq", "--body", "sleep pair"], "supB.log");
+const supB = bgCli(["pool", "--from", "orchestrator", "--count", "2", "--pool-size", "2", "--harness", "opencode", "--prefix", "plq", "--body", "sleep pair"], "supB.log");
 const resumeIdB = await waitPoolFile([poolFiles[0]]);
 check("pool B: state file appears", !!resumeIdB);
 const bBooted = resumeIdB ? await waitPoolState(resumeIdB, (st) => st.launched === 2) : null;
@@ -1041,25 +1052,25 @@ stopBg(supB);
 const qState = JSON.parse(fs.readFileSync(path.join(pl.p, ".crewbus", "pool-state", resumeIdB + ".json"), "utf8"));
 for (const w of ["plq-1", "plq-2"]) {
   run(["cli", "register", "--from", w], pl.e, pl.p);
-  run(["cli", "send", "--from", w, "--to", "plboss", "--reply", qState.idByName[w], "--body", `done ${w}`], pl.e, pl.p);
+  run(["cli", "send", "--from", w, "--to", "orchestrator", "--reply", qState.idByName[w], "--body", `done ${w}`], pl.e, pl.p);
 }
-const finOut = run(["cli", "pool-resume", "--from", "plboss", "--id", resumeIdB], supEnv, pl.p);
+const finOut = run(["cli", "pool-resume", "--from", "orchestrator", "--id", resumeIdB], supEnv, pl.p);
 check("pool-resume: replied counted, none relaunched", finOut.includes("already replied") && finOut.includes("done 2"));
 const fst = JSON.parse(fs.readFileSync(path.join(pl.p, ".crewbus", "pool-state", resumeIdB + ".json"), "utf8"));
 check("pool-resume: finished + lock released", !!fst.finishedAt && fst.done === 2 && fst.results.length === 2 && !fs.existsSync(path.join(pl.p, ".crewbus", "locks", crypto.createHash("sha256").update(`pool/${resumeIdB}`).digest("hex").slice(0, 16) + ".json")));
-plMustFail("pool-resume: finished refused", ["pool-resume", "--from", "plboss", "--id", resumeIdB]);
+plMustFail("pool-resume: finished refused", ["pool-resume", "--from", "orchestrator", "--id", resumeIdB]);
 // Pool C (adopt + relaunch): supervisor dies with one live worker; resume
 // adopts it, then a kill triggers the second boot — all transitions forced,
 // no natural-exit waits.
-const supC = bgCli(["pool", "--from", "plboss", "--count", "2", "--pool-size", "1", "--harness", "opencode", "--prefix", "plr", "--body", "sleep crew"], "supC.log");
+const supC = bgCli(["pool", "--from", "orchestrator", "--count", "2", "--pool-size", "1", "--harness", "opencode", "--prefix", "plr", "--body", "sleep crew"], "supC.log");
 const resumeId = await waitPoolFile([poolFiles[0], resumeIdB + ".json"]);
 check("pool C: state file appears", !!resumeId);
 const cBooted = resumeId ? await waitPoolState(resumeId, (st) => st.launched >= 1) : null;
 check("pool C: first worker booted", !!cBooted);
 stopBg(supC);
-const supR = bgCli(["pool-resume", "--from", "plboss", "--id", resumeId], "supR.log");
+const supR = bgCli(["pool-resume", "--from", "orchestrator", "--id", resumeId], "supR.log");
 check("pool-resume: adopts live worker", await waitForLog("supR.log", "adopted live plr-1"));
-run(["cli", "spawn-kill", "--from", "plboss", "--to", "plr-1"], pl.e, pl.p);
+run(["cli", "spawn-kill", "--from", "orchestrator", "--to", "plr-1"], pl.e, pl.p);
 check("pool-resume: relaunches after kill", await waitForLog("supR.log", "spawned plr-2"));
 const rst = await waitPoolState(resumeId, (st) => st && st.results && st.results.some((r) => r.to === "plr-2"));
 stopBg(supR);
@@ -1073,7 +1084,7 @@ check("reconcile: stale reads dead", workerStatus(plD, "stalew", 1).alive === fa
 check("reconcile: text marks stale", run(["cli", "spawn-status", "--to", "stalew"], pl.e, pl.p).includes("stale pid"));
 const plDoc = run(["cli", "doctor"], pl.e, pl.p);
 check("reconcile: doctor notes stale, stays healthy", plDoc.includes("stale pids") && plDoc.includes("doctor: healthy"));
-run(["cli", "spawn-kill", "--from", "plboss", "--to", "plw-1,plw-2,plw-3,plq-1,plq-2,plr-1,plr-2"], pl.e, pl.p);
+run(["cli", "spawn-kill", "--from", "orchestrator", "--to", "plw-1,plw-2,plw-3,plq-1,plq-2,plr-1,plr-2"], pl.e, pl.p);
 for (let i = 0; i < 15; i++) {
   try {
     fs.rmSync(pl.p, { recursive: true, force: true });

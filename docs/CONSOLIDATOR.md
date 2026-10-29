@@ -2,7 +2,7 @@
 
 One group rarely finishes the job. The consolidator is a reference worker
 that **summarizes one group's findings and hands them to the next group**
-(or the lead): a small crew solves the easy slice first, its summary
+(or the orchestrator): a small crew solves the easy slice first, its summary
 seeds the main crews' briefs.
 
 ## Quick use
@@ -11,11 +11,11 @@ seeds the main crews' briefs.
 # group A works a batch; its replies land threaded on the brief
 batch="<batch-id from the send echo>"
 
-# summarize A's transcript, DM it to the lead, mirror to the group channel
-node examples/consolidator.mjs --from gateway --to lead --batch "$batch" --group team-a
+# summarize A's transcript, DM it to the orchestrator, mirror to the group channel
+node examples/consolidator.mjs --from gateway --to orchestrator --batch "$batch" --group team-a
 
-# lead briefs group B with A's findings attached
-crewbus send --from lead --to-group team-b --subject "variant: build on team-a" --body "<paste summary>"
+# the orchestrator briefs group B with A's findings attached
+crewbus send --from orchestrator --to-group team-b --subject "variant: build on team-a" --body "<paste summary>"
 ```
 
 What the script does (all via the CLI, token-checked like any agent):
@@ -24,7 +24,7 @@ What the script does (all via the CLI, token-checked like any agent):
    reply, oldest first.
 2. Builds an extractive summary: brief count, reply count, first line of
    each reply, artifact references (`send --artifact`), per-sender counts.
-3. `send --from gateway --to lead --reply <first-brief> --subject "RESULT: <batch>"`
+3. `send --from gateway --to orchestrator --reply <first-brief> --subject "RESULT: <batch>"`
    — the handoff, threaded so `thread --id` shows the full chain.
 4. `channel post grp-team-a` — mirrors the summary to the group-scoped
    channel, so late joiners and sibling groups can `channel tail` it.

@@ -107,7 +107,7 @@ export function mirrorToGroupChannels(d, { groups, from, body, subject, replyTo,
   const skipped = [];
   for (const g of groups || []) {
     // Member-scoped mirrors (C4): a worker's brief lands on grp-<g> channel
-    // only if it is a member of <g> (or lead/admin). Non-members' DMs still
+    // only if it is a member of <g> (or orchestrator). Non-members' DMs still
     // deliver — the channel mirror is skipped with a visible note.
     const gate = authorizeCheck(d, from, "channel-post", { channelGroup: g });
     if (!gate || !gate.ok) {

@@ -19,7 +19,7 @@ item. Statuses: **done** (in the tree, covered by `npm test`), **manual**
   See `docs/HA.md`.
 - [manual] **Access-review cadence (quarterly stub):** run `agents --json`,
   confirm each identity still needs its role, `offboard` leavers
-  (`register --offboard <name> --from <admin>` preserves inbox for audit),
+  (`register --offboard <name> --from orchestrator` preserves inbox for audit),
   record the review date + reviewer. Evidence: the signed `role-grant` /
   `offboard` events in the log.
 
@@ -69,7 +69,7 @@ item. Statuses: **done** (in the tree, covered by `npm test`), **manual**
   [--audit-forward-key <bearer>]` POSTs off-box with an `audit-spool/`
   at-least-once retry queue that drains (never blocks the relay path).
   See `docs/AUDIT_EXPORT.md`.
-- [done] Legal holds: `hold place --from <admin> [--reason]` /
+- [done] Legal holds: `hold place --from orchestrator [--reason]` /
   `hold lift` / `hold status`; `prune` (and `import` over a held board)
   refuse while held; hold record syncs to peers.
 - [manual] **Log-review + retention (stub):** forward to your SIEM, alert
@@ -80,14 +80,14 @@ item. Statuses: **done** (in the tree, covered by `npm test`), **manual**
 
 ## 5. Backup
 
-- [done] Portable encrypted backups (`board export --from <admin|auditor>
+- [done] Portable encrypted backups (`board export --from orchestrator
   --out <file>`), safe restore (`board import --force` semantics + hold
-  interaction), declarative schedules (`snapshot schedule --from <admin>
+  interaction), declarative schedules (`snapshot schedule --from orchestrator
   --every 24h --keep 7 --out-dir <dir>`), `snapshot run` for cron/systemd/
   Task Scheduler, quotas/tenancy (`quota set/show`, `storage`, separate
   boards per tenant). See `docs/TENANCY.md`.
 - [manual] **Restore-drill runbook (quarterly stub):**
-  1. `board export --from <admin> --out /offsite/drill-<date>.abbackup.json`
+  1. `board export --from orchestrator --out /offsite/drill-<date>.abbackup.json`
   2. `board import --in /offsite/drill-<date>.abbackup.json --into <fresh-dir> --force`
   3. `gather`/inbox spot-checks + `log --verify` on the restored board
   4. Record date, operator, result. Evidence: the drill log + restored-board

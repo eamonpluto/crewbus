@@ -28,6 +28,13 @@ const run = (args, env, cwd, expectFail) => {
   const merged = { ...env };
   const fi = args.indexOf("--from");
   const who = fi !== -1 && args[fi + 1] && !String(args[fi + 1]).startsWith("--") ? args[fi + 1] : null;
+  const okey = tokKey(merged, "orchestrator");
+  if (who === "orchestrator" && !TOK[okey]) {
+    try {
+      const tf = path.join((merged.CREWBUS_DIR || ""), "logs", "orchestrator.token");
+      if (fs.existsSync(tf)) TOK[okey] = fs.readFileSync(tf, "utf8").trim();
+    } catch {}
+  }
   if (who && TOK[tokKey(merged, who)] && !merged.CREWBUS_TOKEN) merged.CREWBUS_TOKEN = TOK[tokKey(merged, who)];
   let out = "";
   try {
@@ -41,6 +48,7 @@ const run = (args, env, cwd, expectFail) => {
     return String(e.stderr || e.stdout || e.message);
   }
   const m = out.match(/token (abt-[0-9a-f]+)/);
+  if (m && args.includes("orchestrator") && !TOK[okey]) TOK[okey] = m[1];
   if (m && who && !TOK[tokKey(merged, who)]) TOK[tokKey(merged, who)] = m[1];
   return out;
 };
@@ -50,7 +58,7 @@ const tokKey = (env, who) => `${(env && env.CREWBUS_DIR) || ""}\n${who}`;
 const p1 = fs.mkdtempSync(path.join(os.tmpdir(), "cb-wb-"));
 const e1 = { ...process.env, CREWBUS_DIR: path.join(p1, ".crewbus") };
 run(["init"], { ...e1, CREWBUS_DIR: p1 }, p1);
-run(["register", "--from", "lead"], e1);
+run(["orchestrator", "init"], e1);
 run(["register", "--from", "worker-a"], e1);
 run(["register", "--from", "worker-b"], e1);
 
@@ -64,7 +72,7 @@ check("renderWorkbenchBlock: renders lesson bullet", wbLines.some((l) => l.inclu
 check("renderWorkbenchBlock: renders artifact bullet with state", wbLines.some((l) => l.includes("art-260101-000000-abc12345") && l.includes("adopted x1")));
 check("renderWorkbenchBlock: empty board is empty", renderWorkbenchBlock({ lessons: [], artifacts: [] }).length === 0);
 const pinPrompt = buildSpawnPrompt({ name: "worker-c", from: "lead", body: "x", replyId: "msg-1", cwd: ".", root: "/b" });
-check("spawn prompt pins the exact lead recipient (anti-hallucination)", pinPrompt.includes("EXACTLY --to lead") && pinPrompt.includes("the board's lead lane"));
+check("spawn prompt pins the exact orchestrator recipient (anti-hallucination)", pinPrompt.includes("EXACTLY --to orchestrator") && pinPrompt.includes("the board orchestrator, which owns this crew"));
 const wbPrompt = buildSpawnPrompt({ name: "worker-c", from: "lead", body: "x", replyId: "msg-1", cwd: ".", root: "/b", workbench: ["- lesson [audit] test", "- artifact art-260101-000000-abc12345 /tmp/out.js"] });
 check("spawn prompt carries the Workbench block", wbPrompt.includes("Workbench (lessons + artifacts") && wbPrompt.includes("art-260101-000000-abc12345"));
 const lookup = (id) => (id === "art-260101-000000-abc12345" ? { id, from: "worker-a", adoptedBy: [], verifiedBy: [{ by: "worker-b" }] } : null);
@@ -91,8 +99,8 @@ const adoptOut = run(["artifact", "adopt", "--id", artId, "--from", "worker-b", 
 check("artifact adopt records adoption", adoptOut.includes(`adopted ${artId} by worker-b (1 total)`));
 const adopt2 = run(["artifact", "adopt", "--id", artId, "--from", "worker-b"], e1);
 check("artifact adopt is idempotent per agent", adopt2.includes("(1 total)"));
-const verOut = run(["artifact", "verify", "--id", artId, "--from", "lead"], e1);
-check("artifact verify records verification", verOut.includes(`verified ${artId} by lead (1 total)`));
+const verOut = run(["artifact", "verify", "--id", artId, "--from", "orchestrator"], e1);
+check("artifact verify records verification", verOut.includes(`verified ${artId} by orchestrator (1 total)`));
 const show2 = run(["artifact", "show", "--id", artId, "--json"], e1);
 const showDoc = JSON.parse(show2);
 check("artifact show --json reflects adopt + verify", showDoc.adoptedBy.length === 1 && showDoc.verifiedBy.length === 1 && showDoc.deps.length === 0);
@@ -103,7 +111,7 @@ check("artifact chain: dep recorded on the object", depShow.includes(`"deps": [\
 // ------------------------------------------------------------------ lessons
 const lesOut = run(["lesson", "post", "--from", "worker-a", "--scope", "audit", "--text", "use the WPT oracle", e1 || ""], e1);
 check("lesson post echoes scope injection note", lesOut.includes("lesson les-") && lesOut.includes("[audit]"));
-run(["lesson", "post", "--from", "lead", "--text", "commit artifacts before replying"], e1);
+run(["lesson", "post", "--from", "orchestrator", "--text", "commit artifacts before replying"], e1);
 const lesList = run(["lesson", "list"], e1);
 check("lesson list shows scoped + global lessons", lesList.includes("[audit]") && lesList.includes("[global]"));
 check("lesson list --scope filters", !run(["lesson", "list", "--scope", "camera"], e1).includes("WPT oracle") && run(["lesson", "list", "--scope", "audit"], e1).includes("WPT oracle"));
@@ -111,9 +119,9 @@ const sel = selectLessons({ lessons: path.join(e1.CREWBUS_DIR, "lessons") }, { s
 check("selectLessons: audit scope + global injected", sel.length === 2 && sel[0].text.includes("commit artifacts") && sel.some((l) => l.text.includes("WPT oracle")));
 
 // ------------------------------------------------------------- needs-by mail
-run(["send", "--from", "lead", "--to", "worker-a", "--needs-by", "1s", "--body", "urgent a"], e1);
-run(["send", "--from", "lead", "--to", "worker-a", "--needs-by", "1h", "--body", "not due yet"], e1);
-run(["send", "--from", "lead", "--to", "worker-a", "--needs-by", "1s", "--checkpoint", "--body", "checkpoint c"], e1);
+run(["send", "--from", "orchestrator", "--to", "worker-a", "--needs-by", "1s", "--body", "urgent a"], e1);
+run(["send", "--from", "orchestrator", "--to", "worker-a", "--needs-by", "1h", "--body", "not due yet"], e1);
+run(["send", "--from", "orchestrator", "--to", "worker-a", "--needs-by", "1s", "--checkpoint", "--body", "checkpoint c"], e1);
 await new Promise((r) => setTimeout(r, 1300));
 const od = JSON.parse(run(["inbox", "--from", "worker-a", "--overdue", "--json"], e1));
 check("inbox --overdue: only past-deadline non-checkpoint open items", od.length === 1 && od[0].body === "urgent a" && od[0].needsBy !== undefined);
@@ -124,7 +132,7 @@ check("future needs-by NOT overdue", notOd.length === 1 && notOd[0].needsBy !== 
 
 // ----------------------------------------------- gather metrics end-to-end
 run(["group", "create", "audit", "--add", "worker-a,worker-b"], e1);
-const fan = run(["send", "--from", "lead", "--to-group", "audit", "--subject", "audit lane", "--body", "do the audit"], e1);
+const fan = run(["send", "--from", "orchestrator", "--to-group", "audit", "--subject", "audit lane", "--body", "do the audit"], e1);
 const batchId = (fan.match(/batch (batch-\d{6}-\d{6}-[0-9a-f]{8})/) || [])[1];
 check("fan-out send echoes a batch id", !!batchId);
 const briefIds = [...fan.matchAll(/(msg-\d{6}-\d{6}-[0-9a-f]{8}) -> worker-(a|b)/g)].map((m) => m[1]);
@@ -145,11 +153,11 @@ check("gather metrics: cross-agent feed-forward edge counted", gJson.workbench.f
 check("gather metrics: adoption reflected", gJson.workbench.adopted === 1);
 
 // ------------------------------------------------- spawn brief injection e2e
-const dry = run(["spawn", "--dry-run", "--from", "lead", "--to", "worker-a", "--to-group", "audit", "--needs-by", "10m", "--body", "go audit"], e1);
+const dry = run(["spawn", "--dry-run", "--to", "worker-a", "--to-group", "audit", "--needs-by", "10m", "--body", "go audit"], e1);
 check("spawn dry-run brief injects the Workbench block", dry.includes("Workbench (lessons + artifacts") && dry.includes("WPT oracle"));
 check("spawn dry-run brief lists board artifacts", dry.includes(artId));
 const dryPrompt = dry.slice(dry.indexOf("--- prompt (first worker) ---"));
-check("spawn dry-run prompt pins the lead recipient", dryPrompt.includes("EXACTLY --to lead"));
+check("spawn dry-run prompt pins the orchestrator recipient", dryPrompt.includes("EXACTLY --to orchestrator"));
 
 // ----------------------------------------------------------------- cleanup
 fs.rmSync(p1, { recursive: true, force: true });

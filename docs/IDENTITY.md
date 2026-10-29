@@ -58,8 +58,8 @@ crewbus token status --from alice [--json]
 
 ## Mover (rename / team change)
 
-1. Offboard the old name (admin, token-checked):
-   `register --offboard old-name --from admin`
+1. Offboard the old name (orchestrator, token-checked):
+   `register --offboard old-name --from orchestrator`
 2. Register the new name: `register --from new-name`
 3. History stays: DMs to/from the old name remain on disk and in `--all`
    dumps for audit.
@@ -68,16 +68,16 @@ crewbus token status --from alice [--json]
 
 ```
 # kill one identity's live tokens (identity stays, they must re-register):
-crewbus token revoke --from admin --target bob [--reason "laptop lost"]
+crewbus token revoke --from orchestrator --target bob [--reason "laptop lost"]
 
 # full deprovision (revokes tokens + marks offboarded, inbox preserved):
-crewbus register --offboard bob --from admin
+crewbus register --offboard bob --from orchestrator
 ```
 
 - Revoked callers get: `token for "bob" is revoked — re-register...`.
 - Offboarded callers get: `agent "bob" is offboarded — sends ... refused`.
 - Re-register after revoke mints fresh (no dead token needed);
-  offboarded names stay refused until an admin re-onboards.
+  offboarded names stay refused until the orchestrator re-onboards them.
 
 ## Sync hygiene
 
@@ -160,7 +160,7 @@ Compaction amnesia used to mint throwaway identities (`unknown` on the board,
   miss does it print the `crewbus recover` instruction — never a "you are
   unknown" blessing.
 - **Bindings survive daily traffic:** register stores `sessionId`; later
-  sessionless sends/re-registers/admin touches must NOT wipe it
+  sessionless sends/re-registers/orchestrator touches must NOT wipe it
   (`mergeAgentDoc` deletes undefined patch keys — callers add `sessionId`
   to the patch only when given). Heartbeats merge field-by-field and never
   touch unrelated fields.

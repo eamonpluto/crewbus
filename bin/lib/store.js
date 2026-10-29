@@ -232,7 +232,7 @@ for (const _f of ["--sender-type", "--fwd", "--secret", "--device", "--pair-toke
 export function cleanSenderType(raw) { // line 1181
   if (raw === undefined || raw === null || String(raw).trim() === "") return undefined;
   const t = String(raw).trim().toLowerCase();
-  if (!["human", "lead", "peer"].includes(t)) fail(`--sender-type must be human|lead|peer (got "${raw}")`);
+  if (!["human", "orchestrator", "peer"].includes(t)) fail(`--sender-type must be human|orchestrator|peer (got "${raw}")`);
   return t;
 }
 

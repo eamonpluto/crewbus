@@ -192,6 +192,7 @@ try {
     if (who && TOK[who] && !merged.CREWBUS_TOKEN) merged.CREWBUS_TOKEN = TOK[who];
     const out = execFileSync("node", [CLI, ...args], { env: merged, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] }).toString();
     const m = out.match(/token (abt-[0-9a-f]+)/);
+    if (m && args.includes("orchestrator") && !TOK.orchestrator) TOK.orchestrator = m[1];
     if (m && who && !TOK[who]) TOK[who] = m[1];
     return out;
   };
@@ -224,11 +225,11 @@ try {
   };
 
   run(["init", "--board", board]);
-  run(["register", "--from", "lead"]);
+  run(["orchestrator", "init"]);
   run(["register", "--from", "worker"]);
-  check("live: setup lead+worker tokens minted", !!TOK.lead && !!TOK.worker, "live");
-  run(["send", "--from", "worker", "--to", "lead", "--subject", "approval: restart db", "--priority", "high", "--body", "run: restart db now?"]);
-  run(["send", "--from", "worker", "--to", "lead", "--subject", "hello", "--body", "plain message"]);
+  check("live: setup lead+worker tokens minted", !!TOK.orchestrator && !!TOK.worker, "live");
+  run(["send", "--from", "worker", "--to", "orchestrator", "--subject", "approval: restart db", "--priority", "high", "--body", "run: restart db now?"]);
+  run(["send", "--from", "worker", "--to", "orchestrator", "--subject", "hello", "--body", "plain message"]);
 
   const secret = "m5-mobile-secret";
   const serve = startServer(["serve", "--port", "0", "--board", board, "--secret", secret, "--allow-remote-spawn"]);
@@ -265,7 +266,7 @@ try {
 
   // Pair flow: issue -> exchange -> authed read.
   const client = createRelayClient({ routes: [serveBase, webBase], allowLoopback: true });
-  client.setIdentity({ from: "lead", token: TOK.lead });
+  client.setIdentity({ from: "orchestrator", token: TOK.orchestrator });
   const iss = await client.issuePair({ label: "m5-phone" });
   check("live: pair issue ok with pairUrl+expiresAt", iss.ok === true && typeof iss.data.pairUrl === "string" && iss.data.pairUrl.startsWith("crewbus://pair?"), "live");
   const head = iss.data.pairUrl.split("#")[0];
@@ -278,7 +279,7 @@ try {
   check("live: device credential authenticates relay reads", manifest.status === 200, "live");
 
   // Triage inbox fetch + cards.
-  const inbox = await client.getInbox("lead", { unacked: true });
+  const inbox = await client.getInbox("orchestrator", { unacked: true });
   check("live: triage inbox fetch lists seeded mail", inbox.ok === true && Array.isArray(inbox.data.items) && inbox.data.items.length >= 2, "live");
   const cards = triageCards(inbox.data.items);
   const approvals = approvalCards(inbox.data.items);
@@ -301,7 +302,7 @@ try {
   const narrowIss = await client.issuePair({ label: "narrow", scopes: ["mail:inbox"] });
   const narrowToken = String(narrowIss.data.pairUrl.split("#")[1] || "");
   const narrowClient = createRelayClient({ routes: [serveBase], allowLoopback: true });
-  narrowClient.setIdentity({ from: "lead", token: TOK.lead });
+  narrowClient.setIdentity({ from: "orchestrator", token: TOK.orchestrator });
   const narrowPair = await narrowClient.pair(narrowIss.data.pairUrl, { routes: [serveBase], scopes: ["mail:inbox"] });
   check("live: narrowed exchange stores subset scopes", narrowPair.ok === true && narrowPair.data.scopes.join(",") === "mail:inbox", "live");
   void narrowToken;
@@ -310,7 +311,7 @@ try {
 
   // Offline outbox against the live client: enqueue offline, explicit retry.
   const box = createOutbox();
-  box.enqueueDraft({ key: "ack:later", text: "ack when online", op: { kind: "inbox-refresh", agent: "lead" } });
+  box.enqueueDraft({ key: "ack:later", text: "ack when online", op: { kind: "inbox-refresh", agent: "orchestrator" } });
   const flushed = await box.retryOutbox(async (op) => client.getInbox(op.agent, { unacked: true, limit: 5 }));
   check("live: outbox explicit retry flushes via worker", flushed.length === 1 && flushed[0].ok === true && box.pending().length === 0, "live");
   box.enqueueDraft({ key: "k-off", text: "t", op: { kind: "noop" } });

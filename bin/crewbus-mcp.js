@@ -679,25 +679,20 @@ function ensureSender(d, agent, token) {
 // Mirrors the CLI matrix in bin/crewbus.js (authorizeCheck): call
 // authorizeMcp() AFTER checkToken()/ensureSender() passes — never before,
 // never instead. Do not merge into checkToken.
-// Roles: {admin, lead, worker, auditor}; legacy records without `role` map
-// to `lead` (back-compat). First-registered agent on a board is admin,
-// everyone else gets acl.defaultRole (default "worker").
-//   admin: all, incl. role grants / offboard / prune / acl set /
-//     group restrict / serve --allow-remote-spawn.
-//   lead: send / spawn / respawn / group manage / channel post / result /
-//     race / lock / inbox / ack / redeliver + all reads.
-//   worker: send / inbox / ack / redeliver / lock (scoped) + all reads.
-//   auditor: read-only everything (inbox / gather / thread / channel tail);
-//     zero writes.
+// Roles: {orchestrator, worker}.
+//   orchestrator: the board's single control-plane identity (all actions).
+//   worker: send / inbox / ack / redeliver / lock, artifacts, lessons,
+//     member-scoped channel posts.
+// Records with any other/missing role are treated as workers.
 // ---------------------------------------------------------------------------
 
-const VALID_ROLES_MCP = ["admin", "lead", "worker", "auditor"];
+const VALID_ROLES_MCP = ["orchestrator", "worker"];
 
 function roleOfRecordMcp(rec) {
   if (rec && typeof rec.role === "string" && VALID_ROLES_MCP.includes(String(rec.role).toLowerCase())) {
     return String(rec.role).toLowerCase();
   }
-  return "lead"; // back-compat: records predating roles act as lead
+  return "worker";
 }
 
 function getRoleMcp(d, agent) {
@@ -720,10 +715,7 @@ function readBoardAclMcp(d) {
     meta = null;
   }
   const acl = (meta && typeof meta.acl === "object" && meta.acl) || {};
-  const def = typeof acl.defaultRole === "string" && VALID_ROLES_MCP.includes(String(acl.defaultRole).toLowerCase())
-    ? String(acl.defaultRole).toLowerCase()
-    : "worker";
-  return { defaultRole: def, frozen: acl.frozen === true };
+  return { defaultRole: "worker", frozen: acl.frozen === true };
 }
 
 function isBoardFrozenMcp(d) {
@@ -731,7 +723,7 @@ function isBoardFrozenMcp(d) {
 }
 
 function defaultRoleForNewMcp(d) {
-  return countAgentRecordsMcp(d) === 0 ? "admin" : readBoardAclMcp(d).defaultRole;
+  return "worker";
 }
 
 function readGroupMcp(d, name) {
@@ -747,40 +739,30 @@ function readGroupMcp(d, name) {
 // Core RBAC decision (throwing twin: denials throw, handlers surface them as
 // tool errors). Restricted-group scope is checked here too when
 // scope.toGroups is present.
+const WORKER_ACTIONS_MCP = new Set([
+  "send", "inbox", "ack", "redeliver", "lock", "artifact-write", "lesson-write", "hold-status",
+]);
+
 function authorizeMcp(d, agent, action, scope) {
   const role = getRoleMcp(d, agent);
   const act = String(action || "");
-  const ADMIN_ONLY = new Set(["prune", "acl-set", "role-grant", "offboard", "group-restrict", "serve-remote"]);
-  const LEAD_PLUS = new Set(["spawn", "respawn", "pool", "group-manage", "result-record", "race-close"]);
-  const WORKER_WRITES = new Set(["send", "ack", "redeliver", "lock"]);
-  if (role !== "admin") {
-    if (ADMIN_ONLY.has(act)) throw new Error(`role "${role}" cannot ${act} (need admin)`);
-    if (LEAD_PLUS.has(act) && role !== "lead") throw new Error(`role "${role}" cannot ${act} (need lead|admin)`);
-    if (act === "spawn-kill" && role !== "lead") throw new Error(`role "${role}" cannot spawn-kill (need lead|admin)`);
-    if (act === "channel-post" && role !== "lead") {
-      // Member-scoped channel posting (C4): members post to their group's
-      // channel; board channels + foreign groups stay lead|admin.
+  if (role === "orchestrator") {
+    // Full control plane.
+  } else if (role === "worker") {
+    if (act === "channel-post") {
       const targetGroup = scope && scope.channelGroup ? String(scope.channelGroup) : undefined;
       if (!targetGroup) {
-        throw new Error(`role "${role}" may post only to a group channel it belongs to (board channels are lead|admin)`);
+        throw new Error(`role "worker" may post only to a group channel it belongs to (board channels are orchestrator-only)`);
       }
       const gdoc = readGroupMcp(d, targetGroup);
-      if (!gdoc) throw new Error(`channel group "${targetGroup}" not found (groups register their channels — board channels are lead|admin)`);
+      if (!gdoc) throw new Error(`channel group "${targetGroup}" not found (board channels are orchestrator-only)`);
       const members = Array.isArray(gdoc.members) ? gdoc.members : [];
-      if (!members.includes(agent)) throw new Error(`group channel "${targetGroup}" — members only (member or lead|admin)`);
+      if (!members.includes(agent)) throw new Error(`group channel "${targetGroup}" — members only`);
+    } else if (!WORKER_ACTIONS_MCP.has(act)) {
+      throw new Error(`role "worker" cannot ${act} (orchestrator only)`);
     }
-    if (WORKER_WRITES.has(act) && role !== "lead" && role !== "worker") {
-      throw new Error(`role "${role}" cannot ${act} (auditor is read-only)`);
-    }
-  }
-  if (act === "spawn-kill" && role === "lead") {
-    const targets = (scope && Array.isArray(scope.targets)) ? scope.targets : [];
-    for (const t of targets) {
-      const rec = readAgent(d, t);
-      if (rec && rec.spawnedBy && rec.spawnedBy !== agent) {
-        throw new Error(`lead "${agent}" cannot kill "${t}" (spawned by ${rec.spawnedBy}; own crew only)`);
-      }
-    }
+  } else {
+    throw new Error(`unknown role "${role}" (want orchestrator|worker)`);
   }
   const toGroups = (scope && Array.isArray(scope.toGroups)) ? scope.toGroups : [];
   if ((act === "send" || act === "spawn" || act === "pool") && toGroups.length > 0) {
@@ -788,8 +770,8 @@ function authorizeMcp(d, agent, action, scope) {
       const doc = readGroupMcp(d, g);
       if (doc && doc.restricted === true) {
         const members = Array.isArray(doc.members) ? doc.members : [];
-        if (role !== "admin" && role !== "lead" && !members.includes(agent)) {
-          throw new Error(`group "${g}" is restricted (member or lead|admin only)`);
+        if (role !== "orchestrator" && !members.includes(agent)) {
+          throw new Error(`group "${g}" is restricted (member or orchestrator only)`);
         }
       }
     }
@@ -1156,7 +1138,7 @@ function callTool(name, args) {
       const d = requireBoard(root);
       const agent = cleanName(a.agent, "agent");
       checkToken(d, agent, resolveToken(a));
-      authorizeMcp(d, agent, "ack"); // worker+lead only (auditor refused)
+      authorizeMcp(d, agent, "ack");
       touchAgent(d, agent);
       const id = a.id === undefined || a.id === null || String(a.id) === "" ? undefined : String(a.id);
       const all = a.all === true;
@@ -1296,10 +1278,10 @@ function callTool(name, args) {
         prev.tokenHash = hashTokenMcp(String(token), salt);
         prev.salt = salt;
         delete prev.token;
-        if (!prev.role) prev.role = "lead"; // back-compat backfill
+        if (!prev.role) prev.role = "worker"; // default role for legacy records
         writeAgentHashed(path.join(d.agents, `${agent}.json`), prev);
       } else if (!prev.role) {
-        prev.role = "lead"; // back-compat backfill so agents expose roles
+        prev.role = "worker"; // default role for legacy records
         writeAgentHashed(path.join(d.agents, `${agent}.json`), prev);
       }
       touchAgent(d, agent, session || undefined);

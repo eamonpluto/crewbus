@@ -27,20 +27,27 @@ const run = (args) => {
   const merged = { ...env };
   const fi = args.indexOf("--from");
   const who = fi !== -1 && args[fi + 1] && !String(args[fi + 1]).startsWith("--") ? String(args[fi + 1]).toLowerCase() : null;
+  if (who === "orchestrator" && !TOK[who]) {
+    try {
+      const tf = path.join(board, "logs", "orchestrator.token");
+      if (fs.existsSync(tf)) TOK[who] = fs.readFileSync(tf, "utf8").trim();
+    } catch {}
+  }
   if (who && TOK[who] && !merged.CREWBUS_TOKEN) merged.CREWBUS_TOKEN = TOK[who];
   const out = execFileSync("node", [CLI, ...args], { env: merged, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] }).toString();
   const m = out.match(/token (abt-[0-9a-f]+)/);
+  if (m && args.includes("orchestrator") && !TOK.orchestrator) TOK.orchestrator = m[1];
   if (m && who && !TOK[who]) TOK[who] = m[1];
   return out;
 };
 
 run(["init", "--board", board]);
-run(["register", "--from", "lead"]);
-check("setup: lead token minted", !!TOK.lead);
+run(["orchestrator", "init"]);
+check("setup: orchestrator token minted", !!TOK.orchestrator);
 
-// Seed: active hold + quotas via the CLI (first-registered lead is admin).
-run(["hold", "place", "--from", "lead", "--reason", "audit lock"]);
-run(["quota", "set", "--from", "lead", "--max-bytes", "10mb", "--max-agents", "50", "--max-channels", "7"]);
+// Seed: active hold + quotas via the CLI (board orchestrator).
+run(["hold", "place", "--from", "orchestrator", "--reason", "audit lock"]);
+run(["quota", "set", "--from", "orchestrator", "--max-bytes", "10mb", "--max-agents", "50", "--max-channels", "7"]);
 
 function startServer(args) {
   const child = spawn("node", [CLI, ...args], { env, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] });
@@ -93,7 +100,7 @@ let hj = null;
 try { hj = JSON.parse(holds.text); } catch { hj = null; }
 check("holds: {board, hold} shape", !!hj && typeof hj.board === "string" && hj.hold && typeof hj.hold === "object");
 check("holds: active with placed-by/at/reason",
-  !!hj && hj.hold && hj.hold.active === true && hj.hold.placedBy === "lead" &&
+  !!hj && hj.hold && hj.hold.active === true && hj.hold.placedBy === "orchestrator" &&
   typeof hj.hold.placedAt === "string" && hj.hold.reason === "audit lock");
 check("holds: no token/secret material in payload", !hasSecretMaterial(holds.text));
 
@@ -122,7 +129,7 @@ check("cards: quotas humanize + over-quota flag wiring",
   page.text.includes("humanBytes") && page.text.includes("OVER QUOTA"));
 
 // ---- Hold lift flips the card source to null ----
-run(["hold", "lift", "--from", "lead"]);
+run(["hold", "lift", "--from", "orchestrator"]);
 const holds2 = await httpGet(webBase, "/api/holds");
 let hj2 = null;
 try { hj2 = JSON.parse(holds2.text); } catch { hj2 = null; }

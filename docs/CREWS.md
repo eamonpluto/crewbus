@@ -1,10 +1,10 @@
 # Weighted remote crews
 
-One lead, many relays. Relays advertise a `--weight` (default 100) plus live
-worker count in `/healthz`; `crew survey` shows the fleet and `crew dispatch`
-splits an elastic crew across reachable primaries by weight (largest
-remainder). Standbys and unreachable relays skip loudly — they never silently
-absorb workers.
+One orchestrator, many relays. Relays advertise a `--weight` (default 100)
+plus live worker count in `/healthz`; `crew survey` shows the fleet and
+`crew dispatch` splits an elastic crew across reachable primaries by weight
+(largest remainder). Standbys and unreachable relays skip loudly — they never
+silently absorb workers.
 
 ## Survey the fleet
 
@@ -17,7 +17,7 @@ crewbus crew survey --relays http://r1:8471,http://r2:8471 [--json]
 ## Dispatch
 
 ```sh
-crewbus crew dispatch --from lead \
+crewbus crew dispatch --from orchestrator \
   --relays http://r1:8471,http://r2:8471 --weights 3,1 \
   --count 4 --prefix w --harness opencode \
   --body "Triage batch 7…" --secret s3 [--dry-run]
@@ -30,9 +30,11 @@ crewbus crew dispatch --from lead \
 Flags mirror `spawn` (`--harness/--cmd/--cwd/--model/--max-turns/
 --allow-tools/--auto/--subject/--priority/--sender-type/--keep-env/
 --allow-env`, budgets stay local-only). `--dry-run` prints the shares
-without booting. Every boot lands under your identity on that relay
-(first-claim mints there if needed); replies land on each relay's board —
-`sync` them back or `gather` per relay.
+without booting.
+
+Remote boots run as each relay board's orchestrator. The relay secret or a
+device credential with `launch:spawn` is the auth boundary; replies land on
+each relay's board — `sync` them back or `gather` per relay.
 
 ## Credentials per relay
 
@@ -51,5 +53,5 @@ shared secret; longest prefix wins). Bare `--secret` / `--device` /
   loudly rather than queueing into a replica.
 - **Deterministic shares.** Same weights + count always split the same way,
   so `--dry-run` predicts the real run and tests can assert distributions.
-- **Audited both ends.** The lead's board records `crew-dispatch` (relays,
+- **Audited both ends.** The caller's board records `crew-dispatch` (relays,
   count, shares); each relay records its own `remote-spawn` audit trail.

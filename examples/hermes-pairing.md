@@ -19,13 +19,13 @@ them:
 ```sh
 export CREWBUS_DIR="$REPO/.crewbus"
 # one profile per worker — never share a profile between two writers
-crewbus spawn --from lead --harness opencode --to hermes-1 \
+crewbus spawn --harness opencode --to hermes-1 \
   --cmd "hermes --profile hermes-1" --body "Your brief: ..."
-crewbus spawn --from lead --harness opencode --to hermes-2 \
+crewbus spawn --harness opencode --to hermes-2 \
   --cmd "hermes --profile hermes-2" --body "Your brief: ..."
 ```
 
-Workers use `send --to-group` / `inbox` for lateral mail; a lead runs
+Workers use `send --to-group` / `inbox` for lateral mail; the orchestrator runs
 `gather --batch <batch-id>` to reduce each variant group into one
 transcript. Opposite sharing philosophies, complementary roles: Hermes
 compounds inside one head, the board coordinates between heads.

@@ -16,10 +16,10 @@
     "treat pairing URLs + abd- creds as passwords (no screenshots/logs/bug reports)"
   ],
   "endpoints": {
-    "issue": "POST /api/pair/issue (admin, token-checked; body {label?, ttl?, scopes?}) -> {pairUrl, expiresAt}",
+    "issue": "POST /api/pair/issue (orchestrator, token-checked; body {label?, ttl?, scopes?}) -> {pairUrl, expiresAt}",
     "exchange": "POST /api/pair/exchange (body {pairToken, label?, scopes?}) -> {deviceId, credential (abd-..., once only)}; requested scopes must be subset of granted (narrow-only, never widen)",
-    "devices": "GET /api/pair/devices (admin) -> [{id, label, by, lastSeen, revoked?}]",
-    "revoke": "POST /api/pair/revoke (admin; body {deviceId}) -> immediate 403 on next use"
+    "devices": "GET /api/pair/devices (orchestrator) -> [{id, label, by, lastSeen, revoked?}]",
+    "revoke": "POST /api/pair/revoke (orchestrator; body {deviceId}) -> immediate 403 on next use"
   },
   "scopes": ["launch:spawn", "launch:kill", "mail:send", "mail:inbox", "mail:ack", "fleet:read", "admin:pair", "admin:revoke"],
   "defaultScope": "full device (today's secret-equivalent) unless narrowed at exchange",

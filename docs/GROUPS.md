@@ -9,7 +9,7 @@ is replaced by the commands below.
 
 ```sh
 crewbus group create team-a --add a1,a2,a3
-crewbus send --from lead --to-group team-a --subject "variant: regularity" --body "..."
+crewbus send --from orchestrator --to-group team-a --subject "variant: regularity" --body "..."
 crewbus gather --batch <batch>   # briefs + replies + telemetry footer + contributing groups
 ```
 
@@ -20,7 +20,7 @@ crewbus gather --batch <batch>   # briefs + replies + telemetry footer + contrib
 ## Replies carry artifacts
 
 ```sh
-crewbus send --from e1 --to lead --reply <brief-id> --artifact out/a1.json --body "done"
+crewbus send --from e1 --to orchestrator --reply <brief-id> --artifact out/a1.json --body "done"
 ```
 
 `--artifact <path-or-url>` (max 500 chars) is stored on the message and
@@ -29,8 +29,8 @@ shown by `inbox` / `gather` / `thread`.
 ## Verify, then record the result
 
 ```sh
-crewbus ack --from lead --id <reply-id> --verify "node test/check.mjs --input out/a1.json"
-crewbus result record --group team-a --msg <reply-id> --artifact out/a1.json --from lead
+crewbus ack --from orchestrator --id <reply-id> --verify "node test/check.mjs --input out/a1.json"
+crewbus result record --group team-a --msg <reply-id> --artifact out/a1.json --from orchestrator
 crewbus result show --group team-a
 crewbus result list [--group team-a] [--json]
 ```
@@ -45,7 +45,7 @@ unless `--force` (which prints a warning to stderr).
 
 ```sh
 crewbus race start --group team-a --batch <batch> [--timeout 60000] [--json]
-crewbus race close --group team-a --from lead [--kill]
+crewbus race close --group team-a --from orchestrator [--kill]
 ```
 
 `race start` reports the winner (recorded result whose `msgId` is in the
@@ -91,17 +91,17 @@ block assumes:
 
 - **Peer-direct for questions.** `crewbus send --from you --to-group
   <group> --subject "..." --body "..."` reaches every member of
-  another group. Ask the group that owns a thing first; the lead is
+  another group. Ask the group that owns a thing first; the orchestrator is
   for approvals (`--priority high`) and scope disputes only.
 - **Channels are the shared read surface.** `crewbus channel tail
   grp-<group>` shows a group's briefs + mirrored progress; reads need
   no token. Channel *posting* is member-scoped (default-on, no flag):
   a worker may post to `grp-<group>` only when it is a MEMBER of that
-  group — board channels and foreign groups stay lead|admin-only
+  group — board channels and foreign groups are orchestrator-only
   (see docs/RBAC.md).
 - **Boot habit.** `crewbus agents` + `crewbus group list` once at
   start, so a worker knows who else is here. A worker that never runs
-  a discovery command will work star-topology through the lead — that
+  a discovery command will work star-topology through the orchestrator — that
   is a failure of the brief, not the worker.
 - **Scope questions stay lanes-first.** "Stay in your lane" prevents
   collisions; "DM the group that owns a thing" prevents silos. A

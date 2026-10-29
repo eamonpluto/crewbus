@@ -324,9 +324,5 @@ export function findFirstVerifiedReply(d, items) {
 }
 
 export function heuristicSenderType(d, from) { // line 1188
-  try {
-    const g = readGroup(d, "lead");
-    if (g && Array.isArray(g.members) && g.members.includes(from)) return "lead";
-  } catch {}
-  return "peer";
+  return String(from || "") === "orchestrator" ? "orchestrator" : "peer";
 }

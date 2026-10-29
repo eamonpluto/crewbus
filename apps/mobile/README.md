@@ -29,8 +29,8 @@ everything happens in `apps/mobile/` only.
 
 ## Pairing a phone against a web dashboard or relay
 
-1. On the dashboard/relay (admin, token-checked): mint a one-time link —
-   `node bin/crewbus.js serve --advertise-routes <LAN-url> --pair-qrcode --from <admin>`
+1. On the dashboard/relay (orchestrator, token-checked): mint a one-time link —
+   `node bin/crewbus.js serve --advertise-routes <LAN-url> --pair-qrcode --from orchestrator`
    (same mint + audit as `relay pair`; `<LAN-url>` is the http(s) address
    the phone can actually reach — remote-only v1, no loopback) — and show its QR.
 2. On the phone: open **Pair**, point the camera at the QR (or paste via
@@ -128,7 +128,7 @@ What the human does in each console:
 
 Pairing prerequisite (remote-only v1): the phone must reach the relay over
 LAN/tailnet — loopback is refused by the client. Mint with
-`node bin/crewbus.js serve --advertise-routes <LAN-url> --pair-qrcode --from <admin>`
-(admin token), then Pair tab → scan. No `development` profile exists on
+`node bin/crewbus.js serve --advertise-routes <LAN-url> --pair-qrcode --from orchestrator`
+(orchestrator token), then Pair tab → scan. No `development` profile exists on
 purpose — `expo-dev-client` is not a dependency, so there is nothing to
 attach it to.

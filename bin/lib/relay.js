@@ -40,7 +40,7 @@ import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import { readJson, writeJson, listJson, getFlag, cleanWebName, gitRevForBoard, MAX_BODY_CHARS, MAX_FWD_DEPTH, webErr } from "./store.js";
-import { readAgent, agentTokenMatches, mintToken, newSalt, hashToken, timingSafeEqualStr, writeAgentFile, isBoardFrozen, defaultRoleForNew, authorizeThrow, authorizeCheck, touchAgent } from "./identity.js";
+import { readAgent, agentTokenMatches, mintToken, newSalt, hashToken, timingSafeEqualStr, writeAgentFile, isBoardFrozen, defaultRoleForNew, authorizeThrow, authorizeCheck, touchAgent, ensureOrchestrator, ORCHESTRATOR_NAME } from "./identity.js";
 import { httpJson } from "./sync.js";
 import { killWorkers, pidAlive, bootWorker, parseAllowEnv, isPidStale } from "./spawn.js";
 import { expandGroups, heuristicSenderType } from "./groups.js";
@@ -133,10 +133,12 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
     return s !== undefined && s.trim() !== "" ? s : undefined;
   };
   const rawFrom = cleanStr(a.from);
-  if (!rawFrom || !rawFrom.trim()) throw webErr(400, "missing from (your agent name)");
-  const from = rawFrom.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "-").slice(0, 40);
-  if (!from) throw webErr(400, "invalid agent name");
-  const token = cleanStr(a.token) || undefined;
+  if (!rawFrom || !rawFrom.trim()) throw webErr(400, "missing from (requester name)");
+  // Remote control-plane actions run as the relay board's single orchestrator.
+  // The relay secret (or a device credential with launch:spawn) is the auth
+  // boundary; `from` is kept only as audit metadata by the route.
+  ensureOrchestrator(d);
+  const from = ORCHESTRATOR_NAME;
   // Recipients: to (string|array) + to_group + count/prefix, same as CLI.
   const toParts = [];
   if (a.to !== undefined && a.to !== null) {
@@ -241,35 +243,9 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
   }
 
   if (auto && !(a.iUnderstandDanger === true || a.i_understand_danger === true)) throw webErr(400, "--auto remotely needs iUnderstandDanger:true plus an isolated relay (see docs/ISOLATION.md)");
-  // Pre-verify: CLI ensureSender calls fail() (process exit) on mismatch,
-  // which must never run inside a request handler. Hashed + legacy accepted.
-  const existing = readAgent(d, from);
-  if (existing && (existing.tokenHash || existing.token) && !agentTokenMatches(existing, token)) throw webErr(403, `bad token for "${from}"`);
-  let minted = { created: false };
-  if (!existing) {
-    if (isBoardFrozen(d)) throw webErr(403, `board is frozen — new registrations refused (ask an admin to register --from <admin> --for ${from})`);
-    const fresh = mintToken();
-    const salt = newSalt();
-    writeAgentFile(d, from, { name: from, firstSeen: new Date().toISOString(), lastSeen: new Date().toISOString(), lastDir: process.cwd(), tokenHash: hashToken(fresh, salt), salt, role: defaultRoleForNew(d) });
-    minted = { created: true, token: fresh };
-  } else if (existing.token && !existing.tokenHash) {
-    const salt = newSalt();
-    existing.tokenHash = hashToken(String(token), salt);
-    existing.salt = salt;
-    delete existing.token;
-    if (!existing.role) existing.role = "lead"; // back-compat backfill
-    writeAgentFile(d, from, existing);
-  } else if (!existing.tokenHash && !existing.token) {
-    const fresh = mintToken();
-    const salt = newSalt();
-    existing.tokenHash = hashToken(fresh, salt);
-    existing.salt = salt;
-    if (!existing.role) existing.role = defaultRoleForNew(d);
-    writeAgentFile(d, from, existing);
-    minted = { created: true, token: fresh };
-  }
+
   // Phase 1b: relay spawn honors the same matrix as CLI spawn (worker/auditor
-  // refused; restricted --to-group needs admin/lead/member). Throwing twin so
+  // refused; restricted --to-group needs orchestrator/member). Throwing twin so
   // a denial is a 403, never a process exit.
   authorizeThrow(d, from, "spawn", {
     toGroups: String(a.to_group === undefined || a.to_group === null ? "" : a.to_group).split(",").map((s) => String(s).trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "-").slice(0, 40)).filter(Boolean),
@@ -282,7 +258,7 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
   const spawnOpts = { harness, cmd, model, auto, maxTurns, allowTools, cwd, root: d.root, prompt: null, keepEnv: a.keepEnv === true, allowEnv: parseAllowEnv(a.allowEnv) };
   const senderType = (() => {
     const t = a.senderType !== undefined ? String(a.senderType).toLowerCase() : (a.sender_type !== undefined ? String(a.sender_type).toLowerCase() : undefined);
-    if (t !== undefined && !["human", "lead", "peer"].includes(t)) throw webErr(400, "senderType must be human|lead|peer");
+    if (t !== undefined && !["human", "orchestrator", "peer"].includes(t)) throw webErr(400, "senderType must be human|orchestrator|peer");
     return t || heuristicSenderType(d, from);
   })();
   const fwd = (() => {
@@ -320,7 +296,6 @@ export async function remoteSpawn(d, a, serveOpts) { // line 6770
     }
   }
   const out = { results };
-  if (minted.created) out.senderToken = minted.token;
   return out;
 }
 

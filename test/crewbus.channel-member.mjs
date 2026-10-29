@@ -35,8 +35,8 @@ const runFail = (args) => {
 const tok = (out) => (out.match(/token (abt-[0-9a-f]+)/) || [])[1];
 
 try {
-  const bossTok = tok(run(["register", "--from", "boss"]));
-  check("setup: boss registered (admin)", !!bossTok);
+  const bossTok = tok(run(["orchestrator", "init"]));
+  check("setup: orchestrator registered", !!bossTok);
   const aliceTok = tok(run(["register", "--from", "alice"]));
   check("setup: alice registered", !!aliceTok);
   const bobTok = tok(run(["register", "--from", "bob"]));
@@ -46,9 +46,9 @@ try {
   const dU = { root: boardE, agents: path.join(boardE, "agents"), groups: path.join(boardE, "groups") };
 
   // Unit-level authorizeCheck matrix
-  const u1 = authorizeCheck(dU, "boss", "channel-post", { channelGroup: "alpha" });
-  check("unit: admin posts anywhere", u1.ok === true);
-  check("unit: admin posts to any board channel", authorizeCheck(dU, "boss", "channel-post", {}).ok === true);
+  const u1 = authorizeCheck(dU, "orchestrator", "channel-post", { channelGroup: "alpha" });
+  check("unit: orchestrator posts anywhere", u1.ok === true);
+  check("unit: orchestrator posts to any board channel", authorizeCheck(dU, "orchestrator", "channel-post", {}).ok === true);
   const u2 = authorizeCheck(dU, "alice", "channel-post", { channelGroup: "alpha" });
   check("unit: member posts to own group channel", u2.ok === true);
   const u3 = authorizeCheck(dU, "bob", "channel-post", { channelGroup: "alpha" });
@@ -61,10 +61,10 @@ try {
   // CLI E2E
   const ok1 = run(["channel", "post", "--channel", "grp-alpha", "--from", "alice", "--token", aliceTok, "--body", "hi crew"]);
   check("cli: member posts to grp-alpha", ok1.includes("posted ch-"));
-  const ok2 = run(["channel", "post", "--channel", "grp-alpha", "--from", "boss", "--token", bossTok, "--body", "admin ping"]);
-  check("cli: admin posts to grp-alpha", ok2.includes("posted ch-"));
+  const ok2 = run(["channel", "post", "--channel", "grp-alpha", "--from", "orchestrator", "--token", bossTok, "--body", "admin ping"]);
+  check("cli: orchestrator posts to grp-alpha", ok2.includes("posted ch-"));
   const bad1 = runFail(["channel", "post", "--channel", "board-lounge", "--from", "alice", "--token", aliceTok, "--body", "x"]);
-  check("cli: board channels stay lead|admin", !bad1.ok && /board channels/.test(bad1.out));
+  check("cli: board channels are orchestrator-only", !bad1.ok && /orchestrator-only/.test(bad1.out));
   const bad2 = runFail(["channel", "post", "--channel", "grp-alpha", "--from", "bob", "--token", bobTok, "--body", "x"]);
   check("cli: non-member refused", !bad2.ok && /members only/.test(bad2.out));
 

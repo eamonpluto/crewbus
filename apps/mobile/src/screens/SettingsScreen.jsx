@@ -27,7 +27,7 @@ export function SettingsScreen({ ctx, navigation }) {
     if (!route) { setStatus('connect a route in Hub first.'); return; }
     try {
       setDevices(await ctx.apiFor(route).fetchDevices({ from: agent.trim(), agentToken }));
-      setStatus('device list is admin-gated');
+      setStatus('device list is orchestrator-only');
     } catch (e) { setStatus(`devices unavailable: ${String((e && e.message) || e)}`); }
   };
 
@@ -65,7 +65,7 @@ export function SettingsScreen({ ctx, navigation }) {
           ListEmptyComponent={<Text style={S.textMuted}>No learned routes recorded yet.</Text>}
         />
         <View style={S.row}>
-          <TextInput style={[S.input, { flex: 1 }]} value={agent} onChangeText={setAgent} placeholder="admin agent" placeholderTextColor={T.textSubtle} />
+          <TextInput style={[S.input, { flex: 1 }]} value={agent} onChangeText={setAgent} placeholder="orchestrator agent" placeholderTextColor={T.textSubtle} />
           <TouchableOpacity style={S.btnSecondary} onPress={reviewDevices}><Text style={S.btnText}>Audit</Text></TouchableOpacity>
         </View>
         <TouchableOpacity style={S.btnDanger} onPress={signOut}>

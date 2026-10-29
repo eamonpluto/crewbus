@@ -1,6 +1,6 @@
 # M1 CLI draft — `launch` wizard, `harnesses`, `relay pair qr`, serve pairing flags
 
-Status: SHIPPED (lead wired `cmdServe` 2026-10-06). Paste §1 into `bin/crewbus.js` USAGE and §2
+Status: SHIPPED (orchestrator wired `cmdServe` 2026-10-06). Paste §1 into `bin/crewbus.js` USAGE and §2
 into `README.md` after the spawn section ("Running workers (spawn)").
 §1d is now live: `serve --advertise-routes --pair-qrcode` shipped in `cmdServe`;
 `POST /api/launch` + `GET /api/harnesses` + `GET /api/routes` shipped in both
@@ -32,8 +32,8 @@ Flag verification (role-prompt list vs implementation):
 | `--yes` | In shipped USAGE line; no separate consume in `cmdLaunch` (confirm lives in spawn delegation). Keep the token, do not invent semantics |
 | `--permission full` | Needs `--i-understand-danger` (else plan invalid) |
 | `harnesses [detect --json]` | Shipped (`cmdHarnesses`; `detect` optional, bare `harnesses` works) |
-| `relay pair qr --from <admin> [--label --ttl --routes --json]` | Shipped (`qr` branch of `cmdRelayPair`); prints `crewbus://pair` URL, secret in `#fragment` only |
-| `serve --advertise-routes <url,url> --pair-qrcode` | SHIPPED in `cmdServe` (advertised at `relay.json`, `GET /healthz`, `GET /api/routes`; `--pair-qrcode` needs `--from <admin>`, same mint + audit as `relay pair`) |
+| `relay pair qr --from orchestrator [--label --ttl --routes --json]` | Shipped (`qr` branch of `cmdRelayPair`); prints `crewbus://pair` URL, secret in `#fragment` only |
+| `serve --advertise-routes <url,url> --pair-qrcode` | SHIPPED in `cmdServe` (advertised at `relay.json`, `GET /healthz`, `GET /api/routes`; `--pair-qrcode` needs `--from orchestrator`, same mint + audit as `relay pair`) |
 
 ## 1. USAGE text blocks (paste-ready)
 
@@ -48,7 +48,7 @@ Flag verification (role-prompt list vs implementation):
      the interactive confirm; --json prints the crewId/batch/workers shape.)
 ```
 
-Notes for the lead (do not paste): `--body-file <path>` is also accepted
+Notes for the orchestrator (do not paste): `--body-file <path>` is also accepted
 (read into the brief before validation); `--target` is `local` (hardcoded —
 fleet goes through `crew dispatch`); `--permission full` additionally
 requires `--i-understand-danger`.
@@ -65,7 +65,7 @@ requires `--i-understand-danger`.
 ### 1c. `crewbus relay pair qr` (shipped — keep verbatim)
 
 ```text
-  crewbus relay pair qr --from <admin> [--label <device>] [--ttl 10m] [--routes <url,url>] [--json]
+  crewbus relay pair qr --from orchestrator [--label <device>] [--ttl 10m] [--routes <url,url>] [--json]
     (prints the one-time crewbus://pair URL (secret in #fragment, never
      query) alongside the plain pairing token. Scan/paste into the mobile
      or desktop client to pair.)
@@ -158,7 +158,7 @@ surface to keep citing is the resume column: cursor/antigravity
 report `resume: false` in `harnesses` output by design (see §2 wording
 above), matching the existing "no" rows.
 
-## 4. Paste checklist for the lead
+## 4. Paste checklist for the orchestrator
 
 1. USAGE: §1a–c already shipped in `bin/crewbus.js` — no paste needed.
    §1d only after `cmdServe` gains `--advertise-routes`/`--pair-qrcode`.
@@ -167,7 +167,7 @@ above), matching the existing "no" rows.
 3. COMPATIBILITY.md: no edit (per §3).
 4. Never touched (per role): `bin/crewbus.js`, `package.json`, tests —
    this draft only *adds* `docs/M1_CLI_DRAFT.md`.
-   UPDATE (lead, 2026-10-06): serve + web wiring landed after the draft —
+   UPDATE (orchestrator, 2026-10-06): serve + web wiring landed after the draft —
    `bin/crewbus.js` (`cmdServe` flags, `/api/routes`, `/api/harnesses`,
    `/api/launch`, USAGE), `bin/lib/web.js` (`handleApiLaunch`,
    `/api/harnesses`, `/api/routes`, `/api/launch`), `package.json`

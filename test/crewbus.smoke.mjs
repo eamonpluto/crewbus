@@ -36,10 +36,10 @@ const run = (args, extraEnv) => {
   const merged = { ...env, ...(extraEnv || {}) };
   const fi = args.indexOf("--from");
   const who = fi !== -1 && args[fi + 1] && !String(args[fi + 1]).startsWith("--") ? String(args[fi + 1]).toLowerCase() : null;
-  if (who === "lead" && !TOK["lead"]) {
+  if (who === "orchestrator" && !TOK["orchestrator"]) {
     try {
-      const ltp = path.join(board, "logs", "lead.token");
-      if (fs.existsSync(ltp)) TOK["lead"] = fs.readFileSync(ltp, "utf8").trim();
+      const ltp = path.join(board, "logs", "orchestrator.token");
+      if (fs.existsSync(ltp)) TOK["orchestrator"] = fs.readFileSync(ltp, "utf8").trim();
     } catch {}
   }
   if (who && TOK[who] && !merged.CREWBUS_TOKEN) merged.CREWBUS_TOKEN = TOK[who];
@@ -233,12 +233,12 @@ check("@all in --all dump", run(["inbox", "--all"]).includes("all hands"));
 
 // 7b2. spawn: brief + boot workers detached (opencode harness
 // with CREWBUS_DIR + CREWBUS_AGENT set; opencode path covered by --dry-run)
-const dryOut = run(["spawn", "--from", "alice", "--to", "spw1,spw2", "--subject", "brief: cards", "--body", "drop borders", "--dry-run"]);
+const dryOut = run(["spawn", "--to", "spw1,spw2", "--subject", "brief: cards", "--body", "drop borders", "--dry-run"]);
 check("spawn --dry-run previews without sending", dryOut.includes("would spawn spw1") && dryOut.includes("would spawn spw2"));
 check("spawn --dry-run shows prompt + reply threading", dryOut.includes("DM a summary back") && dryOut.includes("--reply"));
 run(["register", "--from", "spw1"]);
 check("spawn --dry-run touches no inbox", !run(["inbox", "--from", "spw1"]).includes("drop borders"));
-const spawned = run(["spawn", "--from", "alice", "--harness", "opencode", "--to", "gw1", "--body", "hello worker"]);
+const spawned = run(["spawn", "--harness", "opencode", "--to", "gw1", "--body", "hello worker"]);
 check("spawn launches detached with pid + log", spawned.includes("spawned gw1 pid ") && spawned.includes("reply msg-"));
 run(["register", "--from", "gw1"]); // spawned workers claim their name (prompt step 0)
 const replyId = (spawned.match(/reply (\S+)/) || [])[1];
@@ -246,72 +246,72 @@ check("spawn brief waits with reply id", JSON.parse(run(["inbox", "--from", "gw1
 const gwDoc = JSON.parse(run(["agents", "--json"])).find((a) => a.name === "gw1");
 check("detached child ran with board env", true);
 check("spawn pid recorded on agent", gwDoc && typeof gwDoc.spawnedPid === "number");
-run(["spawn-kill", "--from", "alice", "--to", "gw1"]);
+run(["spawn-kill", "--from", "orchestrator", "--to", "gw1"]);
 let spawnAll = false;
 try {
-  run(["spawn", "--from", "alice", "--to", "@all", "--body", "x"]);
+  run(["spawn", "--to", "@all", "--body", "x"]);
 } catch {
   spawnAll = true;
 }
 check("spawn --to @all refused", spawnAll);
 let spawnMany = false;
 try {
-  run(["spawn", "--from", "alice", "--to", Array.from({ length: 21 }, (_, i) => `s${i}`).join(","), "--body", "x"]);
+  run(["spawn", "--to", Array.from({ length: 21 }, (_, i) => `s${i}`).join(","), "--body", "x"]);
 } catch {
   spawnMany = true;
 }
 check("spawn over 20 refused", spawnMany);
 let spawnGeneric = false;
 try {
-  run(["spawn", "--from", "alice", "--harness", "generic", "--to", "gw9", "--body", "x"]);
+  run(["spawn", "--harness", "generic", "--to", "gw9", "--body", "x"]);
 } catch {
   spawnGeneric = true;
 }
 check("spawn generic harness refused", spawnGeneric);
 let spawnBadHarness = false;
 try {
-  run(["spawn", "--from", "alice", "--harness", "wat", "--to", "gw9", "--body", "x"]);
+  run(["spawn", "--harness", "wat", "--to", "gw9", "--body", "x"]);
 } catch {
   spawnBadHarness = true;
 }
 check("spawn unknown harness refused", spawnBadHarness);
 // first-class targets: dry-run prints the exact launch command (no harness needed)
-const dryClaude = run(["spawn", "--from", "alice", "--harness", "claude", "--to", "cw1", "--body", "x", "--dry-run"]);
+const dryClaude = run(["spawn", "--harness", "claude", "--to", "cw1", "--body", "x", "--dry-run"]);
 check("spawn claude builds -p + stdin command", dryClaude.includes("cmd: claude -p") && dryClaude.includes("--allowedTools Read,Edit,Write,Bash") && dryClaude.includes("< brief-file"));
-const dryCodex = run(["spawn", "--from", "alice", "--harness", "codex", "--to", "cw1", "--body", "x", "--dry-run"]);
+const dryCodex = run(["spawn", "--harness", "codex", "--to", "cw1", "--body", "x", "--dry-run"]);
 check("spawn codex builds exec command", dryCodex.includes("cmd: codex exec") && dryCodex.includes("--skip-git-repo-check") && dryCodex.includes("-C"));
-const dryGrok = run(["spawn", "--from", "alice", "--harness", "grok", "--to", "cw1", "--body", "x", "--dry-run"]);
+const dryGrok = run(["spawn", "--harness", "grok", "--to", "cw1", "--body", "x", "--dry-run"]);
 check("spawn grok builds prompt-file command", dryGrok.includes("cmd: grok --prompt-file") && dryGrok.includes("--max-turns 50"));
-const dryAgy = run(["spawn", "--from", "alice", "--harness", "antigravity", "--to", "cw1", "--body", "x", "--dry-run"]);
+const dryAgy = run(["spawn", "--harness", "antigravity", "--to", "cw1", "--body", "x", "--dry-run"]);
 check("spawn antigravity builds print command", dryAgy.includes("cmd: agy --print") && dryAgy.includes("--mode accept-edits"));
-const dryCur = run(["spawn", "--from", "alice", "--harness", "cursor", "--to", "cw1", "--body", "x", "--dry-run"]);
+const dryCur = run(["spawn", "--harness", "cursor", "--to", "cw1", "--body", "x", "--dry-run"]);
 check("spawn cursor builds headless command", dryCur.includes("cmd: cursor-agent -p") && dryCur.includes("--force") && dryCur.includes("--trust") && dryCur.includes("--workspace"));
-check("spawn cursor+auto maps to yolo", run(["spawn", "--from", "alice", "--harness", "cursor", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--yolo"));
-check("spawn agy alias resolves", run(["spawn", "--from", "alice", "--harness", "agy", "--to", "cw1", "--body", "x", "--dry-run"]).includes("[antigravity]"));
-check("spawn claude+auto maps to skip-permissions", run(["spawn", "--from", "alice", "--harness", "claude", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--dangerously-skip-permissions"));
-check("spawn codex+auto maps to danger-full-access", run(["spawn", "--from", "alice", "--harness", "codex", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("danger-full-access"));
-check("spawn grok+auto maps to always-approve", run(["spawn", "--from", "alice", "--harness", "grok", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--always-approve"));
+check("spawn cursor+auto maps to yolo", run(["spawn", "--harness", "cursor", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--yolo"));
+check("spawn agy alias resolves", run(["spawn", "--harness", "agy", "--to", "cw1", "--body", "x", "--dry-run"]).includes("[antigravity]"));
+check("spawn claude+auto maps to skip-permissions", run(["spawn", "--harness", "claude", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--dangerously-skip-permissions"));
+check("spawn codex+auto maps to danger-full-access", run(["spawn", "--harness", "codex", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("danger-full-access"));
+check("spawn grok+auto maps to always-approve", run(["spawn", "--harness", "grok", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--always-approve"));
 let spawnScope = false;
 try {
-  run(["spawn", "--from", "alice", "--harness", "codex", "--to", "cw1", "--body", "x", "--allow-tools", "Read", "--dry-run"]);
+  run(["spawn", "--harness", "codex", "--to", "cw1", "--body", "x", "--allow-tools", "Read", "--dry-run"]);
 } catch {
   spawnScope = true;
 }
 check("spawn --allow-tools scoped to claude", spawnScope);
 let spawnScope2 = false;
 try {
-  run(["spawn", "--from", "alice", "--harness", "opencode", "--to", "cw1", "--body", "x", "--max-turns", "5", "--dry-run"]);
+  run(["spawn", "--harness", "opencode", "--to", "cw1", "--body", "x", "--max-turns", "5", "--dry-run"]);
 } catch {
   spawnScope2 = true;
 }
 check("spawn --max-turns scoped to claude/grok", spawnScope2);
 // spawn-status: running -> reply -> done, unknown names, --all, --json
-const stSpawn = run(["spawn", "--from", "alice", "--harness", "opencode", "--to", "st1", "--body", "work please"]);
+const stSpawn = run(["spawn", "--harness", "opencode", "--to", "st1", "--body", "work please"]);
 const stReply = (stSpawn.match(/reply (\S+)/) || [])[1];
 check("spawn-status running while alive", run(["spawn-status", "--to", "st1"]).includes("st1: running"));
-run(["send", "--from", "st1", "--to", "lead", "--reply", stReply, "--body", "did the thing"]);
+run(["send", "--from", "st1", "--to", "orchestrator", "--reply", stReply, "--body", "did the thing"]);
 const stDone = run(["spawn-status", "--to", "st1"]);
-const stReplyMsg = JSON.parse(run(["inbox", "--from", "lead", "--json"])).find((m) => m.replyTo === stReply).id;
+const stReplyMsg = JSON.parse(run(["inbox", "--from", "orchestrator", "--json"])).find((m) => m.replyTo === stReply).id;
 check("spawn-status done after reply", stDone.includes("done (reply waiting)") && stDone.includes(stReplyMsg));
 const stJson = JSON.parse(run(["spawn-status", "--to", "st1", "--json"]));
 check("spawn-status --json structured", Array.isArray(stJson) && stJson[0].name === "st1" && stJson[0].reply && stJson[0].reply.id.length > 0 && stJson[0].acked === false);
@@ -324,54 +324,54 @@ try {
   }
 } catch {}
 // spawn-kill: the kill switch (closing the terminal does NOT stop detached workers)
-run(["spawn", "--from", "alice", "--harness", "opencode", "--to", "kk1", "--body", "x"]);
+run(["spawn", "--harness", "opencode", "--to", "kk1", "--body", "x"]);
 run(["register", "--from", "kk1"]);
-check("spawn-kill terminates worker", run(["spawn-kill", "--from", "alice", "--to", "kk1"]).includes("killed pid"));
+check("spawn-kill terminates worker", run(["spawn-kill", "--from", "orchestrator", "--to", "kk1"]).includes("killed pid"));
 check("spawn-kill status shows exited", run(["spawn-status", "--to", "kk1"]).includes("exited"));
-check("spawn-kill idempotent", run(["spawn-kill", "--from", "alice", "--to", "kk1"]).includes("already exited"));
-check("spawn-kill unknown name", run(["spawn-kill", "--from", "alice", "--to", "ghost-kk"]).includes("no pid recorded"));
+check("spawn-kill idempotent", run(["spawn-kill", "--from", "orchestrator", "--to", "kk1"]).includes("already exited"));
+check("spawn-kill unknown name", run(["spawn-kill", "--from", "orchestrator", "--to", "ghost-kk"]).includes("no pid recorded"));
 // spawn --count: elastic crews (auto-named, mergeable, collision-guarded)
-const dryCount = run(["spawn", "--from", "alice", "--to", "solo", "--count", "2", "--body", "x", "--dry-run"]);
+const dryCount = run(["spawn", "--to", "solo", "--count", "2", "--body", "x", "--dry-run"]);
 check("spawn --count auto-names", dryCount.includes("would spawn solo") && dryCount.includes("would spawn worker-1") && dryCount.includes("would spawn worker-2"));
-check("spawn --count --prefix", run(["spawn", "--from", "alice", "--count", "2", "--prefix", "crew", "--body", "x", "--dry-run"]).includes("would spawn crew-2"));
-let leadNoneRefused = false;
+check("spawn --count --prefix", run(["spawn", "--count", "2", "--prefix", "crew", "--body", "x", "--dry-run"]).includes("would spawn crew-2"));
+let leadFlagRefused = false;
 try {
-  run(["spawn", "--from", "alice", "--lead", "none", "--body", "x", "--dry-run"]);
+  run(["spawn", "--lead", "auto", "--body", "x", "--dry-run"]);
 } catch {
-  leadNoneRefused = true;
+  leadFlagRefused = true;
 }
-check("spawn --lead none refused", leadNoneRefused);
-check("spawn --count 0 revive previews lead-only", run(["spawn", "--from", "alice", "--count", "0", "--body", "x", "--dry-run"]).includes("lead-revive:"));
+check("spawn --lead flag refused", leadFlagRefused);
+check("spawn --count 0 revive previews orchestrator-only", run(["spawn", "--count", "0", "--body", "x", "--dry-run"]).includes("orchestrator-revive:"));
 let countBig = false;
 try {
-  run(["spawn", "--from", "alice", "--count", "21", "--body", "x", "--dry-run"]);
+  run(["spawn", "--count", "21", "--body", "x", "--dry-run"]);
 } catch {
   countBig = true;
 }
 check("spawn --count over cap refused", countBig);
-check("spawn --count with --max-spawn override", run(["spawn", "--from", "alice", "--count", "25", "--max-spawn", "30", "--body", "x", "--dry-run"]).includes("would spawn worker-25"));
+check("spawn --count with --max-spawn override", run(["spawn", "--count", "25", "--max-spawn", "30", "--body", "x", "--dry-run"]).includes("would spawn worker-25"));
 let maxSpawnBad = false;
 try {
-  run(["spawn", "--from", "alice", "--count", "2", "--max-spawn", "0", "--body", "x", "--dry-run"]);
+  run(["spawn", "--count", "2", "--max-spawn", "0", "--body", "x", "--dry-run"]);
 } catch {
   maxSpawnBad = true;
 }
 check("spawn --max-spawn validates", maxSpawnBad);
 run(["register", "--from", "taken"]);
-check("spawn stale name allowed", run(["spawn", "--from", "alice", "--to", "taken", "--body", "x", "--dry-run"]).includes("would spawn taken"));
-run(["spawn", "--from", "alice", "--harness", "opencode", "--to", "clash-live", "--body", "x"]);
+check("spawn stale name allowed", run(["spawn", "--to", "taken", "--body", "x", "--dry-run"]).includes("would spawn taken"));
+run(["spawn", "--harness", "opencode", "--to", "clash-live", "--body", "x"]);
 let countClash = false;
 try {
-  run(["spawn", "--from", "alice", "--to", "clash-live", "--body", "x", "--dry-run"]);
+  run(["spawn", "--to", "clash-live", "--body", "x", "--dry-run"]);
 } catch (e) {
   countClash = String((e.stdout || "") + (e.stderr || "")).includes("live worker");
 }
 check("spawn live name refused", countClash);
-run(["spawn-kill", "--from", "alice", "--to", "clash-live"]);
+run(["spawn-kill", "--from", "orchestrator", "--to", "clash-live"]);
 // end-to-end: real --count boot + kill
-const cntSpawn = run(["spawn", "--from", "alice", "--harness", "opencode", "--count", "1", "--prefix", "e2e", "--body", "x"]);
+const cntSpawn = run(["spawn", "--harness", "opencode", "--count", "1", "--prefix", "e2e", "--body", "x"]);
 check("spawn --count boots", cntSpawn.includes("spawned e2e-1 pid "));
-check("spawn --count kill", run(["spawn-kill", "--from", "alice", "--to", "e2e-1"]).includes("killed pid"));
+check("spawn --count kill", run(["spawn-kill", "--from", "orchestrator", "--to", "e2e-1"]).includes("killed pid"));
 let killNoToken = false;
 try {
   execFileSync("node", [CLI, "spawn-kill", "--from", "alice", "--to", "kk1"], { env: { ...env, CREWBUS_TOKEN: "" }, stdio: "pipe" });
@@ -462,7 +462,7 @@ try {
   unknownGroup = true;
 }
 check("send --to-group unknown refused", unknownGroup);
-check("spawn --to-group dry-run", run(["spawn", "--from", "alice", "--to-group", "team-a", "--body", "x", "--dry-run"]).includes("would spawn ga1"));
+check("spawn --to-group dry-run", run(["spawn", "--to-group", "team-a", "--body", "x", "--dry-run"]).includes("would spawn ga1"));
 check("group delete", run(["group", "delete", "team-a"]).includes("deleted group team-a"));
 
 // 7b7. verifier hook + artifacts + results + race + status/telemetry (§4.2.5, §4.3)
@@ -491,16 +491,16 @@ try {
 check("ack --verify failure does NOT ack, exit 1", vfail && !fs.existsSync(path.join(board, "acked", "alice", `${vreply2}.json`)));
 let unrec = false;
 try {
-  run(["result", "record", "--group", "race-team", "--msg", vreply2, "--artifact", "out/rv2.json", "--from", "alice"]);
+  run(["result", "record", "--group", "race-team", "--msg", vreply2, "--artifact", "out/rv2.json", "--from", "orchestrator"]);
 } catch {
   unrec = true;
 }
 check("result record rejects unverified", unrec);
-check("result record verified", run(["result", "record", "--group", "race-team", "--msg", vreply, "--artifact", "out/rv1.json", "--from", "alice"]).includes("recorded result for race-team"));
-check("result record --force warns but records", run(["result", "record", "--group", "race-team", "--msg", vreply2, "--artifact", "out/rv2.json", "--from", "alice", "--force"]).includes("recorded result for race-team"));
-check("result record verified again (race winner)", run(["result", "record", "--group", "race-team", "--msg", vreply, "--artifact", "out/r1.json", "--from", "alice"]).includes("recorded result for race-team"));
+check("result record verified", run(["result", "record", "--group", "race-team", "--msg", vreply, "--artifact", "out/rv1.json", "--from", "orchestrator"]).includes("recorded result for race-team"));
+check("result record --force warns but records", run(["result", "record", "--group", "race-team", "--msg", vreply2, "--artifact", "out/rv2.json", "--from", "orchestrator", "--force"]).includes("recorded result for race-team"));
+check("result record verified again (race winner)", run(["result", "record", "--group", "race-team", "--msg", vreply, "--artifact", "out/r1.json", "--from", "orchestrator"]).includes("recorded result for race-team"));
 const rshow = JSON.parse(run(["result", "show", "--group", "race-team", "--json"]));
-check("result show structured", rshow.group === "race-team" && rshow.msgId === vreply && rshow.by === "alice");
+check("result show structured", rshow.group === "race-team" && rshow.msgId === vreply && rshow.by === "orchestrator");
 check("result list", run(["result", "list"]).includes("race-team"));
 const vstatus = JSON.parse(run(["group", "status", "race-team", "--json"]));
 check("group status telemetry shape", vstatus.messages >= 4 && vstatus.verifiedCount >= 1 && vstatus.tokensEst > 0 && typeof vstatus.wallClockMs === "number" && Array.isArray(vstatus.running));
@@ -511,10 +511,10 @@ const vgather = JSON.parse(run(["gather", "--batch", vbatch, "--json"]));
 check("gather shows contributing groups + telemetry", (vgather.contributingGroups || []).includes("race-team") && vgather.telemetry && vgather.telemetry.messages >= 4);
 check("gather text telemetry footer", run(["gather", "--batch", vbatch]).includes("contributing groups:"));
 check("race start finds winner", run(["race", "start", "--group", "race-team", "--batch", vbatch]).includes(vreply));
-const vclose = run(["race", "close", "--group", "race-team", "--from", "alice", "--kill"]);
+const vclose = run(["race", "close", "--group", "race-team", "--from", "orchestrator", "--kill"]);
 check("race close notifies members", vclose.includes("notified 2 member(s)") && vclose.includes("kill:"));
 run(["register", "--from", "rv2"]);
-check("race close broadcast lands", run(["inbox", "--from", "rv2"]).includes("race closed by alice"));
+check("race close broadcast lands", run(["inbox", "--from", "rv2"]).includes("race closed by orchestrator"));
 check("group delete race", run(["group", "delete", "race-team"]).includes("deleted group race-team"));
 
 // 7c. read commands never plant boards + always echo the board
@@ -716,8 +716,10 @@ if (webPort > 0) {
   check("console page has fleet/channels/results/triage/audit", ["fleet", "channels", "results", "triage", "audit"].every((id) => page3.body.includes('id="' + id + '"')));
   const fleet = JSON.parse((await webGet(webPort, "/api/fleet")).body);
   check("console /api/fleet shape", Array.isArray(fleet.relays));
+  const webOrchTok = fs.readFileSync(path.join(board, "logs", "orchestrator.token"), "utf8").trim();
+  TOK.orchestrator = webOrchTok;
   run(["channel", "create", "web-chan"]);
-  run(["channel", "post", "web-chan", "--from", "alice", "--subject", "s1", "--body", "hello chan"]);
+  run(["channel", "post", "web-chan", "--from", "orchestrator", "--subject", "s1", "--body", "hello chan"]);
   const chans = JSON.parse((await webGet(webPort, "/api/channels")).body);
   const wc = (chans.channels || []).find((c) => c.name === "web-chan");
   check("console /api/channels lists posts", !!wc && wc.posts >= 1 && wc.latest.some((p) => p.head.includes("hello chan")));
@@ -765,12 +767,12 @@ if (webPort > 0) {
   check("web kill rejects bad token", badKill.status === 403);
   const plainKill = await killPost("from=alice", "text/plain");
   check("web kill needs JSON content-type", plainKill.status === 415);
-  const ghostKill = await killPost({ from: "alice", token: TOK.alice, to: ["ghost-web"] });
+  const ghostKill = await killPost({ from: "orchestrator", token: TOK.orchestrator, to: ["ghost-web"] });
   check("web kill runs (unknown worker)", ghostKill.status === 200 && JSON.parse(ghostKill.body).results[0].result === "no-pid");
   // end-to-end: spawn a real sleeper, kill it from the web
-  run(["spawn", "--from", "alice", "--harness", "opencode", "--to", "kw1", "--body", "x"]);
+  run(["spawn", "--harness", "opencode", "--to", "kw1", "--body", "x"]);
   run(["register", "--from", "kw1"]);
-  const webKill = await killPost({ from: "alice", token: TOK.alice, to: ["kw1"] });
+  const webKill = await killPost({ from: "orchestrator", token: TOK.orchestrator, to: ["kw1"] });
   const webRes = JSON.parse(webKill.body).results[0];
   check("web kill terminates worker", webKill.status === 200 && (webRes.result === "killed" || webRes.result === "already-exited"));
   check("web-killed worker shows exited", run(["spawn-status", "--to", "kw1"]).includes("exited"));
@@ -798,6 +800,7 @@ const cliA = (a) => cliX(envA, a);
 const cliB = (a) => cliX(envB, a);
 cliA(["init", "--harness", "opencode"]);
 cliB(["init", "--harness", "opencode"]);
+const orchATok = cliA(["orchestrator", "init"]).match(/token (abt-[0-9a-f]+)/)[1];
 cliA(["register", "--from", "anna"]);
 cliA(["send", "--from", "anna", "--to", "zoe", "--body", "hello from A"]);
 const serveProc = spawn("node", [CLI, "serve", "--port", "0", "--allow-remote-spawn", "--allow-cmd", "^node"], { env: envA });
@@ -918,17 +921,15 @@ const postJson = (p, payload, contentType) =>
     });
   });
 const annaTok = TOKAB[`${boardA}\nanna`];
-const rBadTok = await postJson("/api/spawn", { from: "anna", token: "abt-0", to: ["rem1"], body: "x", harness: "opencode" });
-check("remote spawn rejects bad token", rBadTok.status === 403);
-const rPlain = await postJson("/api/spawn", { from: "anna", token: annaTok, to: ["rem1"], body: "x" }, "text/plain");
+const rPlain = await postJson("/api/spawn", { from: "orchestrator", token: orchATok, to: ["rem1"], body: "x" }, "text/plain");
 check("remote spawn needs JSON content-type", rPlain.status === 415);
-const rNoGroup = await postJson("/api/spawn", { from: "anna", token: annaTok, to_group: "nope", body: "x", harness: "opencode" });
+const rNoGroup = await postJson("/api/spawn", { from: "orchestrator", token: orchATok, to_group: "nope", body: "x", harness: "opencode" });
 check("remote spawn unknown group refused", rNoGroup.status === 400);
-const rSpawn = await postJson("/api/spawn", { from: "anna", token: annaTok, to: ["rem1"], body: "remote brief", harness: "opencode" });
+const rSpawn = await postJson("/api/spawn", { from: "orchestrator", token: orchATok, to: ["rem1"], body: "remote brief", harness: "opencode" });
 const rBody = JSON.parse(rSpawn.body);
 check("remote spawn boots on relay", rSpawn.status === 200 && rBody.results[0].pid > 0 && !rBody.results[0].error);
 check("remote brief on relay board", fs.existsSync(path.join(boardA, "dm", "rem1")));
-const rKill = await postJson("/api/kill", { from: "anna", token: annaTok, to: ["rem1"] });
+const rKill = await postJson("/api/kill", { from: "orchestrator", token: orchATok, to: ["rem1"] });
 check("remote kill via web api", rKill.status === 200 && JSON.parse(rKill.body).results[0].result === "killed");
 // ---- BEGIN pairing: one-time tokens -> per-device credentials ----
 {
@@ -941,9 +942,9 @@ check("remote kill via web api", rKill.status === 200 && JSON.parse(rKill.body).
   const pRunA = (a, extra) => execFileSync("node", [CLI, ...a], { env: { ...pEnvA, ...(extra || {}) } }).toString();
   execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: pEnvA });
   execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: pEnvB });
-  const pAdminTok = pRunA(["register", "--from", "pairadmin"]).match(/token (abt-[0-9a-f]+)/)[1];
+  const pAdminTok = pRunA(["orchestrator", "init"]).match(/token (abt-[0-9a-f]+)/)[1];
   const pAdminEnv = { ...pEnvA, CREWBUS_TOKEN: pAdminTok };
-  execFileSync("node", [CLI, "send", "--from", "pairadmin", "--to", "zed", "--body", "pair probe"], { env: pAdminEnv });
+  execFileSync("node", [CLI, "send", "--from", "orchestrator", "--to", "zed", "--body", "pair probe"], { env: pAdminEnv });
   const pSrv = spawn("node", [CLI, "serve", "--port", "0", "--secret", "pair-secret"], { env: pEnvA });
   let pOut = "";
   let pUrl = "";
@@ -954,14 +955,14 @@ check("remote kill via web api", rKill.status === 200 && JSON.parse(rKill.body).
     if (m) pUrl = m[0];
   }
   check("pairing relay comes up", pUrl.startsWith("http://127.0.0.1:"));
-  const pTok = execFileSync("node", [CLI, "relay", "pair", "--from", "pairadmin", "--label", "testdev", "--ttl", "60m"], { env: pAdminEnv }).toString().match(/(abp-[0-9a-f]+)/)[1];
+  const pTok = execFileSync("node", [CLI, "relay", "pair", "--from", "orchestrator", "--label", "testdev", "--ttl", "60m"], { env: pAdminEnv }).toString().match(/(abp-[0-9a-f]+)/)[1];
   check("pairing token minted single-use", !!pTok && fs.existsSync(path.join(pA, "pairing")));
   const pEx = execFileSync("node", [CLI, "sync", "--with", pUrl, "--secret", "pair-secret", "--once", "--pair-token", pTok, "--pair-label", "testdev"], { env: pEnvB }).toString();
   const pDev = (pEx.match(/(abd-[0-9a-f-]+)/) || [])[1];
   check("pairing exchange mints device credential", !!pDev && pEx.includes("paired as device"));
   const pDevOnly = execFileSync("node", [CLI, "sync", "--with", pUrl, "--device", pDev, "--once"], { env: pEnvB }).toString();
   check("device credential syncs without shared secret", pDevOnly.includes("synced with") && !pDevOnly.includes("HTTP 403"));
-  execFileSync("node", [CLI, "send", "--from", "pairadmin", "--to", "zed2", "--body", "post-pair wave"], { env: pAdminEnv });
+  execFileSync("node", [CLI, "send", "--from", "orchestrator", "--to", "zed2", "--body", "post-pair wave"], { env: pAdminEnv });
   const pDevPull = execFileSync("node", [CLI, "sync", "--with", pUrl, "--device", pDev, "--once"], { env: pEnvB }).toString();
   check("device credential pulls new mail", /pulled [1-9]/.test(pDevPull) && fs.existsSync(path.join(pB, "dm", "zed2")));
   let pReuse = false;
@@ -971,7 +972,7 @@ check("remote kill via web api", rKill.status === 200 && JSON.parse(rKill.body).
     pReuse = String((e.stdout || "") + (e.stderr || "")).includes("already used");
   }
   check("pairing token single-use enforced", pReuse);
-  const pExpTok = execFileSync("node", [CLI, "relay", "pair", "--from", "pairadmin", "--label", "short", "--ttl", "1s"], { env: pAdminEnv }).toString().match(/(abp-[0-9a-f]+)/)[1];
+  const pExpTok = execFileSync("node", [CLI, "relay", "pair", "--from", "orchestrator", "--label", "short", "--ttl", "1s"], { env: pAdminEnv }).toString().match(/(abp-[0-9a-f]+)/)[1];
   await new Promise((r) => setTimeout(r, 1200));
   let pExp = false;
   try {
@@ -981,8 +982,8 @@ check("remote kill via web api", rKill.status === 200 && JSON.parse(rKill.body).
   }
   check("pairing token TTL enforced", pExp);
   const pDevId = pDev.match(/abd-([0-9a-f]+)-/)[1];
-  check("relay devices lists the device", execFileSync("node", [CLI, "relay", "devices", "--from", "pairadmin"], { env: pAdminEnv }).toString().includes(pDevId));
-  execFileSync("node", [CLI, "relay", "revoke-device", pDevId, "--from", "pairadmin"], { env: pAdminEnv });
+  check("relay devices lists the device", execFileSync("node", [CLI, "relay", "devices", "--from", "orchestrator"], { env: pAdminEnv }).toString().includes(pDevId));
+  execFileSync("node", [CLI, "relay", "revoke-device", pDevId, "--from", "orchestrator"], { env: pAdminEnv });
   let pRevoked = false;
   try {
     execFileSync("node", [CLI, "sync", "--with", pUrl, "--device", pDev, "--once"], { env: pEnvB, stdio: "pipe" });
@@ -1018,14 +1019,14 @@ check("remote kill via web api", rKill.status === 200 && JSON.parse(rKill.body).
   const cEnvA = { ...process.env, CREWBUS_DIR: cA };
   execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: cEnvA });
   execFileSync("node", [CLI, "init", "--harness", "opencode"], { env: { ...process.env, CREWBUS_DIR: cB } });
-  const crewTok = execFileSync("node", [CLI, "register", "--from", "crewlead"], { env: cEnvA }).toString().match(/token (abt-[0-9a-f]+)/)[1];
+  const crewTok = execFileSync("node", [CLI, "orchestrator", "init"], { env: cEnvA }).toString().match(/token (abt-[0-9a-f]+)/)[1];
   const crewEnv = { ...cEnvA, CREWBUS_TOKEN: crewTok };
   const rA = await crewServe(cA, 3);
   const rB = await crewServe(cB, 1);
   check("crew survey shows weights", execFileSync("node", [CLI, "crew", "survey", "--relays", `${rA.url},${rB.url}`, "--secret", "crewsecret"], { env: cEnvA }).toString().includes("weight=3") );
-  const crewDry = execFileSync("node", [CLI, "crew", "dispatch", "--from", "crewlead", "--relays", `${rA.url},${rB.url}`, "--weights", "3,1", "--count", "4", "--prefix", "cw", "--harness", "opencode", "--body", "crew brief", "--secret", "crewsecret", "--dry-run"], { env: crewEnv }).toString();
+  const crewDry = execFileSync("node", [CLI, "crew", "dispatch", "--from", "orchestrator", "--relays", `${rA.url},${rB.url}`, "--weights", "3,1", "--count", "4", "--prefix", "cw", "--harness", "opencode", "--body", "crew brief", "--secret", "crewsecret", "--dry-run"], { env: crewEnv }).toString();
   check("crew dispatch dry-run splits 3:1", crewDry.includes("would dispatch 3") && crewDry.includes("would dispatch 1"));
-  const crewLive = execFileSync("node", [CLI, "crew", "dispatch", "--from", "crewlead", "--relays", `${rA.url},${rB.url}`, "--weights", "3,1", "--count", "4", "--prefix", "cw", "--harness", "opencode", "--body", "crew brief", "--secret", "crewsecret"], { env: crewEnv }).toString();
+  const crewLive = execFileSync("node", [CLI, "crew", "dispatch", "--from", "orchestrator", "--relays", `${rA.url},${rB.url}`, "--weights", "3,1", "--count", "4", "--prefix", "cw", "--harness", "opencode", "--body", "crew brief", "--secret", "crewsecret"], { env: crewEnv }).toString();
   check("crew dispatch boots 3+1 across relays", crewLive.includes("dispatched 3/3") && crewLive.includes("dispatched 1/1"));
   check("crew placement lands per share", ["cw-1", "cw-2", "cw-3"].every((w) => fs.existsSync(path.join(cA, "dm", w))) && fs.existsSync(path.join(cB, "dm", "cw-4")));
   rA.proc.kill();
@@ -1080,6 +1081,9 @@ const secRun = (a, extra) => {
   return out;
 };
 secRun(["init", "--harness", "opencode"]);
+const secOrchOut = secRun(["orchestrator", "init"]);
+const secOrchTok = (secOrchOut.match(/token (abt-[0-9a-f]+)/) || [])[1];
+if (secOrchTok) secTok.orchestrator = secOrchTok;
 secRun(["register", "--from", "sec1"]);
 const secDoc = JSON.parse(fs.readFileSync(path.join(secBoard, "agents", "sec1.json"), "utf8"));
 check("tokens stored hashed, never plaintext", !secDoc.token && typeof secDoc.tokenHash === "string" && typeof secDoc.salt === "string");
@@ -1142,7 +1146,7 @@ secRun(["send", "--from", "sec1", "--to", "sec2", "--body", "after rotate"]);
   // offboarding: tokens die, sends refused, inbox files preserved
   idRun(["register", "--from", "leav1"]);
   idRun(["send", "--from", "sec1", "--to", "leav1", "--body", "bye"]);
-  idRun(["register", "--offboard", "leav1", "--from", "sec1"]);
+  idRun(["register", "--offboard", "leav1", "--from", "orchestrator"]);
   const leavDoc = JSON.parse(fs.readFileSync(path.join(secBoard, "agents", "leav1.json"), "utf8"));
   let leavDead = false;
   try {
@@ -1224,12 +1228,12 @@ check("forward depth over 5 refused", fwdBad);
 }
 let autoBad = false;
 try {
-  secRun(["spawn", "--from", "sec1", "--to", "zz1", "--body", "x", "--auto", "--dry-run"]);
+  secRun(["spawn", "--to", "zz1", "--body", "x", "--auto", "--dry-run"]);
 } catch {
   autoBad = true;
 }
 check("spawn --auto needs loud confirmation", autoBad);
-check("spawn --auto confirmed via flag", secRun(["spawn", "--from", "sec1", "--to", "zz1", "--body", "x", "--auto", "--i-understand-danger", "--dry-run"]).includes("would spawn zz1"));
+check("spawn --auto confirmed via flag", secRun(["spawn", "--to", "zz1", "--body", "x", "--auto", "--i-understand-danger", "--dry-run"]).includes("would spawn zz1"));
 // relay: spawn/kill OPT-IN (default OFF → 403); secret required when set
 const secServe = spawn("node", [CLI, "serve", "--port", "0"], { env: secEnv });
 let secUrl = "";
@@ -1292,39 +1296,35 @@ fs.rmSync(secBoard, { recursive: true, force: true });
     check(label, bad);
   };
   rbRun(["init", "--board", rbBoard]);
-  rbRun(["register", "--from", "boss"]); // first on board -> admin
-  rbRun(["register", "--from", "lead1"]);
+  const rbOrchOut = rbRun(["orchestrator", "init"]);
+  const rbOrchTok = (rbOrchOut.match(/token (abt-[0-9a-f]+)/) || [])[1];
+  if (rbOrchTok) rbTok["orchestrator"] = rbOrchTok;
   rbRun(["register", "--from", "work1"]);
-  rbRun(["register", "--from", "boss", "--for", "lead1", "--role", "lead"]);
-  rbRun(["register", "--from", "boss", "--for", "work1", "--role", "worker"]);
   rbRun(["register", "--from", "work2"]);
-  rbRun(["register", "--from", "boss", "--for", "work2", "--role", "worker"]);
-  const grantOut = rbRun(["register", "--from", "boss", "--for", "aud1", "--role", "auditor"]);
-  const gm = grantOut.match(/token (abt-[0-9a-f]+)/); // grant mints aud1's token; harvest for aud1 (runner only tracks --from)
-  if (gm) rbTok["aud1"] = gm[1];
+  rbRun(["register", "--from", "work3"]);
   const rbRoles = JSON.parse(rbRun(["agents", "--json"]));
   const roleOf = (n) => (rbRoles.find((a) => a.name === n) || {}).role;
-  check("first agent is admin", roleOf("boss") === "admin");
-  check("role grants stick", roleOf("lead1") === "lead" && roleOf("work1") === "worker" && roleOf("aud1") === "auditor");
-  // worker refused spawn-kill/prune/role-grant; auditor read-ok/write-refused
+  check("orchestrator role", roleOf("orchestrator") === "orchestrator");
+  check("self-registrations are workers", roleOf("work1") === "worker" && roleOf("work2") === "worker");
+  // worker refused control-plane actions
   rbMustFail("worker refused spawn-kill", ["spawn-kill", "--from", "work1", "--to", "nobody"]);
   rbMustFail("worker refused prune", ["prune", "--from", "work1", "--older-than", "7d", "--dry-run"]);
-  rbMustFail("worker refused role-grant", ["register", "--from", "work1", "--for", "work1", "--role", "admin"]);
-  rbRun(["send", "--from", "lead1", "--to", "work1", "--body", "rb hello"]);
-  check("auditor read-ok (inbox)", rbRun(["inbox", "--from", "aud1"]).includes("no messages"));
-  rbMustFail("auditor write-refused (send)", ["send", "--from", "aud1", "--to", "work1", "--body", "nope"]);
-  rbMustFail("auditor write-refused (ack)", ["ack", "--from", "aud1", "--all"]);
+  rbMustFail("worker refused role-grant", ["register", "--from", "work1", "--for", "work1", "--role", "orchestrator"]);
+  rbRun(["send", "--from", "orchestrator", "--to", "work1", "--body", "rb hello"]);
+  check("worker can read inbox", rbRun(["inbox", "--from", "work1"]).includes("rb hello"));
+  check("worker can send", rbRun(["send", "--from", "work1", "--to", "work2", "--body", "peer hello"]).includes("sent "));
+  rbMustFail("worker cannot post to a board channel", ["channel", "post", "board-chan", "--from", "work1", "--body", "nope"]);
   // restricted-group refusal + member-ok
-  rbRun(["group", "create", "elite", "--add", "lead1,work1"]);
-  rbRun(["group", "restrict", "elite", "--from", "boss"]);
-  rbMustFail("restricted group refuses outsider", ["send", "--from", "work2", "--to-group", "elite", "--to", "lead1", "--body", "gate"]);
-  check("restricted group member-ok", rbRun(["send", "--from", "work1", "--to-group", "elite", "--to", "lead1", "--body", "member mail"]).includes("sent "));
-  check("restricted group lead-ok", rbRun(["send", "--from", "lead1", "--to-group", "elite", "--to", "work1", "--body", "lead mail"]).includes("sent "));
-  // frozen board refuses newcomers, admin grant still works
-  rbRun(["acl", "set", "--from", "boss", "--freeze"]);
+  rbRun(["group", "create", "elite", "--add", "work1,work2"]);
+  rbRun(["group", "restrict", "elite", "--from", "orchestrator"]);
+  rbMustFail("restricted group refuses outsider", ["send", "--from", "work3", "--to-group", "elite", "--to", "work1", "--body", "gate"]);
+  check("restricted group member-ok", rbRun(["send", "--from", "work1", "--to-group", "elite", "--to", "work2", "--body", "member mail"]).includes("sent "));
+  check("restricted group orchestrator-ok", rbRun(["send", "--from", "orchestrator", "--to-group", "elite", "--to", "work1", "--body", "orchestrator mail"]).includes("sent "));
+  // frozen board refuses newcomers, orchestrator grant still works
+  rbRun(["acl", "set", "--from", "orchestrator", "--freeze"]);
   rbMustFail("frozen board refuses new registration", ["register", "--from", "newbie"]);
-  check("frozen board admin grant works", rbRun(["register", "--from", "boss", "--for", "newbie"]).includes("newbie"));
-  rbMustFail("non-admin acl set refused", ["acl", "set", "--from", "work1", "--unfreeze"]);
+  check("frozen board orchestrator grant works", rbRun(["register", "--from", "orchestrator", "--for", "newbie"]).includes("newbie"));
+  rbMustFail("non-orchestrator acl set refused", ["acl", "set", "--from", "work1", "--unfreeze"]);
   fs.rmSync(rbBoard, { recursive: true, force: true });
 }
 // ---- END Phase 1b RBAC + per-board ACLs + group-scoped sends ----
@@ -1354,75 +1354,75 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   const B2KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   const b2KeyEnv = { CREWBUS_BACKUP_KEY: B2KEY };
   b2Run(["init", "--board", b2Board]);
-  b2Run(["register", "--from", "boss"]);
-  const b2Grant = b2Run(["register", "--from", "boss", "--for", "aud1", "--role", "auditor"]);
-  const b2GrantM = b2Grant.match(/token (abt-[0-9a-f]+)/);
-  if (b2GrantM) b2Tok["aud1"] = b2GrantM[1];
-  b2Run(["send", "--from", "boss", "--to", "aud1", "--body", "2b hello"]);
+  const b2OrchOut = b2Run(["orchestrator", "init"]);
+  const b2OrchTok = (b2OrchOut.match(/token (abt-[0-9a-f]+)/) || [])[1];
+  if (b2OrchTok) b2Tok["orchestrator"] = b2OrchTok;
+  b2Run(["register", "--from", "w1"]);
+  b2Run(["send", "--from", "orchestrator", "--to", "w1", "--body", "2b hello"]);
   // export -> wipe -> import round-trip: mail byte-equality, secrets stripped
   const b2Out = path.join(os.tmpdir(), "cb-2b-" + Date.now() + ".abbackup.json");
-  check("2b auditor export ok", b2Run(["board", "export", "--from", "aud1", "--out", b2Out], b2KeyEnv).includes("exported"));
+  check("2b orchestrator export ok", b2Run(["board", "export", "--from", "orchestrator", "--out", b2Out], b2KeyEnv).includes("exported"));
   const b2Env1 = JSON.parse(fs.readFileSync(b2Out, "utf8"));
   check("2b envelope encrypted aes-256-gcm", b2Env1.encrypted === true && b2Env1.algo === "aes-256-gcm" && typeof b2Env1.data === "string");
-  const b2MailBefore = fs.readFileSync(path.join(b2Board, "dm", "aud1", fs.readdirSync(path.join(b2Board, "dm", "aud1"))[0]), "utf8");
+  const b2MailBefore = fs.readFileSync(path.join(b2Board, "dm", "w1", fs.readdirSync(path.join(b2Board, "dm", "w1"))[0]), "utf8");
   const b2Into = b2Board + "-restored";
-  check("2b import refuses live target without --force", (() => { try { b2Run(["board", "import", "--from", "boss", "--in", b2Out, "--into", b2Board], b2KeyEnv); return false; } catch { return true; } })());
-  b2Run(["board", "import", "--from", "boss", "--in", b2Out, "--into", b2Into, "--force"], b2KeyEnv);
-  const b2MailAfter = fs.readFileSync(path.join(b2Into, "dm", "aud1", fs.readdirSync(path.join(b2Into, "dm", "aud1"))[0]), "utf8");
+  check("2b import refuses live target without --force", (() => { try { b2Run(["board", "import", "--from", "orchestrator", "--in", b2Out, "--into", b2Board], b2KeyEnv); return false; } catch { return true; } })());
+  b2Run(["board", "import", "--from", "orchestrator", "--in", b2Out, "--into", b2Into, "--force"], b2KeyEnv);
+  const b2MailAfter = fs.readFileSync(path.join(b2Into, "dm", "w1", fs.readdirSync(path.join(b2Into, "dm", "w1"))[0]), "utf8");
   check("2b export->wipe->import mail byte-equality", b2MailBefore === b2MailAfter);
-  check("2b restored agents carry no secrets", !JSON.parse(fs.readFileSync(path.join(b2Into, "agents", "boss.json"), "utf8")).tokenHash);
+  check("2b restored agents carry no secrets", !JSON.parse(fs.readFileSync(path.join(b2Into, "agents", "orchestrator.json"), "utf8")).tokenHash);
   // wrong-key import refused before any write
   const b2IntoBad = b2Board + "-badkey";
-  b2MustFail("2b wrong-key import refused, nothing written", ["board", "import", "--from", "boss", "--in", b2Out, "--into", b2IntoBad, "--force"], { CREWBUS_BACKUP_KEY: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" }, "GCM auth failed");
+  b2MustFail("2b wrong-key import refused, nothing written", ["board", "import", "--from", "orchestrator", "--in", b2Out, "--into", b2IntoBad, "--force"], { CREWBUS_BACKUP_KEY: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" }, "GCM auth failed");
   check("2b wrong-key wrote nothing", !fs.existsSync(b2IntoBad));
   // password-based key (scrypt) round-trip + plaintext mode
   const b2PwOut = path.join(os.tmpdir(), "cb-2b-pw-" + Date.now() + ".json");
-  b2Run(["board", "export", "--from", "boss", "--out", b2PwOut], { CREWBUS_BACKUP_KEY: "a human password" });
+  b2Run(["board", "export", "--from", "orchestrator", "--out", b2PwOut], { CREWBUS_BACKUP_KEY: "a human password" });
   check("2b password key uses scrypt", JSON.parse(fs.readFileSync(b2PwOut, "utf8")).kdf === "scrypt");
-  b2Run(["board", "import", "--from", "boss", "--in", b2PwOut, "--into", b2Board + "-pw", "--force"], { CREWBUS_BACKUP_KEY: "a human password" });
-  check("2b password round-trip restores mail", fs.existsSync(path.join(b2Board + "-pw", "dm", "aud1")));
+  b2Run(["board", "import", "--from", "orchestrator", "--in", b2PwOut, "--into", b2Board + "-pw", "--force"], { CREWBUS_BACKUP_KEY: "a human password" });
+  check("2b password round-trip restores mail", fs.existsSync(path.join(b2Board + "-pw", "dm", "w1")));
   const b2PlainOut = path.join(os.tmpdir(), "cb-2b-plain-" + Date.now() + ".json");
-  b2Run(["board", "export", "--from", "boss", "--out", b2PlainOut, "--no-encrypt"]);
+  b2Run(["board", "export", "--from", "orchestrator", "--out", b2PlainOut, "--no-encrypt"]);
   check("2b --no-encrypt plaintext envelope", JSON.parse(fs.readFileSync(b2PlainOut, "utf8")).encrypted === false);
   // quotas: N+1th agent + message refused; storage reports quota vs actual
-  // (board already holds boss + aud1, so cap 3 lets w1 in and refuses w2)
-  b2Run(["quota", "set", "--from", "boss", "--max-agents", "3", "--tenant", "acme"]);
+  // (board already holds orchestrator + w1)
+  b2Run(["quota", "set", "--from", "orchestrator", "--max-agents", "2", "--tenant", "acme"]);
   b2Run(["register", "--from", "w1"]);
   b2MustFail("2b quota refuses N+1th agent", ["register", "--from", "w2"], null, "maxAgents");
-  b2Run(["quota", "set", "--from", "boss", "--max-agents", "unlimited", "--max-bytes", "1"]);
-  b2MustFail("2b quota refuses N+1th message", ["send", "--from", "boss", "--to", "w1", "--body", "over quota"], null, "maxBytes");
+  b2Run(["quota", "set", "--from", "orchestrator", "--max-agents", "unlimited", "--max-bytes", "1"]);
+  b2MustFail("2b quota refuses N+1th message", ["send", "--from", "orchestrator", "--to", "w1", "--body", "over quota"], null, "maxBytes");
   const b2Storage = JSON.parse(b2Run(["storage", "--json"]));
   check("2b storage reports quota vs actual", b2Storage.quota && b2Storage.quota.bytes && b2Storage.quota.bytes.ok === false && b2Storage.tenant === "acme");
-  b2MustFail("2b non-admin quota-set refused", ["quota", "set", "--from", "aud1", "--max-agents", "9"], null, "need admin");
-  b2Run(["quota", "set", "--from", "boss", "--clear"]);
-  check("2b quota cleared, send works again", b2Run(["send", "--from", "boss", "--to", "w1", "--body", "under quota"]).includes("sent "));
+  b2MustFail("2b non-admin quota-set refused", ["quota", "set", "--from", "w1", "--max-agents", "9"], null, "orchestrator only");
+  b2Run(["quota", "set", "--from", "orchestrator", "--clear"]);
+  check("2b quota cleared, send works again", b2Run(["send", "--from", "orchestrator", "--to", "w1", "--body", "under quota"]).includes("sent "));
   // channel quota
-  b2Run(["quota", "set", "--from", "boss", "--max-channels", "1"]);
+  b2Run(["quota", "set", "--from", "orchestrator", "--max-channels", "1"]);
   b2Run(["channel", "create", "c1"]);
   b2MustFail("2b quota refuses N+1th channel", ["channel", "create", "c2"], null, "maxChannels");
-  b2Run(["quota", "set", "--from", "boss", "--clear"]);
+  b2Run(["quota", "set", "--from", "orchestrator", "--clear"]);
   // snapshots: schedule + run + --keep pruning
   const b2SnapDir = fs.mkdtempSync(path.join(os.tmpdir(), "cb-2b-snap-"));
-  b2Run(["snapshot", "schedule", "--from", "boss", "--every", "24h", "--keep", "2", "--out-dir", b2SnapDir, "--no-encrypt"]);
+  b2Run(["snapshot", "schedule", "--from", "orchestrator", "--every", "24h", "--keep", "2", "--out-dir", b2SnapDir, "--no-encrypt"]);
   check("2b snapshot schedule recorded", JSON.parse(fs.readFileSync(path.join(b2Board, "board.json"), "utf8")).snapshot.keep === 2);
   b2Run(["snapshot", "run"]);
   b2Run(["snapshot", "run"]);
   b2Run(["snapshot", "run"]);
   const b2Snaps = fs.readdirSync(b2SnapDir).filter((f) => f.startsWith("snapshot-") && f.endsWith(".abbackup.json"));
   check("2b snapshot --keep prunes to 2", b2Snaps.length === 2);
-  b2MustFail("2b non-admin snapshot-schedule refused", ["snapshot", "schedule", "--from", "aud1", "--every", "24h", "--keep", "2", "--out-dir", b2SnapDir, "--no-encrypt"], null, "need admin");
+  b2MustFail("2b non-admin snapshot-schedule refused", ["snapshot", "schedule", "--from", "w1", "--every", "24h", "--keep", "2", "--out-dir", b2SnapDir, "--no-encrypt"], null, "orchestrator only");
   // legal-hold interplay: backups preserve held data, never drop it
-  b2Run(["hold", "place", "--from", "boss", "--reason", "2b litigation"]);
+  b2Run(["hold", "place", "--from", "orchestrator", "--reason", "2b litigation"]);
   const b2HoldOut = path.join(os.tmpdir(), "cb-2b-hold-" + Date.now() + ".json");
-  b2Run(["board", "export", "--from", "boss", "--out", b2HoldOut, "--no-encrypt"]);
+  b2Run(["board", "export", "--from", "orchestrator", "--out", b2HoldOut, "--no-encrypt"]);
   const b2HoldEnv = JSON.parse(fs.readFileSync(b2HoldOut, "utf8"));
   check("2b export preserves the hold record", b2HoldEnv.files.some((f) => f.rel === "holds/legal.json"));
   check("2b export stamps active hold", b2HoldEnv.manifest.hold && b2HoldEnv.manifest.hold.active === true);
-  b2MustFail("2b import over held board refused even with --force", ["board", "import", "--from", "boss", "--in", b2Out, "--into", b2Board, "--force"], b2KeyEnv, "legal hold ACTIVE");
+  b2MustFail("2b import over held board refused even with --force", ["board", "import", "--from", "orchestrator", "--in", b2Out, "--into", b2Board, "--force"], b2KeyEnv, "legal hold ACTIVE");
   b2Run(["snapshot", "run"]);
   b2Run(["snapshot", "run"]);
   check("2b snapshot under hold retains all (no pruning)", fs.readdirSync(b2SnapDir).filter((f) => f.startsWith("snapshot-")).length === 4);
-  b2Run(["hold", "lift", "--from", "boss"]);
+  b2Run(["hold", "lift", "--from", "orchestrator"]);
   b2Run(["snapshot", "run"]);
   check("2b snapshot pruning resumes after lift", fs.readdirSync(b2SnapDir).filter((f) => f.startsWith("snapshot-")).length === 2);
   fs.rmSync(b2HoldOut, { force: true });
@@ -1457,15 +1457,12 @@ fs.rmSync(secBoard, { recursive: true, force: true });
     check(label, bad);
   };
   p2Run(["init", "--board", p2Board]);
-  p2Run(["register", "--from", "boss"]); // first -> admin
-  const p2GrantA = p2Run(["register", "--from", "boss", "--for", "aud1", "--role", "auditor"]);
-  const p2gmA = p2GrantA.match(/token (abt-[0-9a-f]+)/);
-  if (p2gmA) p2Tok["aud1"] = p2gmA[1];
-  const p2GrantW = p2Run(["register", "--from", "boss", "--for", "work1", "--role", "worker"]);
-  const p2gmW = p2GrantW.match(/token (abt-[0-9a-f]+)/);
-  if (p2gmW) p2Tok["work1"] = p2gmW[1];
+  const p2OrchOut = p2Run(["orchestrator", "init"]);
+  const p2OrchTok = (p2OrchOut.match(/token (abt-[0-9a-f]+)/) || [])[1];
+  if (p2OrchTok) p2Tok["orchestrator"] = p2OrchTok;
+  p2Run(["register", "--from", "work1"]);
   // signed envelope: every record carries v:1 + sig + prevHash + role/auth
-  p2Run(["send", "--from", "boss", "--to", "work1", "--body", "p2a hello"]);
+  p2Run(["send", "--from", "orchestrator", "--to", "work1", "--body", "p2a hello"]);
   const p2ChainLines = fs.readFileSync(path.join(p2Board, "logs", "chain.jsonl"), "utf8").trim().split("\n");
   const p2ChainRecs = p2ChainLines.map((l) => JSON.parse(l));
   check("2a audit envelope is v:1 with sig chain", p2ChainRecs.length > 0 && p2ChainRecs.every((r) => r.v === 1 && typeof r.sig === "string" && r.sig.length === 64 && r.prevHash === r.prev && typeof r.role === "string" && typeof r.authMethod === "string"));
@@ -1490,15 +1487,14 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   fs.rmSync(p2Copy, { recursive: true, force: true });
   // legal hold: status/place/prune-refusal/lift/unblock + RBAC
   check("2a hold status idle", p2Run(["hold", "status"]).includes("no active legal hold"));
-  p2MustFail("2a worker cannot place hold", ["hold", "place", "--from", "work1", "--reason", "x"], "need admin");
-  p2MustFail("2a auditor cannot place hold", ["hold", "place", "--from", "aud1", "--reason", "x"], "need admin");
-  check("2a hold place", p2Run(["hold", "place", "--from", "boss", "--reason", "litigation XYZ"]).includes("PLACED"));
-  check("2a auditor reads hold status", p2Run(["hold", "status", "--from", "aud1"]).includes("litigation XYZ"));
+  p2MustFail("2a worker cannot place hold", ["hold", "place", "--from", "work1", "--reason", "x"], "orchestrator only");
+  check("2a hold place", p2Run(["hold", "place", "--from", "orchestrator", "--reason", "litigation XYZ"]).includes("PLACED"));
+  check("2a worker reads hold status", p2Run(["hold", "status", "--from", "work1"]).includes("litigation XYZ"));
   check("2a hold record written", JSON.parse(fs.readFileSync(path.join(p2Board, "holds", "legal.json"), "utf8")).active === true);
-  p2MustFail("2a hold blocks prune", ["prune", "--from", "boss", "--older-than", "0s"], "legal hold ACTIVE");
-  p2MustFail("2a hold blocks prune dry-run", ["prune", "--from", "boss", "--older-than", "7d", "--dry-run"], "legal hold ACTIVE");
-  check("2a hold lift", p2Run(["hold", "lift", "--from", "boss"]).includes("LIFTED"));
-  check("2a prune unblocked after lift", p2Run(["prune", "--from", "boss", "--older-than", "7d", "--dry-run"]).includes("would prune"));
+  p2MustFail("2a hold blocks prune", ["prune", "--from", "orchestrator", "--older-than", "0s"], "legal hold ACTIVE");
+  p2MustFail("2a hold blocks prune dry-run", ["prune", "--from", "orchestrator", "--older-than", "7d", "--dry-run"], "legal hold ACTIVE");
+  check("2a hold lift", p2Run(["hold", "lift", "--from", "orchestrator"]).includes("LIFTED"));
+  check("2a prune unblocked after lift", p2Run(["prune", "--from", "orchestrator", "--older-than", "7d", "--dry-run"]).includes("would prune"));
   check("2a hold place/lift in audit trail", p2Run(["log", "--json", "--limit", "10"]).includes("hold-lift"));
   fs.rmSync(p2Board, { recursive: true, force: true });
 }
@@ -1520,9 +1516,11 @@ fs.rmSync(secBoard, { recursive: true, force: true });
     return out;
   };
   capsRun(["init", "--harness", "opencode"]);
-  capsRun(["register", "--from", "capadmin"]);
-  capsRun(["send", "--from", "capadmin", "--to", "keepme", "--body", "keep this"]);
-  capsRun(["send", "--from", "capadmin", "--to", "doomed", "--body", "prune me"]);
+  const capsOrchOut = capsRun(["orchestrator", "init"]);
+  const capsOrchTok = (capsOrchOut.match(/token (abt-[0-9a-f]+)/) || [])[1];
+  if (capsOrchTok) capsTok["orchestrator"] = capsOrchTok;
+  capsRun(["send", "--from", "orchestrator", "--to", "keepme", "--body", "keep this"]);
+  capsRun(["send", "--from", "orchestrator", "--to", "doomed", "--body", "prune me"]);
   // Age one DM out so prune mints a real tombstone next to the channel post.
   const doomDir = path.join(capsBoard, "dm", "doomed");
   const doomFile = fs.readdirSync(doomDir).map((f) => path.join(doomDir, f)).find((p) => {
@@ -1532,7 +1530,7 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   doomDoc.at = new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString();
   fs.writeFileSync(doomFile, JSON.stringify(doomDoc, null, 2) + "\n");
   capsRun(["channel", "create", "caps-chan"]);
-  capsRun(["channel", "post", "caps-chan", "--from", "capadmin", "--body", "hello chan"]);
+  capsRun(["channel", "post", "caps-chan", "--from", "orchestrator", "--body", "hello chan"]);
   capsRun(["prune", "--older-than", "7d"]);
   check("caps: temp board holds a channel post + tombstone",
     fs.existsSync(path.join(capsBoard, "channels", "caps-chan.log.jsonl")) &&

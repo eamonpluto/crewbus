@@ -359,9 +359,6 @@ export function validateLaunchPlan(raw) {
   const model = r.model === undefined || r.model === null || String(r.model).trim() === "" ? undefined : String(r.model).trim();
   if (model && model.length > 100) errors.push("model name too long (max 100 chars)");
 
-  const lead = r.lead === undefined || r.lead === null || String(r.lead).trim() === "" ? "auto" : String(r.lead).trim().toLowerCase();
-  if (lead !== "auto") errors.push(`bad lead mode "${r.lead}" (only "auto" supported)`);
-
   const plan = {
     harness, harnesses: harnesses.length > 0 ? harnesses : ["opencode"],
     model, body, count: Number.isInteger(count) && count > 0 ? count : 1,
@@ -371,7 +368,7 @@ export function validateLaunchPlan(raw) {
     priority: r.priority === undefined ? undefined : String(r.priority),
     maxTurns: r.maxTurns === undefined ? undefined : String(r.maxTurns),
     allowTools: r.allowTools === undefined ? undefined : String(r.allowTools),
-    permission, lifetime, lead,
+    permission, lifetime,
     isolate: !!r.isolate, worktree: r.worktree, branch: r.branch,
     budgetTokens: r.budgetTokens, budgetMinutes: r.budgetMinutes, timeout: r.timeout,
     target: r.target === undefined ? "local" : r.target,

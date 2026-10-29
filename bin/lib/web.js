@@ -18,9 +18,9 @@ import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, readBoardMeta, writeBoardMeta, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS } from "./store.js";
-import { readAgent, agentTokenMatches, authorizeCheck, ensureLoopbackOperator, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
+import { readAgent, agentTokenMatches, authorizeCheck, ensureOrchestrator, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
 import { readDMs, readVisible, ackedIds, ackedIdSet, findMessageById, deliverDMs, parseRecipients } from "./mail.js";
-import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim, buildCoordinatorPrompt, provisionAutoLead, LEAD_NAME, isPidStale } from "./spawn.js";
+import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim, buildOrchestratorPrompt, provisionOrchestrator, ORCHESTRATOR_NAME, isPidStale } from "./spawn.js";
 import { groupTelemetryData, collectBatch, gatherTelemetry, listBatches } from "./groups.js";
 import { httpJson } from "./sync.js";
 import { readChainRecords, verifyChainRecords, appendChainRecord, readHold, readBoardQuotas } from "./export.js";
@@ -784,9 +784,9 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
               <button type="button" data-perm="auto">auto</button>
               <button type="button" data-perm="full">full</button>
             </span>
-            <span class="dim" style="margin-left:8px">Coordinator:</span>
-            <select id="launch-lead" style="background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-size:12px" title="Observer coordinator lane: auto provisions a persistent background coordinator (lead) to triage workers and report to you">
-              <option value="auto">auto (Observer coordinator)</option>
+            <span class="dim" style="margin-left:8px">Orchestrator:</span>
+            <select id="launch-lead" style="background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-size:12px" title="The board orchestrator: auto-provisions a persistent background coordinator to triage workers and report">
+              <option value="auto">auto (board orchestrator)</option>
             </select>
             <label class="dim" style="cursor:pointer;margin-left:6px"><input id="launch-dry" type="checkbox" checked> Dry-run</label>
           </div>
@@ -807,7 +807,7 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
 
           <div class="composer-bottom">
             <div class="launch-identity" title="Desktop launches as the board owner (auto-provisioned) — no token step needed">
-              <span class="dim">launching as <b id="launch-as">boss</b> (auto)</span>
+              <span class="dim">launching as <b id="launch-as">orchestrator</b> (auto)</span>
               <input id="launch-from" type="hidden" value="">
               <input id="launch-token" type="password" style="display:none" value="">
             </div>
@@ -1015,7 +1015,7 @@ function markIdent(){
   try{
     var man=document.getElementById('launch-from-manual');
     var lbl=document.getElementById('launch-as');
-    if(lbl)lbl.textContent=(man&&man.value.trim())||lf.value.trim()||c.from||'lead';
+    if(lbl)lbl.textContent=(man&&man.value.trim())||lf.value.trim()||c.from||'orchestrator';
   }catch(_){}
 }
 async function autoLoadOperatorCreds(){
@@ -1211,9 +1211,9 @@ async function refresh(){
           return '<tr><td>'+esc(m.id)+'</td><td>'+esc(m.from)+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(m.head)+'</td><td><button data-ack="'+esc(m.id)+'">ack</button></td></tr>';
         }).join('')||'<tr><td colspan="4" class="dim">inbox zero for '+esc(c.from)+'</td></tr>';
         var ap=(tj.items||[]).filter(function(m){return m.subject&&m.subject.indexOf('approval: ')===0;});
-        if(c.from!=='lead'){
+        if(c.from!=='orchestrator'){
           try{
-            var lr=await fetch('/api/inbox?agent=lead&unacked=1&limit=50',{cache:'no-store'});
+            var lr=await fetch('/api/inbox?agent=orchestrator&unacked=1&limit=50',{cache:'no-store'});
             if(lr.ok){
               var lj=await lr.json();
               var lap=(lj.items||[]).filter(function(m){return m.subject&&m.subject.indexOf('approval: ')===0;});
@@ -1225,7 +1225,7 @@ async function refresh(){
           }catch(_){}
         }
         document.getElementById('approvals').innerHTML=ap.map(function(m){
-          var tag=m._forLead?' <span class="badge" style="font-size:10px;background:var(--panel);border:1px solid var(--line);padding:1px 4px;border-radius:3px">to lead</span>':'';
+          var tag=m._forLead?' <span class="badge" style="font-size:10px;background:var(--panel);border:1px solid var(--line);padding:1px 4px;border-radius:3px">to orchestrator</span>':'';
           return '<tr><td>'+esc(m.id)+tag+'</td><td>'+esc(m.from)+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(m.head)+'</td><td><input data-reason="'+esc(m.id)+'" maxlength="500" size="18" placeholder="optional reason"></td><td><button data-approve="'+esc(m.id)+'">approve</button> <button class="danger" data-deny="'+esc(m.id)+'">deny</button></td></tr>';
         }).join('')||'<tr><td colspan="5" class="dim">no approval requests for '+esc(c.from)+'</td></tr>';
       }else{
@@ -1512,19 +1512,19 @@ async function doLaunch(dry){
     if(j.dryRun){
       var warn=(j.warnings||[]).length?('warnings: '+j.warnings.join('; ')+'\\n'):'';
       var cwdNotice=j.cwd?('target directory (cwd): '+j.cwd+'\\n'):'';
-      var coordNotice=j.coordinator?('\\ncoordinator ('+j.coordinator.name+'): '+(j.coordinator.action==='reused'?('reused standing pid '+j.coordinator.pid):(j.coordinator.action==='minted'?'would auto-provision':'skipped ('+(j.coordinator.reason||'')+')'))):'';
+      var coordNotice=j.coordinator?('\\ncoordinator ('+j.coordinator.name+'): '+(j.coordinator.action==='reused'?('reused standing pid '+j.coordinator.pid):(j.coordinator.action==='created'?'would auto-provision':'skipped ('+(j.coordinator.reason||'')+')'))):'';
       try{renderLaunchDiff(j);}catch(_){}out.textContent=warn+cwdNotice+(j.commands||[]).map(function(c){return c.to+' ['+(c.harness||'')+']: '+c.command;}).join('\\n')+coordNotice+'\\n(dry-run — booted nothing)';
     }else{
       try{showUndoToast((j.workers||[]).map(function(w){return w.name;}));}catch(_){}
       var cwdNotice=j.cwd?(' [cwd: '+j.cwd+']'):'';
       var coordNotice='';
       if(j.coordinator){
-        if(j.coordinator.action==='minted'&&j.coordinator.pid){
-          coordNotice=' · coordinator: lead (pid '+j.coordinator.pid+')';
+        if(j.coordinator.action==='created'&&j.coordinator.pid){
+          coordNotice=' · orchestrator: pid '+j.coordinator.pid;
         }else if(j.coordinator.action==='reused'){
-          coordNotice=' · coordinator: lead (reused'+(j.coordinator.pid?' pid '+j.coordinator.pid:'')+')';
+          coordNotice=' · orchestrator: reused'+(j.coordinator.pid?' pid '+j.coordinator.pid:'');
         }else if(j.coordinator.reason){
-          coordNotice=' · coordinator: skipped ('+j.coordinator.reason+')';
+          coordNotice=' · orchestrator: skipped ('+j.coordinator.reason+')';
         }
       }
       out.textContent='launched: '+(j.workers||[]).map(function(w){return w.name+' ['+(w.driver||'')+']'+(w.pid?(' (pid '+w.pid+')'):'')+(w.error?(' ERROR '+w.error):'');}).join(', ')+coordNotice+cwdNotice;
@@ -2463,7 +2463,7 @@ export async function handleWebDashboardRoute(req, res, url, d) {
       res.end(JSON.stringify({ error: "loopback only" }));
       return true;
     }
-    for (const name of ["boss", "lead"]) {
+    for (const name of [ORCHESTRATOR_NAME]) {
       const tokenFile = path.join(d.root, "logs", `${name}.token`);
       let tok = "";
       try { tok = fs.readFileSync(tokenFile, "utf8").trim(); } catch {}
@@ -2566,12 +2566,12 @@ export async function handleWebDashboardRoute(req, res, url, d) {
       const ttlMs = 10 * 60 * 1000;
       const doc = {
         tokenHash: hashToken(token, salt), salt, label: "dashboard-oneclick",
-        createdBy: "lead", createdAt: new Date(now).toISOString(),
+        createdBy: ORCHESTRATOR_NAME, createdAt: new Date(now).toISOString(),
         expiresAt: new Date(now + ttlMs).toISOString(),
       };
       fs.mkdirSync(path.join(d.root, "pairing"), { recursive: true });
       writeJson(pairingPath(d, doc.tokenHash), doc);
-      try { appendChainRecord(d, "lead", "pair", { label: "dashboard-oneclick", expiresAt: doc.expiresAt }); } catch {}
+      try { appendChainRecord(d, ORCHESTRATOR_NAME, "pair", { label: "dashboard-oneclick", expiresAt: doc.expiresAt }); } catch {}
       const envId = (readRelayState(d) && readRelayState(d).envId) || ("board:" + path.basename(d.root));
       const pairUrl = buildPairUrl({ envId, routes: [], caps: ["hlc", "tombstones", "channels", "revoked", "holds", "launch"], pairToken: token });
       res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -2591,9 +2591,9 @@ export async function cmdWeb(args) {
   ensureBoardCliShim(d);
   const host = getFlag(args, "--host") || "127.0.0.1";
   const port = Number(getFlag(args, "--port") || 0);
-  // Desktop plug-and-play: same loopback auto-provision as `serve` (see
-  // ensureLoopbackOperator in identity.js). First loopback boot mints `lead`.
-  try { ensureLoopbackOperator(d, host); } catch {}
+  // Same local auto-provision as `serve`: the board's single orchestrator is
+  // ensured on boot (minted on first use, token at logs/orchestrator.token).
+  try { ensureOrchestrator(d); } catch {}
   if (!(port >= 0 && port < 65536)) fail("--port must be 0-65535 (0 = random)");
   if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") {
     process.stderr.write(`crewbus: warning: binding non-local ${host} — the dashboard has no auth, anyone who can reach it can read the board\n`);
@@ -2771,11 +2771,13 @@ export async function handleApiKill(d, body) {
 // CLI); dryRun previews exact commands without booting; live delivers the
 // brief + boots via bootWorker (same core as CLI spawn/remoteSpawn).
 export async function handleApiLaunch(d, body) {
-  const from = cleanWebName(body && body.from);
+  const from = ORCHESTRATOR_NAME;
   const token = body && body.token !== undefined && body.token !== null && String(body.token) !== "" ? String(body.token) : undefined;
-  if (!from) return { status: 400, payload: { error: "missing from (your agent name)" } };
-  const rec = readAgent(d, from);
-  if (!rec || !(rec.tokenHash || rec.token) || !agentTokenMatches(rec, token)) return { status: 403, payload: { error: "bad token" } };
+  ensureOrchestrator(d);
+  if (token) {
+    const rec = readAgent(d, from);
+    if (!rec || !(rec.tokenHash || rec.token) || !agentTokenMatches(rec, token)) return { status: 403, payload: { error: "bad token" } };
+  }
   {
     const r = authorizeCheck(d, from, "spawn");
     if (!r.ok) return { status: 403, payload: { error: r.reason } };
@@ -2784,11 +2786,8 @@ export async function handleApiLaunch(d, body) {
   if (!v.ok) return { status: 400, payload: { error: "launch plan invalid", errors: v.errors, warnings: v.warnings } };
   const p = v.plan;
   const harnesses = Array.isArray(p.harnesses) && p.harnesses.length > 0 ? p.harnesses : [p.harness || "opencode"];
-  const leadMode = p.lead || "auto";
-  if (leadMode !== "auto") {
-    return { status: 400, payload: { error: `invalid lead mode "${p.lead}" (only "auto" supported)` } };
-  }
-  const leadTarget = LEAD_NAME;
+  const orchestratorMode = "auto";
+  const orchestratorTarget = ORCHESTRATOR_NAME;
   const names = p.to ? String(p.to).split(",").map((s) => cleanWebName(s)).filter(Boolean)
     : Array.from({ length: p.count }, (_, i) => `${cleanWebName(p.prefix || "w") || "w"}-${i + 1}`);
   if (names.length === 0) return { status: 400, payload: { error: "no worker names (pass to or count)" } };
@@ -2801,7 +2800,7 @@ export async function handleApiLaunch(d, body) {
     const previewBatch = names.length > 1 ? newId("batch") : undefined;
     const rows = names.map((to, i) => {
       const driver = harnesses[i % harnesses.length];
-      const previewPrompt = buildSpawnPrompt({ name: to, from, lead: leadTarget, subject: p.subject, body: p.body.trim(), replyId: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", rev, cwd, root: d.root });
+      const previewPrompt = buildSpawnPrompt({ name: to, orchestrator: orchestratorTarget, subject: p.subject, body: p.body.trim(), replyId: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", rev, cwd, root: d.root });
       const t = buildSpawnTarget({
         harness: driver, model: p.model,
         auto: p.permission === "auto" || p.permission === "full" ? true : undefined,
@@ -2811,24 +2810,24 @@ export async function handleApiLaunch(d, body) {
       return { to, harness: driver, command: formatSpawnCmd(t) };
     });
     let coordinator = undefined;
-    if (leadMode === "auto") {
-      const existingLead = readAgent(d, LEAD_NAME);
+    if (orchestratorMode === "auto") {
+      const existingLead = readAgent(d, ORCHESTRATOR_NAME);
       // Stale-pid guard (C2): reuse only a live, non-stale coordinator; a
       // pid-recycled after reboot record gets the fresh-provision branch.
       const standing = existingLead && typeof existingLead.spawnedPid === "number" && pidAlive(existingLead.spawnedPid) && !isPidStale(existingLead.spawnedPid, existingLead.spawnedAt);
       if (standing) {
-        coordinator = { name: LEAD_NAME, action: "reused", pid: existingLead.spawnedPid, note: "live coordinator already running" };
+        coordinator = { name: ORCHESTRATOR_NAME, action: "reused", pid: existingLead.spawnedPid, note: "live coordinator already running" };
       } else if (existingLead && existingLead.offboarded) {
-        coordinator = { name: LEAD_NAME, action: "skipped", reason: "lane is offboarded" };
+        coordinator = { name: ORCHESTRATOR_NAME, action: "skipped", reason: "lane is offboarded" };
       } else {
         const coordDriver = harnesses[0] || "opencode";
-        const previewCoordPrompt = buildCoordinatorPrompt({
-          name: LEAD_NAME, from, subject: p.subject, body: p.body.trim(), batch: previewBatch,
+        const previewCoordPrompt = buildOrchestratorPrompt({
+          name: ORCHESTRATOR_NAME, subject: p.subject, body: p.body.trim(), batch: previewBatch,
           workers: names.map((name, i) => ({ name, id: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", harness: harnesses[i % harnesses.length] })),
           cwd, root: d.root, auto: p.permission === "auto" || p.permission === "full",
         });
         coordinator = {
-          name: LEAD_NAME, action: "minted", harness: coordDriver, wouldProvision: true,
+          name: ORCHESTRATOR_NAME, action: "created", harness: coordDriver, wouldProvision: true,
           promptPreview: previewCoordPrompt.slice(0, 400),
         };
       }
@@ -2852,25 +2851,25 @@ export async function handleApiLaunch(d, body) {
     const driver = harnesses[i % harnesses.length];
     const spawnOpts = { harness: driver, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model, auto, maxTurns: p.maxTurns, allowTools: p.allowTools, cwd, root: d.root, prompt: null };
     try {
-      const r = bootWorker(d, spawnOpts, { to, id, from, lead: leadTarget, subject: p.subject, body: p.body.trim(), rev, logDir });
+      const r = bootWorker(d, spawnOpts, { to, id, from, orchestrator: orchestratorTarget, subject: p.subject, body: p.body.trim(), rev, logDir });
       workers.push({ name: to, pid: r.pid, replyId: id, log: r.logPath, driver });
     } catch (e) {
       workers.push({ name: to, replyId: id, driver, error: String((e && e.message) || e) });
     }
   }
   let coordinator = undefined;
-  if (leadMode === "auto") {
+  if (orchestratorMode === "auto") {
     const coordHarness = harnesses[0] || "opencode";
     const coordSpawnOpts = { harness: coordHarness, cmd: body && body.cmd ? String(body.cmd) : undefined, model: p.model, auto, cwd, root: d.root, prompt: null };
     try {
-      coordinator = provisionAutoLead(d, {
+      coordinator = provisionOrchestrator(d, {
         spawnOpts: coordSpawnOpts,
-        from, subject: p.subject, body: p.body.trim(), rev, logDir,
+        subject: p.subject, body: p.body.trim(), rev, logDir,
         workers: res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })),
-        batch: res.batch, auto, authToken: token,
+        batch: res.batch, auto,
       });
     } catch (e) {
-      coordinator = { action: "skipped", reason: `coordinator boot error: ${String((e && e.message) || e)}`, leadName: LEAD_NAME };
+      coordinator = { action: "skipped", reason: `coordinator boot error: ${String((e && e.message) || e)}`, orchestratorName: ORCHESTRATOR_NAME };
     }
   }
   return { status: 200, payload: { ok: true, cwd, workers, coordinator, warnings: v.warnings } };

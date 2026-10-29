@@ -107,8 +107,8 @@ Missing: launch wizard, harness picker, pairing UI, route management.
 First claim wins (`writeExclusiveJson`); salted `tokenHash+salt`, never
 plaintext; `expiresAt/rotatedAt/service/offboarded`; `revoked/` union
 (copy-if-missing, never undone). Secrets stripped on sync/push/serve/JSON
-output; local secrets always win merges. Roles `{admin,lead,worker,auditor}`
-(first registration = admin; legacy = lead); `checkToken()` THEN
+output; local secrets always win merges. Roles `{orchestrator, worker}`
+(the board bootstraps one orchestrator; self-registrations are workers); `checkToken()` THEN
 `authorize()` — never merged, never reordered. Leads kill own crew only;
 auditors read-only; `acl {defaultRole, frozen}` per board; `group restrict`
 for private crews.
@@ -240,7 +240,7 @@ back to loopback silently.
 
 ### 3.4 Pairing (`pairing.json`)
 
-`POST /api/pair/issue` (admin) → one-time
+`POST /api/pair/issue` (orchestrator) → one-time
 `crewbus://pair?env=<id>&routes=<json>&caps=<…>#<abp-…>` (secret in
 FRAGMENT; QR renders the same). `POST /api/pair/exchange` swaps once for
 `abd-…` with requested scopes ⊆ granted (narrow-only). Devices relay-local,

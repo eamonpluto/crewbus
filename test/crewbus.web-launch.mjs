@@ -20,9 +20,9 @@ const run = (args) =>
   execFileSync("node", [CLI, ...args], { env, cwd: os.tmpdir(), stdio: ["ignore", "pipe", "pipe"] }).toString();
 
 run(["init", "--board", board]);
-const leadReg = run(["register", "--from", "lead"]);
+const leadReg = run(["orchestrator", "init"]);
 const leadTok = ((leadReg.match(/token (abt-[0-9a-f]+)/) || [])[1]) || "";
-check("setup: lead token minted", !!leadTok);
+check("setup: orchestrator token minted", !!leadTok);
 
 // ---- helpers ----
 function startServer(args, expectRe) {
@@ -83,31 +83,31 @@ check("web: GET /api/routes shape", routes.status === 200 && !!routes.json && Ar
 const models = await httpCall(webBase, "GET", "/api/models");
 check("web: GET /api/models 200 catalog", models.status === 200 && !!models.json && Array.isArray(models.json.claude) && Array.isArray(models.json.opencode));
 
-const dry = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "audit scope", dryRun: true });
+const dry = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", body: "audit scope", dryRun: true });
 check("web: POST /api/launch dry-run previews", dry.status === 200 && dry.json && dry.json.dryRun === true && Array.isArray(dry.json.commands) && dry.json.commands.length === 1);
-check("web: POST /api/launch dry-run auto-lead previews coordinator", dry.json && dry.json.coordinator && dry.json.coordinator.name === "lead" && dry.json.coordinator.wouldProvision === true);
+check("web: POST /api/launch dry-run previews orchestrator", dry.json && dry.json.coordinator && dry.json.coordinator.name === "orchestrator" && dry.json.coordinator.wouldProvision === true);
 
-const dryNone = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", lead: "none", body: "audit scope", dryRun: true });
-check("web: POST /api/launch lead=none refused 400", dryNone.status === 400);
+const dryNone = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", lead: "none", body: "audit scope", dryRun: true });
+check("web: POST /api/launch ignores legacy lead field", dryNone.status === 200);
 
-const badLeadGen = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "generic", body: "x", dryRun: true });
+const badLeadGen = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "generic", body: "x", dryRun: true });
 check("web: POST /api/launch generic 400", badLeadGen.status === 400);
 
 const customCwd = fs.mkdtempSync(path.join(os.tmpdir(), "cb-custom-cwd-"));
-const dryWithCwd = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "audit scope", dryRun: true, cwd: customCwd });
+const dryWithCwd = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", body: "audit scope", dryRun: true, cwd: customCwd });
 check("web: POST /api/launch honors explicit cwd", dryWithCwd.status === 200 && dryWithCwd.json && dryWithCwd.json.cwd === path.resolve(customCwd));
 fs.rmSync(customCwd, { recursive: true, force: true });
 
-const badPlan = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "nope", body: "x" });
+const badPlan = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "nope", body: "x" });
 check("web: POST /api/launch bad harness 400", badPlan.status === 400 && (badPlan.json.error || "").includes("launch plan invalid"));
 
-const badTok = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: "abt-deadbeef", harness: "grok", body: "x", dryRun: true });
+const badTok = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: "abt-deadbeef", harness: "grok", body: "x", dryRun: true });
 check("web: POST /api/launch bad token 403", badTok.status === 403);
 
-const live = await httpCall(webBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "opencode", to: "ww1", body: "quick check" });
+const live = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "opencode", to: "ww1", body: "quick check" });
 check("web: POST /api/launch live boots (workers)", live.status === 200 && live.json && Array.isArray(live.json.workers) && live.json.workers.length === 1 && typeof live.json.workers[0].pid === "number");
-check("web: POST /api/launch provisions coordinator", live.json && live.json.coordinator && (live.json.coordinator.name === "lead" || live.json.coordinator.leadName === "lead"));
-run(["spawn-kill", "--from", "lead", "--token", leadTok, "--to", "ww1"]);
+check("web: POST /api/launch provisions coordinator", live.json && live.json.coordinator && (live.json.coordinator.name === "orchestrator" || live.json.coordinator.orchestratorName === "orchestrator"));
+run(["spawn-kill", "--from", "orchestrator", "--token", leadTok, "--to", "ww1"]);
 
 // ---- loopback operator auto-provision & /api/operator-creds ----
 const boardLoop = fs.mkdtempSync(path.join(os.tmpdir(), "cb-loopback-"));
@@ -117,8 +117,8 @@ try {
   const loopAt = await loopSrv.waitFor(/crewbus serve at http:\/\/(\S+)/);
   const loopBase = `http://${loopAt[1]}`;
   const creds = await httpCall(loopBase, "GET", "/api/operator-creds");
-  check("loopback: fresh board auto-provisions boss operator", creds.status === 200 && creds.json && creds.json.ok === true && creds.json.from === "boss" && typeof creds.json.token === "string" && creds.json.token.startsWith("abt-"));
-  check("loopback: boss token file persisted", fs.existsSync(path.join(boardLoop, "logs", "boss.token")));
+  check("loopback: fresh board auto-provisions orchestrator", creds.status === 200 && creds.json && creds.json.ok === true && creds.json.from === "orchestrator" && typeof creds.json.token === "string" && creds.json.token.startsWith("abt-"));
+  check("loopback: orchestrator token file persisted", fs.existsSync(path.join(boardLoop, "logs", "orchestrator.token")));
   loopSrv.kill();
 } finally {
   fs.rmSync(boardLoop, { recursive: true, force: true });
@@ -158,27 +158,27 @@ const hz = await httpCall(relayBase, "GET", "/healthz");
 check("relay: /healthz carries advertisedRoutes", hz.status === 200 && Array.isArray(hz.json.advertisedRoutes) && hz.json.advertisedRoutes.length === 2);
 
 const sec = { "x-crewbus-secret": secret };
-const rDry = await httpCall(relayBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "scope it", dryRun: true }, sec);
+const rDry = await httpCall(relayBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", body: "scope it", dryRun: true }, sec);
 check("relay: POST /api/launch dry-run 200", rDry.status === 200 && rDry.json && rDry.json.dryRun === true);
 
-const rNoAuth = await httpCall(relayBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "x", dryRun: true });
+const rNoAuth = await httpCall(relayBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", body: "x", dryRun: true });
 check("relay: POST /api/launch without secret refused", rNoAuth.status === 401 || rNoAuth.status === 403);
 
-const rLive = await httpCall(relayBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "opencode", to: "rw1", body: "remote check" }, sec);
+const rLive = await httpCall(relayBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "opencode", to: "rw1", body: "remote check" }, sec);
 check("relay: POST /api/launch live boots via remote core", rLive.status === 200 && rLive.json && Array.isArray(rLive.json.results) && rLive.json.results.length === 1);
-run(["spawn-kill", "--from", "lead", "--token", leadTok, "--to", "rw1"]);
+run(["spawn-kill", "--from", "orchestrator", "--token", leadTok, "--to", "rw1"]);
 relay.kill();
 
 // ---- relay gate: no --allow-remote-spawn -> 403 ----
 const locked = startServer(["serve", "--port", "0", "--board", board, "--secret", secret]);
 const lockedAt = await locked.waitFor(/crewbus serve at http:\/\/(\S+)/);
 const lockedBase = `http://${lockedAt[1]}`;
-const gated = await httpCall(lockedBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "x", dryRun: true }, sec);
+const gated = await httpCall(lockedBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", body: "x", dryRun: true }, sec);
 check("relay: POST /api/launch OPT-IN 403 without flag", gated.status === 403);
 locked.kill();
 
 // ---- serve --pair-qrcode prints a fragment-secret URL ----
-const qr = startServer(["serve", "--port", "0", "--board", board, "--secret", secret, "--from", "lead", "--token", leadTok, "--pair-qrcode", "--advertise-routes", "http://lan:9"]);
+const qr = startServer(["serve", "--port", "0", "--board", board, "--secret", secret, "--from", "orchestrator", "--token", leadTok, "--pair-qrcode", "--advertise-routes", "http://lan:9"]);
 await qr.waitFor(/crewbus serve at http:\/\/(\S+)/);
 await qr.waitFor(/pair URL: crewbus:\/\/pair\?/, 15000);
 check("serve: --pair-qrcode prints pair URL", /pair URL: crewbus:\/\/pair\?[^ ]+#abp-/.test(qr.out));
@@ -190,16 +190,16 @@ const desktopSrv = startServer(["serve", "--port", "0", "--board", board]);
 const dsAt = await desktopSrv.waitFor(/crewbus serve at http:\/\/(\S+)/);
 const dsBase = `http://${dsAt[1]}`;
 
-const dsDry = await httpCall(dsBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "grok", body: "desktop dry run", dryRun: true });
+const dsDry = await httpCall(dsBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", body: "desktop dry run", dryRun: true });
 check("desktop serve: POST /api/launch dry-run 200 without --allow-remote-spawn", dsDry.status === 200 && dsDry.json && dsDry.json.dryRun === true && Array.isArray(dsDry.json.commands));
 
-const dsBadTok = await httpCall(dsBase, "POST", "/api/launch", { from: "lead", token: "abt-badtoken", harness: "grok", body: "x", dryRun: true });
+const dsBadTok = await httpCall(dsBase, "POST", "/api/launch", { from: "orchestrator", token: "abt-badtoken", harness: "grok", body: "x", dryRun: true });
 check("desktop serve: POST /api/launch bad token rejected 403", dsBadTok.status === 403);
 
-const dsLive = await httpCall(dsBase, "POST", "/api/launch", { from: "lead", token: leadTok, harness: "opencode", to: "dw1", body: "desktop live boot" });
+const dsLive = await httpCall(dsBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "opencode", to: "dw1", body: "desktop live boot" });
 check("desktop serve: POST /api/launch live boots workers", dsLive.status === 200 && dsLive.json && Array.isArray(dsLive.json.workers) && dsLive.json.workers.length === 1 && typeof dsLive.json.workers[0].pid === "number");
 
-const dsKill = await httpCall(dsBase, "POST", "/api/kill", { from: "lead", token: leadTok, to: ["dw1"] });
+const dsKill = await httpCall(dsBase, "POST", "/api/kill", { from: "orchestrator", token: leadTok, to: ["dw1"] });
 check("desktop serve: POST /api/kill succeeds without --allow-remote-spawn", dsKill.status === 200);
 
 desktopSrv.kill();
