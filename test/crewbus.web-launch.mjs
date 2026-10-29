@@ -87,6 +87,9 @@ const dry = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator
 check("web: POST /api/launch dry-run previews", dry.status === 200 && dry.json && dry.json.dryRun === true && Array.isArray(dry.json.commands) && dry.json.commands.length === 1);
 check("web: POST /api/launch dry-run previews orchestrator", dry.json && dry.json.coordinator && dry.json.coordinator.name === "orchestrator" && dry.json.coordinator.wouldProvision === true);
 
+const dryCoordModel = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", model: "m1", orchestratorModel: "kimi-k3", body: "audit scope", dryRun: true });
+check("web: POST /api/launch dry-run carries orchestrator model", dryCoordModel.status === 200 && dryCoordModel.json && dryCoordModel.json.plan && dryCoordModel.json.plan.orchestratorModel === "kimi-k3" && dryCoordModel.json.coordinator && dryCoordModel.json.coordinator.model === "kimi-k3");
+
 const dryNone = await httpCall(webBase, "POST", "/api/launch", { from: "orchestrator", token: leadTok, harness: "grok", lead: "none", body: "audit scope", dryRun: true });
 check("web: POST /api/launch ignores legacy lead field", dryNone.status === 200);
 

@@ -373,9 +373,18 @@ export function validateLaunchPlan(raw) {
   }
   const model = models.length > 0 ? models.join(",") : undefined;
 
+  // The orchestrator lane is one process, so it takes one model (not a list).
+  const orchestratorModelRaw = r.orchestratorModel;
+  let orchestratorModel;
+  if (orchestratorModelRaw !== undefined && orchestratorModelRaw !== null && String(orchestratorModelRaw).trim() !== "") {
+    orchestratorModel = String(orchestratorModelRaw).trim();
+    if (orchestratorModel.includes(",")) errors.push("orchestratorModel takes one model (not a comma list)");
+    if (orchestratorModel.length > 100) errors.push("orchestrator model name too long (max 100 chars)");
+  }
+
   const plan = {
     harness, harnesses: harnesses.length > 0 ? harnesses : ["opencode"],
-    model, models, body, count: Number.isInteger(count) && count > 0 ? count : 1,
+    model, models, orchestratorModel, body, count: Number.isInteger(count) && count > 0 ? count : 1,
     prefix: r.prefix === undefined ? undefined : String(r.prefix),
     to: r.to === undefined ? undefined : String(r.to),
     subject: r.subject === undefined ? undefined : String(r.subject),

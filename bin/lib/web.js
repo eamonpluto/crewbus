@@ -2788,6 +2788,8 @@ export async function handleApiLaunch(d, body) {
   const p = v.plan;
   const harnesses = Array.isArray(p.harnesses) && p.harnesses.length > 0 ? p.harnesses : [p.harness || "opencode"];
   const models = Array.isArray(p.models) ? p.models : parseModelList(p.model);
+  const coordModel = p.orchestratorModel !== undefined && p.orchestratorModel !== null && String(p.orchestratorModel).trim() !== ""
+    ? String(p.orchestratorModel).trim() : modelForIndex(models, 0);
   const orchestratorMode = "auto";
   const orchestratorTarget = ORCHESTRATOR_NAME;
   const names = p.to ? String(p.to).split(",").map((s) => cleanWebName(s)).filter(Boolean)
@@ -2829,7 +2831,7 @@ export async function handleApiLaunch(d, body) {
           cwd, root: d.root, auto: p.permission === "auto" || p.permission === "full",
         });
         coordinator = {
-          name: ORCHESTRATOR_NAME, action: "created", harness: coordDriver, wouldProvision: true,
+          name: ORCHESTRATOR_NAME, action: "created", harness: coordDriver, model: coordModel, wouldProvision: true,
           promptPreview: previewCoordPrompt.slice(0, 400),
         };
       }
@@ -2862,7 +2864,7 @@ export async function handleApiLaunch(d, body) {
   let coordinator = undefined;
   if (orchestratorMode === "auto") {
     const coordHarness = harnesses[0] || "opencode";
-    const coordSpawnOpts = { harness: coordHarness, cmd: body && body.cmd ? String(body.cmd) : undefined, model: modelForIndex(models, 0), auto, cwd, root: d.root, prompt: null };
+    const coordSpawnOpts = { harness: coordHarness, cmd: body && body.cmd ? String(body.cmd) : undefined, model: coordModel, auto, cwd, root: d.root, prompt: null };
     try {
       coordinator = provisionOrchestrator(d, {
         spawnOpts: coordSpawnOpts,

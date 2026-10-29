@@ -116,6 +116,8 @@ check("cli: multi-model dry-run cycles models per worker", multiModelDry.ok === 
   && multiModelDry.commands[0].command.includes("--model m1")
   && multiModelDry.commands[1].command.includes("--model m2")
   && multiModelDry.commands[2].command.includes("--model m1"));
+const coordModelDry = JSON.parse(run(["launch", "--harness", "claude", "--model", "m1", "--orchestrator-model", "kimi-k3", "--body", "x", "--count", "1", "--dry-run", "--json"]));
+check("cli: launch plan carries orchestratorModel", coordModelDry.ok === true && coordModelDry.plan.orchestratorModel === "kimi-k3");
 let genericRefused = false;
 try {
   run(["launch", "--harness", "generic", "--body", "x", "--dry-run"]);

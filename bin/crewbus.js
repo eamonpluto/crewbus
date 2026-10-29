@@ -3045,6 +3045,19 @@ function cmdSpawn(args) {
     const modelErr = modelListErrors(models)[0];
     if (modelErr) fail(modelErr);
   }
+  // The orchestrator lane is one process, so it takes one model (not a list).
+  // Applies when the lane is provisioned; a standing coordinator is reused
+  // with its boot-time model (same rule as --orchestrator-budget-*).
+  const orchestratorModelRaw = getFlag(args, "--orchestrator-model");
+  let orchestratorModel;
+  if (orchestratorModelRaw !== undefined) {
+    const v = String(orchestratorModelRaw).trim();
+    if (!v) fail("--orchestrator-model must not be empty");
+    if (v.includes(",")) fail("--orchestrator-model takes one model (not a comma list)");
+    if (v.length > MODEL_NAME_MAX) fail(`model name too long (max ${MODEL_NAME_MAX} chars)`);
+    orchestratorModel = v;
+  }
+  const coordModel = orchestratorModel !== undefined ? orchestratorModel : models[0];
   const auto = args.includes("--auto");
   requireAutoConfirm(args);
   const dry = args.includes("--dry-run");
@@ -3153,7 +3166,7 @@ if (orchestratorBudgetMinutesRaw !== undefined && !(orchestratorBudgetMinutes > 
           workers: revive ? [] : recipients.map((name, i) => ({ name, id: previewBatch ? `${previewBatch}-${i + 1}` : "msg-<id>", harness: harnesses[i % harnesses.length] })),
           crew: crewFor(recipients[0], orchestratorTarget), cwd, root, auto, workbench: wbFor(recipients[0]),
         });
-        console.log(`--- orchestrator ---\nwould spawn ${ORCHESTRATOR_NAME} [${harnesses[0]}] (persistent — owns this crew) cwd ${cwd} [board ${d.root}]`);
+        console.log(`--- orchestrator ---\nwould spawn ${ORCHESTRATOR_NAME} [${harnesses[0]}]${coordModel ? ` model ${coordModel}` : ""} (persistent — owns this crew) cwd ${cwd} [board ${d.root}]`);
         console.log(`--- orchestrator prompt (preview) ---\n${coordPreview}`);
       }
     }
@@ -3216,14 +3229,14 @@ if (orchestratorBudgetMinutesRaw !== undefined && !(orchestratorBudgetMinutes > 
   {
     const coordHarness = harnesses[0] || "opencode";
     const provision = provisionOrchestrator(d, {
-      spawnOpts: { ...spawnOpts, harness: coordHarness, maxTurns: undefined, allowTools: undefined },
+      spawnOpts: { ...spawnOpts, harness: coordHarness, model: coordModel, maxTurns: undefined, allowTools: undefined },
       subject, body: body.trim(), rev, logDir,
       workers: res ? res.items.map((it, i) => ({ name: it.to, id: it.id, harness: harnesses[i % harnesses.length] })) : [],
       batch: res ? res.batch : undefined, crew: crewFor(recipients[0], orchestratorTarget), workbench: wbFor(recipients[0]), auto,
       budgetTokens: orchestratorBudgetTokens, budgetMinutes: orchestratorBudgetMinutes,
     });
     if (provision.action === "created" && provision.pid) {
-      console.log(`orchestrator provisioned: lane '${provision.orchestratorName}' (owns this crew), pid ${provision.pid} (persistent, ${coordHarness}) log ${provision.logPath} [board ${d.root}]`);
+      console.log(`orchestrator provisioned: lane '${provision.orchestratorName}' (owns this crew), pid ${provision.pid} (persistent, ${coordHarness}${coordModel ? `, model ${coordModel}` : ""}) log ${provision.logPath} [board ${d.root}]`);
       if (provision.token) console.log(`orchestrator token (set CREWBUS_TOKEN=${provision.token} to act as '${provision.orchestratorName}'): also saved to logs/${provision.orchestratorName}.token`);
     } else if (provision.action === "created") {
       console.log(`orchestrator provisioned with a caveat: ${provision.reason} [board ${d.root}]`);
@@ -3264,6 +3277,7 @@ function printLaunchDryRun(v, args, from, root, asJson, cmdOpt) {
   else {
     console.log(`launch dry-run: ${harnesses.join(",")} x${rows.length} [board ${root}]`);
     for (const r of rows) console.log(`  ${r.to} [${r.harness}]: ${r.command}`);
+    if (p.orchestratorModel) console.log(`  orchestrator model: ${p.orchestratorModel}`);
     if (p.permission === "full") console.log("  (permission full: unattended + isolate recommended)");
   }
   return rows;
@@ -3353,6 +3367,7 @@ async function cmdLaunch(args) {
     subject: getFlag(args, "--subject"),
     priority: getFlag(args, "--priority"),
     model: getFlag(args, "--model"),
+    orchestratorModel: getFlag(args, "--orchestrator-model"),
     maxTurns: getFlag(args, "--max-turns"),
     allowTools: getFlag(args, "--allow-tools"),
     permission: getFlag(args, "--permission"),
@@ -3426,7 +3441,7 @@ async function cmdLaunch(args) {
   const fwd = ["--harness", v.plan.harness, "--body", v.plan.body];
   if (v.plan.to) fwd.push("--to", v.plan.to);
   else fwd.push("--count", String(v.plan.count), "--prefix", v.plan.prefix || "w");
-  for (const [flag, val] of [["--subject", v.plan.subject], ["--priority", v.plan.priority], ["--model", v.plan.model], ["--max-turns", v.plan.maxTurns], ["--allow-tools", v.plan.allowTools], ["--cmd", cmdOpt.value], ["--cwd", getFlag(args, "--cwd")], ["--worktree", v.plan.worktree], ["--branch", v.plan.branch], ["--budget-tokens", v.plan.budgetTokens], ["--budget-minutes", v.plan.budgetMinutes], ["--timeout", v.plan.timeout], ["--sender-type", getFlag(args, "--sender-type")]]) {
+  for (const [flag, val] of [["--subject", v.plan.subject], ["--priority", v.plan.priority], ["--model", v.plan.model], ["--orchestrator-model", v.plan.orchestratorModel], ["--max-turns", v.plan.maxTurns], ["--allow-tools", v.plan.allowTools], ["--cmd", cmdOpt.value], ["--cwd", getFlag(args, "--cwd")], ["--worktree", v.plan.worktree], ["--branch", v.plan.branch], ["--budget-tokens", v.plan.budgetTokens], ["--budget-minutes", v.plan.budgetMinutes], ["--timeout", v.plan.timeout], ["--sender-type", getFlag(args, "--sender-type")]]) {
     if (val !== undefined) fwd.push(flag, String(val));
   }
   if (v.plan.isolate) fwd.push("--isolate");
@@ -6930,7 +6945,7 @@ Messaging (primitive — just a tool call, whenever you want):
     (recover mail a dead watcher consumed: clears delivered markers and
      rewinds the cursor so the next poll/push treats it as fresh;
      use after re-registering with the live session)
-    crewbus spawn --body "..." [--count <n> [--prefix <p>] | --to <workers> | --to-group <g> | --to-file <path>] [--subject "..."] [--reply <msg-id>] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m[,m2,...]>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--orchestrator-budget-tokens N] [--orchestrator-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--also-channel] [--sender-type human|orchestrator|peer] [--dry-run]
+    crewbus spawn --body "..." [--count <n> [--prefix <p>] | --to <workers> | --to-group <g> | --to-file <path>] [--subject "..."] [--reply <msg-id>] [--priority high|normal] [--needs-by 30m] [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--cmd "..."] [--cwd <dir>] [--worktree <branch-prefix> | --branch <branch-prefix>] [--oneshot | --persistent] [--model <m[,m2,...]>] [--orchestrator-model <m>] [--max-turns <n>] [--allow-tools "..."] [--max-spawn <n>] [--auto --i-understand-danger] [--isolate] [--budget-tokens N] [--budget-minutes M] [--orchestrator-budget-tokens N] [--orchestrator-budget-minutes M] [--timeout 10m] [--keep-env] [--allow-env ANTHROPIC_,GITHUB_] [--workdir-root <dir>] [--also-channel] [--sender-type human|orchestrator|peer] [--dry-run]
    (--budget-* cap the WORKERS; --orchestrator-budget-* cap the auto-provisioned coordinator lane — same semantics, e.g. a 400k-token orchestrator that posts its aggregate and exits. Unset = persistent orchestrator (default). A standing coordinator keeps its boot-time budget; the flags cannot change it mid-flight.)
    (workers boot with cloud/AI credential vars scrubbed from their environment by default (the orchestrator's keys never leak into briefs); pass --keep-env to inherit everything or --allow-env <prefix,...> to keep listed names. CREWBUS_TOKEN is never inherited — workers claim their own identity.)
     (brief N workers AND boot them detached: the DM lands first so the brief
@@ -6952,6 +6967,8 @@ Messaging (primitive — just a tool call, whenever you want):
      --model takes one model (applies to every worker) or a comma list
      (a,b,c) applied in worker order and cycled — like --harness — so each
      worker can run a different model; the orchestrator lane uses the first.
+     --orchestrator-model <m> overrides the coordinator lane's model when it
+     is provisioned (a standing coordinator keeps its boot-time model).
      --auto maps to each harness's
      unattended mode (dangerous); --dry-run prints the exact command without
      touching the board. --count 0 is the ORCHESTRATOR REVIVE path: boots nothing
@@ -7013,7 +7030,7 @@ Messaging (primitive — just a tool call, whenever you want):
      Surviving markers are kept, so nothing replays. Pruned ids leave
      tombstones/ entries replicated via sync so deletes don't return.
      Refused while a legal hold is active — see hold.)
-  crewbus pool --from <you> --count N --pool-size S --body "..." [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--prefix p] [--queue a,b] [--model <m[,m2,...]>] [--max-turns <n>] [--allow-tools "..."] [--auto] [--subject "..."] [--cwd <dir>] [--keep-env] [--allow-env ...] [--json]
+  crewbus pool --from <you> --count N --pool-size S --body "..." [--harness opencode|claude|codex|grok|antigravity|cursor|qwen] [--prefix p] [--queue a,b] [--model <m[,m2,...]>] [--orchestrator-model <m>] [--max-turns <n>] [--allow-tools "..."] [--auto] [--subject "..."] [--cwd <dir>] [--keep-env] [--allow-env ...] [--json]
     (lean async runner: brief N workers but boot at most S concurrently,
      watch exits and auto-replace until N total. Queue backpressure refuses
      when pending > 4*poolSize. State in pool-state/<id>.json, token-checked;
@@ -7122,7 +7139,7 @@ Messaging (primitive — just a tool call, whenever you want):
      capabilities[] negotiated (mixed-version peers degrade with warnings).)
   crewbus doctor [--harness <list>] [--board <path>]
 
-  crewbus launch --from <you> --harness <driver> (--body "..." | --body-file <path>) [--to <a,b> | --count N [--prefix p]] [--subject ...] [--priority high|normal] [--model <m[,m2,...]>] [--max-turns <n>] [--allow-tools "..."] [--permission supervised|autoEdits|auto|full] [--isolate] [--worktree <prefix>|--branch <prefix>] [--oneshot|--persistent] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--cmd "..."] [--cwd <dir>] [--sender-type ...] [--dry-run] [--yes] [--i-understand-danger] [--json]
+  crewbus launch --from <you> --harness <driver> (--body "..." | --body-file <path>) [--to <a,b> | --count N [--prefix p]] [--subject ...] [--priority high|normal] [--model <m[,m2,...]>] [--orchestrator-model <m>] [--max-turns <n>] [--allow-tools "..."] [--permission supervised|autoEdits|auto|full] [--isolate] [--worktree <prefix>|--branch <prefix>] [--oneshot|--persistent] [--budget-tokens N] [--budget-minutes M] [--timeout 10m] [--cmd "..."] [--cwd <dir>] [--sender-type ...] [--dry-run] [--yes] [--i-understand-danger] [--json]
     (control-plane launch: validates the plan against packages/contracts
      (permission full needs --i-understand-danger); --dry-run prints the
      exact spawn commands via formatSpawnCmd without booting; otherwise
@@ -7584,6 +7601,18 @@ async function cmdPool(args) {
     const modelErr = modelListErrors(models)[0];
     if (modelErr) fail(modelErr);
   }
+  // Orchestrator lane model (single). When set, pool provisions/reuses the
+  // coordinator lane with that model; without it pool behaves as before and
+  // boots no coordinator.
+  const orchestratorModelRaw = getFlag(args, "--orchestrator-model");
+  let orchestratorModel;
+  if (orchestratorModelRaw !== undefined) {
+    const v = String(orchestratorModelRaw).trim();
+    if (!v) fail("--orchestrator-model must not be empty");
+    if (v.includes(",")) fail("--orchestrator-model takes one model (not a comma list)");
+    if (v.length > MODEL_NAME_MAX) fail(`model name too long (max ${MODEL_NAME_MAX} chars)`);
+    orchestratorModel = v;
+  }
   const auto = args.includes("--auto");
   const subject = cleanSubject(getFlag(args, "--subject"));
   const cwd = path.resolve(getFlag(args, "--cwd") || path.dirname(root));
@@ -7613,6 +7642,28 @@ async function cmdPool(args) {
   const idByName = new Map(res.items.map((s) => [s.to, s.id]));
   state.idByName = Object.fromEntries(idByName);
   saveState();
+  // Optional coordinator lane (only when --orchestrator-model is given, so
+  // default pool behavior stays worker-only). A standing coordinator is
+  // reused with its boot-time model, exactly like spawn/launch.
+  if (orchestratorModel !== undefined) {
+    try {
+      const provision = provisionOrchestrator(d, {
+        spawnOpts: { ...spawnOpts, harness, model: orchestratorModel, maxTurns: undefined, allowTools: undefined },
+        subject, body: body.trim(), rev, logDir,
+        workers: queue.map((name) => ({ name, id: idByName.get(name), harness })),
+        batch: res.batch, auto,
+      });
+      if (provision.action === "created" && provision.pid) {
+        console.log(`pool ${poolId}: orchestrator provisioned pid ${provision.pid} (persistent, ${harness}, model ${orchestratorModel}) [board ${d.root}]`);
+      } else if (provision.action === "reused") {
+        console.log(`pool ${poolId}: orchestrator reused (standing) — --orchestrator-model applies only to a fresh provision [board ${d.root}]`);
+      } else {
+        console.log(`pool ${poolId}: orchestrator NOT provisioned: ${provision.reason || provision.action} [board ${d.root}]`);
+      }
+    } catch (e) {
+      console.log(`pool ${poolId}: orchestrator provision failed: ${(e && e.message) || e} (workers still boot) [board ${d.root}]`);
+    }
+  }
   const launchOne = (name) => {
     try {
       const itemOpts = models.length ? { ...spawnOpts, model: modelForIndex(models, queue.indexOf(name)) } : spawnOpts;

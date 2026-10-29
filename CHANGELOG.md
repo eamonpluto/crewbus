@@ -1,5 +1,20 @@
 # Changelog
 
+## 11.2.0
+
+Orchestrator model selection.
+
+- `--orchestrator-model <m>` sets the model for the board orchestrator lane
+  on `spawn`, `launch`, and `pool`. It applies when the lane is provisioned;
+  a standing coordinator is reused with its boot-time model (same rule as
+  `--orchestrator-budget-*`).
+- Without the flag, behavior is unchanged: spawn/launch use the first
+  `--model` entry for the coordinator, and pool boots no coordinator.
+- The launch plan/RPC accepts `orchestratorModel`; local web launch and pool
+  coordinator provisioning honor it.
+- Tests cover the spawn preview, launch plan, web/RPC dry-run, and invalid
+  comma lists.
+
 ## 11.1.0
 
 Per-worker models for spawned crews.

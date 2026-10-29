@@ -307,6 +307,19 @@ try {
   spawnBadModel = true;
 }
 check("spawn invalid empty model refused", spawnBadModel);
+// Fresh board: the shared smoke board already has a standing orchestrator,
+// so the coordinator preview would be the "reused" branch.
+const coordBoard = fs.mkdtempSync(path.join(os.tmpdir(), "cb-coord-model-"));
+const dryCoordModel = run(["spawn", "--board", coordBoard, "--harness", "claude", "--to", "ow1", "--model", "m1", "--orchestrator-model", "kimi-k3", "--body", "x", "--dry-run"]);
+check("spawn --orchestrator-model appears in preview", dryCoordModel.includes("model kimi-k3"));
+fs.rmSync(coordBoard, { recursive: true, force: true });
+let spawnBadCoordModel = false;
+try {
+  run(["spawn", "--to", "ow2", "--orchestrator-model", "a,b", "--body", "x", "--dry-run"]);
+} catch {
+  spawnBadCoordModel = true;
+}
+check("spawn --orchestrator-model rejects a comma list", spawnBadCoordModel);
 check("spawn claude+auto maps to skip-permissions", run(["spawn", "--harness", "claude", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--dangerously-skip-permissions"));
 check("spawn codex+auto maps to danger-full-access", run(["spawn", "--harness", "codex", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("danger-full-access"));
 check("spawn grok+auto maps to always-approve", run(["spawn", "--harness", "grok", "--to", "cw1", "--body", "x", "--dry-run", "--auto", "--i-understand-danger"]).includes("--always-approve"));
