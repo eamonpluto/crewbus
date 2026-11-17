@@ -66,6 +66,9 @@ const run = (args, env, cwd) => {
 
 // ---------------------------------------------------------------- MCP server
 const mcpBoard = fs.mkdtempSync(path.join(os.tmpdir(), "cb-mcp-"));
+const pkgVersion = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+const mcpVersionOut = execFileSync("node", [MCP, "--version"]).toString().trim();
+check("mcp: --version prints package version", mcpVersionOut === `crewbus-mcp ${pkgVersion}`);
 const srv = spawn("node", [MCP], { env: { ...process.env, CREWBUS_DIR: mcpBoard }, stdio: ["pipe", "pipe", "inherit"] });
 let mcpBuf = "";
 const mcpPending = [];
@@ -94,6 +97,7 @@ const mcpReq = (method, params) =>
 
 const init1 = await mcpReq("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "t", version: "0" } });
 check("mcp: initialize negotiates", init1.result.protocolVersion === "2024-11-05" && init1.result.serverInfo.name === "crewbus");
+check("mcp: serverInfo.version matches package.json", init1.result.serverInfo.version === pkgVersion);
 const init2 = await mcpReq("initialize", { protocolVersion: "9999-99-99" });
 check("mcp: unknown version falls back", init2.result.protocolVersion === "2024-11-05");
 const tools = await mcpReq("tools/list", {});

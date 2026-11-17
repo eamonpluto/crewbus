@@ -219,7 +219,7 @@ export function getFlag(args, flag) { // line 658
 
 // Positional args with flag values removed (so `send --from alice --to bob`
 // with no body doesn't mistake "alice bob" for a message).
-export const VALUE_FLAGS = new Set(["--from", "--to", "--to-file", "--to-group", "--body", "--subject", "--reply", "--replyTo", "--session", "--board", "--limit", "--after", "--timeout", "--id", "--harness", "--cmd", "--cwd", "--model", "--orchestrator-model", "--max-turns", "--allow-tools", "--window", "--older-than", "--lines", "--token", "--port", "--host", "--group", "--add", "--batch", "--with", "--interval", "--count", "--prefix", "--max-spawn", "--pool-size", "--pool", "--queue", "--agents", "--iters", "--scope", "--ttl", "--worktree", "--branch", "--grep", "--priority", "--max-chars", "--cursor", "--verify", "--msg", "--artifact"]); // line 665
+export const VALUE_FLAGS = new Set(["--from", "--to", "--to-file", "--to-group", "--body", "--subject", "--reply", "--replyTo", "--session", "--board", "--limit", "--after", "--timeout", "--id", "--harness", "--cmd", "--cwd", "--model", "--orchestrator-model", "--max-turns", "--allow-tools", "--window", "--older-than", "--lines", "--token", "--port", "--host", "--group", "--add", "--batch", "--with", "--interval", "--count", "--prefix", "--max-spawn", "--pool-size", "--pool", "--queue", "--agents", "--iters", "--scope", "--ttl", "--worktree", "--branch", "--grep", "--priority", "--max-chars", "--cursor", "--verify", "--msg", "--artifact", "--registry"]); // line 665
 
 // Comma-separated recipients: `--to alice,bob,carol` fans out one DM per
 // recipient (same body/subject, unique id each). Keeps the DM-only model

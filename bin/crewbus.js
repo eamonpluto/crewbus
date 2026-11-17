@@ -4782,6 +4782,10 @@ function cmdDoctor(args) {
   if (nodeMajor >= 18) ok(`node ${process.version} (>= 18)`);
   else no(`node ${process.version} (>= 18 required)`);
 
+  const own = ownPackage();
+  if (own) info(`crewbus ${own.version} (${own.name})`);
+  else info("crewbus version unknown (no package.json next to the CLI)");
+
   const meta = readJsonFile(path.join(root, "board.json"), null);
   if (meta && meta.version === 2) ok(`board at ${root} (v2)`);
   else no(`board at ${root}`, "run: crewbus init");
@@ -6801,7 +6805,15 @@ const REMOVED = new Set([
   "say", "messages", "sweep", "watch", "stats",
 ]);
 
-const USAGE = `crewbus — DM-only minimal bus for AI agent coordination (v2)
+const OWN = ownPackage();
+const USAGE = `crewbus — DM-only minimal bus for AI agent coordination (v2${OWN ? `; package ${OWN.name} ${OWN.version}` : ""})
+
+General:
+  crewbus --version | -v | version [--json]
+    print the installed package version; --json also reports name, node,
+    platform, and arch
+  crewbus --help | -h | help [command]
+    print this reference; append --help to any command for the same text
 
 Setup:
   crewbus init [--global] [--board <path>] [--force] [--no-opencode] [--portable]
@@ -6816,10 +6828,12 @@ Setup:
     Nothing else is widened.
   crewbus install-cli
     install standalone CLI wrapper to user PATH (~/.crewbus/bin)
-  crewbus update [--check] [--yes] [--version x.y.z]
-    self-update the global npm install to the registry latest
-    (--check reports only; needs --yes off-TTY; runs the published
-    install scripts — same trust as npm i -g @eamonpluto/crewbus)
+  crewbus update [--check] [--yes] [--version x.y.z] [--registry <url>]
+    self-update the global npm install from the public npm registry
+    (registry.npmjs.org), falling back to the scoped GitHub Packages mirror;
+    --registry <url> pins another registry. --check reports only;
+    needs --yes off-TTY; runs the published install scripts — same trust
+    as npm i -g crewbus
 
 Identity (first claim wins, token after that):
   crewbus register --from <you> [--session <opencode-session-id>] [--token <t>] [--expires-in <dur>] [--service] [--role <r>]
@@ -7954,6 +7968,50 @@ function cmpSemver(a, b) {
   return 0;
 }
 
+// Public npm first, then GitHub Packages as an optional mirror/fallback.
+// A user's .npmrc may pin a @scope to GitHub Packages — passing BOTH
+// --registry and --@scope:registry is what actually overrides that.
+const UPDATE_REGISTRIES = [
+  { label: "npm", url: "https://registry.npmjs.org/" },
+  { label: "GitHub Packages", url: "https://npm.pkg.github.com/" },
+];
+
+function npmRegistryArgs(name, registry) {
+  const args = ["--registry", registry];
+  if (name.startsWith("@") && name.includes("/")) args.push(`--${name.split("/")[0]}:registry=${registry}`);
+  return args;
+}
+
+function viewVersion(name, spec, registry, nodeShell) {
+  try {
+    const out = String(execFileSync(
+      "npm",
+      ["view", `${name}@${spec}`, "version", ...npmRegistryArgs(name, registry)],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 20000, shell: nodeShell }
+    ) || "");
+    const last = out.trim().split(/\r?\n/).map((s) => s.trim()).filter(Boolean).pop() || "";
+    return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(last) ? last : "";
+  } catch {
+    return "";
+  }
+}
+
+function cmdVersion(args) {
+  const own = ownPackage();
+  if (!own) fail("cannot determine the installed package version (no package.json next to the CLI) — reinstall with: npm i -g crewbus");
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({
+      name: own.name,
+      version: own.version,
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+    }, null, 2));
+    return;
+  }
+  console.log(`crewbus ${own.version} (${own.name})`);
+}
+
 function cmdUpdate(args) {
   const checkOnly = args.includes("--check");
   const yes = args.includes("--yes");
@@ -7961,8 +8019,16 @@ function cmdUpdate(args) {
   if (wantRaw !== undefined && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(String(wantRaw).trim())) {
     fail(`--version must be a plain x.y.z version (got "${wantRaw}") — no tags, URLs, or ranges`);
   }
+  const registryRaw = getFlag(args, "--registry");
+  let registries = UPDATE_REGISTRIES;
+  if (registryRaw !== undefined) {
+    const url = String(registryRaw).trim();
+    if (!/^https?:\/\/\S+$/i.test(url)) fail(`--registry must be an http(s) URL (got "${registryRaw}")`);
+    registries = [{ label: "registry", url: url.endsWith("/") ? url : `${url}/` }];
+  }
+  const labelOf = (entry) => (entry.label === "registry" ? entry.url : entry.label);
   const own = ownPackage();
-  if (!own) fail("cannot determine the installed package (no package.json next to the CLI) — reinstall with: npm i -g @eamonpluto/crewbus");
+  if (!own) fail("cannot determine the installed package (no package.json next to the CLI) — reinstall with: npm i -g crewbus");
   try {
     if (fs.existsSync(path.join(own.dir, ".git"))) {
       fail(`running from a source checkout at ${own.dir} — update it with: git pull (npm would install the registry copy elsewhere; the global CLI is a separate install)`);
@@ -7971,39 +8037,58 @@ function cmdUpdate(args) {
     if (e && e.message && e.message.startsWith("running from a source checkout")) throw e;
   }
   // The user's own npm: registry, auth, proxy and cache all come from
-  // their npm config — never hardcoded here. shell:true on Windows so the
-  // npm.cmd shim resolves (same convention as probeBinary in lib/launch.js).
+  // their npm config except for the registries named here. shell:true on
+  // Windows so the npm.cmd shim resolves (same convention as probeBinary
+  // in lib/launch.js).
   const npmShell = process.platform === "win32";
   try {
     execFileSync("npm", ["--version"], { stdio: ["ignore", "pipe", "pipe"], timeout: 15000, shell: npmShell });
   } catch {
-    fail("npm was not found on PATH — install Node.js/npm first, or update manually: npm i -g @eamonpluto/crewbus@latest");
+    fail("npm was not found on PATH — install Node.js/npm first, or update manually: npm i -g crewbus@latest");
   }
-  let latest = "";
-  try {
-    latest = String(execFileSync("npm", ["view", `${own.name}@latest`, "version"], { stdio: ["ignore", "pipe", "pipe"], timeout: 30000, shell: npmShell }) || "").trim();
-  } catch {
-    latest = "";
+  const spec = wantRaw !== undefined ? String(wantRaw).trim() : "latest";
+  const found = [];
+  const failed = [];
+  const registryPackage = (entry) => (
+    entry.label === "GitHub Packages" && own.name === "crewbus"
+      ? "@eamonpluto/crewbus"
+      : own.name
+  );
+  for (const reg of registries) {
+    const name = registryPackage(reg);
+    const version = viewVersion(name, spec, reg.url, npmShell);
+    if (version) found.push({ ...reg, name, version });
+    else failed.push(labelOf(reg));
   }
-  if (!latest) fail(`could not reach the npm registry (offline?) — latest ${own.name} version unknown; retry with network, or install explicitly: npm i -g ${own.name}@<x.y.z>`);
+  if (found.length === 0) {
+    fail(`could not reach ${registries.map(labelOf).join(" or ")} (offline, auth, or package not published there) — latest ${own.name} version unknown; retry with network, or install explicitly: npm i -g ${own.name}@<x.y.z>`);
+  }
+  const latestEntry = found.slice().sort((a, b) => cmpSemver(b.version, a.version))[0];
+  const latest = latestEntry.version;
   const want = wantRaw !== undefined ? String(wantRaw).trim() : latest;
+  if (wantRaw !== undefined && !found.some((f) => f.version === want)) {
+    fail(`version ${want} of ${own.name} was not found on ${registries.map(labelOf).join(" or ")} (saw ${found.map((f) => f.version).join(", ")})`);
+  }
+  const targetEntry = wantRaw !== undefined
+    ? (found.find((f) => f.version === want) || latestEntry)
+    : latestEntry;
   const cmp = cmpSemver(own.version, want);
   if (cmp === 0) {
-    console.log(`crewbus ${own.version} installed${wantRaw !== undefined ? ` (requested ${want})` : `, ${latest} latest`} — already up to date [board n/a]`);
+    console.log(`crewbus ${own.version} installed${wantRaw !== undefined ? ` (requested ${want})` : `, ${latest} latest on ${labelOf(latestEntry)}`} — already up to date [board n/a]`);
     return;
   }
   if (cmp > 0 && wantRaw === undefined) {
-    console.log(`crewbus ${own.version} installed is newer than registry latest ${latest} (dev install?) — nothing to do [board n/a]`);
+    console.log(`crewbus ${own.version} installed is newer than registry latest ${latest} on ${labelOf(latestEntry)} (dev install?) — nothing to do [board n/a]`);
     return;
   }
   if (checkOnly) {
-    console.log(`crewbus ${own.version} installed, ${want} available — re-run without --check to update [board n/a]`);
+    console.log(`crewbus ${own.version} installed, ${want} available on ${labelOf(targetEntry)}${failed.length ? ` (unreachable: ${failed.join(", ")})` : ""} — re-run without --check to update [board n/a]`);
     return;
   }
   const direction = cmp < 0 ? "upgrade" : "downgrade";
   if (!yes) {
     if (process.stdin && process.stdin.isTTY) {
-      process.stderr.write(`This ${direction}s ${own.name} ${own.version} → ${want} via "npm install -g" (runs the published package's install scripts). Type "yes" to continue: `);
+      process.stderr.write(`This ${direction}s ${own.name} ${own.version} → ${want} via "npm install -g" from ${labelOf(targetEntry)} (runs the published package's install scripts). Type "yes" to continue: `);
       let answer = "";
       try {
         answer = String(fs.readFileSync(0, "utf8") || "").trim().toLowerCase();
@@ -8013,21 +8098,42 @@ function cmdUpdate(args) {
       fail(`refusing to self-update non-interactively without --yes (npm install -g executes the published package's install scripts) — re-run with --yes to confirm`);
     }
   }
-  console.log(`${direction === "upgrade" ? "Updating" : "Downgrading"} ${own.name} ${own.version} → ${want} (npm install -g ${own.name}@${want})…`);
-  try {
-    execFileSync("npm", ["install", "-g", `${own.name}@${want}`], { stdio: "inherit", timeout: 300000, shell: npmShell });
-  } catch (e) {
-    const detail = String((e && e.message) || e);
-    const busy = /EBUSY|EPERM/i.test(detail);
-    fail(`npm install failed: ${detail.slice(0, 300)}${busy ? " — close running crewbus processes (web/serve/listen/watchers holding the install open) and retry" : ""}`);
+  // Install from registries that actually report the wanted version; if one
+  // fails (auth, outage), the other may still have the same release.
+  const targets = found.filter((f) => cmpSemver(f.version, want) === 0);
+  if (targets.length === 0) fail(`no reachable registry reports ${own.name}@${want} — run "crewbus update --check" to see what is available`);
+  let lastDetail = "";
+  let installedFrom = "";
+  for (const target of targets) {
+    console.log(`${direction === "upgrade" ? "Updating" : "Downgrading"} ${own.name} ${own.version} → ${want} via ${labelOf(target)} (npm install -g ${target.name}@${want})…`);
+    try {
+      execFileSync("npm", ["install", "-g", `${target.name}@${want}`, ...npmRegistryArgs(target.name, target.url)], { stdio: "inherit", timeout: 300000, shell: npmShell });
+      installedFrom = labelOf(target);
+      break;
+    } catch (e) {
+      lastDetail = String((e && e.message) || e);
+      const rest = targets.filter((t) => t !== target);
+      if (rest.length > 0) console.error(`crewbus: npm install from ${labelOf(target)} failed — trying ${labelOf(rest[0])}`);
+    }
   }
-  console.log(`updated to ${want} — this process is still the old code: restart your terminal (and any crewbus web/serve/listen processes), then re-run init --force in your projects to refresh harness wiring [board n/a]`);
+  if (!installedFrom) {
+    const busy = /EBUSY|EPERM/i.test(lastDetail);
+    fail(`npm install failed: ${lastDetail.slice(0, 300)}${busy ? " — close running crewbus processes (web/serve/listen/watchers holding the install open) and retry" : ""}`);
+  }
+  console.log(`updated to ${want} from ${installedFrom} — this process is still the old code: restart your terminal (and any crewbus web/serve/listen processes), then re-run init --force in your projects to refresh harness wiring [board n/a]`);
 }
 
 async function main() {
   const [, , cmd, ...rest] = process.argv;
   if (REMOVED.has(cmd)) {
     fail(`"${cmd}" was removed in v2 DM-only — use "send --from A --to B --body ..." (+ inbox/listen). See --help.`);
+  }
+  if (cmd !== undefined && (rest.includes("--help") || rest.includes("-h"))) {
+    console.log(USAGE);
+    return;
+  }
+  if (cmd === "--version" || cmd === "-v" || cmd === "-V" || cmd === "version") {
+    return cmdVersion(rest);
   }
   switch (cmd) {
     case "init": return cmdInit(rest);

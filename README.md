@@ -1,6 +1,7 @@
-# crewbus v11.2.1 — DM bus
+# crewbus v11.3.0 — DM bus
 
 [![CI](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml/badge.svg)](https://github.com/eamonpluto/crewbus/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/crewbus.svg)](https://www.npmjs.com/package/crewbus)
 
 Primary audience: developers running **mixed-harness crews** (opencode,
 Claude Code, Codex, Antigravity, grok-build, Cursor, Qwen Code) who want agents to
@@ -21,12 +22,19 @@ Node 18+ from anywhere:
 node $REPO/bin/crewbus.js <command>
 ```
 
-Or install globally from private GitHub Packages (authenticate npm with a
-token that has `read:packages` first):
+Or install globally from npm (public; a scoped GitHub Packages mirror is
+published as `@eamonpluto/crewbus`):
 
 ```sh
-npm i -g @eamonpluto/crewbus
+npm i -g crewbus
+crewbus --version
 crewbus --help
+```
+
+```sh
+# update later
+crewbus update --check
+crewbus update
 ```
 
 Or from a local checkout (dev alternative):
@@ -52,7 +60,7 @@ env overrides below.)
 Layout: `board.json`, `agents/<name>.json`, `dm/<recipient>/<id>.json`,
 `delivered/<recipient>/<id>.json` (push markers, written by the plugin).
 
-Versions: `package.json` (currently 11.2.1) is the source of truth for the
+Versions: `package.json` (currently 11.3.0) is the source of truth for the
 release version. `board.json`'s `version: 2` is the **board schema version**
 (a different number on purpose — do not "align" them). New to the project?
 Start with `docs/QUICKSTART.md` (5 minutes).
@@ -559,7 +567,7 @@ Stop envelope is verified against the Claude, Codex, and grok-build docs
 Or install globally (enables portable `init --portable` wiring):
 
 ```powershell
-npm i -g @eamonpluto/crewbus
+npm i -g crewbus
 crewbus --help
 ```
 
@@ -681,10 +689,17 @@ primaries by weight (`serve --weight`, `crew survey`, `crew dispatch`
 ## Publishing (maintainer)
 
 ```powershell
-npm test          # 24 suites (smoke + harness + opencode-respawn + compact + tokenfile + digest + workbench + control-plane + launch + pair-api + web-launch + web-panel + web-approot + client-runtime + runtime-wiring + mobile-client + holds-quotas + grok-hooks + approval-protocol + approvals-init + approvals-web + fault-injection + integration), all must pass
-# publish via GitHub Actions -> "Publish to GitHub Packages" (workflow_dispatch)
-# local fallback: npm publish (needs a write:packages token in NODE_AUTH_TOKEN)
+npm test          # all 29 suites must pass
+npm run pack:check
+# publish both registries via GitHub Actions -> "Publish" (workflow_dispatch or a v* tag)
+# local fallback (needs publish credentials):
+npm run publish:npm      # registry.npmjs.org (npm login or token in your user ~/.npmrc)
+npm run publish:github   # scoped mirror @eamonpluto/crewbus (NODE_AUTH_TOKEN with write:packages)
 ```
+
+The npm publish also runs with `--provenance` in CI (public repo + `id-token:
+write`). A `v*` tag must match `package.json` or the workflow fails before
+publishing.
 
 `sync-embeds.mjs` (repo root, dev-only) re-embeds
 `opencode/tools/dm-send.js` + `opencode/plugins/dm-watch.js` into
@@ -697,4 +712,4 @@ logic lives in `bin/lib/` (13 modules). See `docs/SPLIT.md` for the module
 map, dependency rules, and how to add a command.
 
 After publishing, projects can skip the checkout entirely:
-`npm i -g @eamonpluto/crewbus` then `crewbus init --harness <name> --portable`.
+`npm i -g crewbus` then `crewbus init --harness <name> --portable`.

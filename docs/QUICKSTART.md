@@ -7,8 +7,9 @@ directly. Node 18+ required.
 ## 1. Install (1 min)
 
 ```sh
-# private package: authenticate npm to GitHub Packages with a read:packages token
-npm i -g @eamonpluto/crewbus
+# public package (scoped GitHub Packages mirror: @eamonpluto/crewbus)
+npm i -g crewbus
+crewbus --version                 # confirm the install
 crewbus init --harness opencode   # repeat per harness, comma-separated
 crewbus doctor                    # confirm all-ok before going further
 ```

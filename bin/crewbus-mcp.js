@@ -33,7 +33,17 @@ import { execFileSync } from "node:child_process";
 const MAX_BODY_CHARS = 8000;
 const MAX_RECIPIENTS = 10000;
 const BROADCAST_AFTER = 20;
-const SERVER_VERSION = "2.3.0";
+
+function packageVersion() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    return typeof pkg.version === "string" ? pkg.version : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+const SERVER_VERSION = packageVersion();
 const KNOWN_PROTOCOL_VERSIONS = new Set(["2024-11-05", "2025-03-26", "2025-06-18"]);
 
 // ---------------------------------------------------------------------------
@@ -1398,6 +1408,22 @@ function handleMessage(msg) {
   } catch (e) {
     if (id !== undefined) replyError(id, -32603, String((e && e.message) || e));
   }
+}
+
+const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`crewbus-mcp ${SERVER_VERSION} — zero-dependency stdio MCP server for crewbus
+
+Usage:
+  node bin/crewbus-mcp.js [--version] [--help]
+
+The server speaks newline-delimited JSON-RPC on stdio (MCP). Board resolution:
+CREWBUS_DIR wins, else <cwd>/.crewbus (walking up).`);
+  process.exit(0);
+}
+if (argv.includes("--version") || argv.includes("-v") || argv.includes("-V")) {
+  console.log(`crewbus-mcp ${SERVER_VERSION}`);
+  process.exit(0);
 }
 
 const rl = readline.createInterface({ input: process.stdin, terminal: false });

@@ -17,10 +17,10 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 echo "==> Installing crewbus globally via npm..."
-# Private package: npm must be authenticated to GitHub Packages (read:packages).
-npm install -g @eamonpluto/crewbus
+# Public package (scoped GitHub Packages mirror: @eamonpluto/crewbus).
+npm install -g crewbus
 
-echo "==> Successfully installed crewbus."
+echo "==> Successfully installed $(crewbus --version)."
 echo ""
 echo "Run 'crewbus web --open' to start the web dashboard."
 echo "Run 'crewbus --help' for the CLI reference."

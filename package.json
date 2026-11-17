@@ -1,8 +1,22 @@
 {
-  "name": "@eamonpluto/crewbus",
-  "version": "11.2.1",
+  "name": "crewbus",
+  "version": "11.3.0",
   "description": "Zero-dependency message bus for AI coding-agent crews: message another agent, inserted into context, just a tool call.",
   "type": "module",
+  "keywords": [
+    "ai",
+    "agents",
+    "multi-agent",
+    "message-bus",
+    "mcp",
+    "cli",
+    "orchestration",
+    "developer-tools",
+    "coding-agents",
+    "opencode",
+    "claude-code",
+    "codex"
+  ],
   "bin": {
     "crewbus": "bin/crewbus.js",
     "crewbus-mcp": "bin/crewbus-mcp.js",
@@ -12,7 +26,11 @@
     "test": "node test/crewbus.smoke.mjs && node test/crewbus.kidproc.mjs && node test/crewbus.recover.mjs && node test/crewbus.harness.mjs && node test/crewbus.lead-assign.mjs && node test/crewbus.lead-budget.mjs && node test/crewbus.channel-member.mjs && node test/crewbus.inbox-archive.mjs && node test/crewbus.opencode-respawn.mjs && node test/crewbus.compact.mjs && node test/crewbus.tokenfile.mjs && node test/crewbus.digest.mjs && node test/crewbus.workbench.mjs && node test/crewbus.control-plane.mjs && node test/crewbus.launch.mjs && node test/crewbus.web-launch.mjs && node test/crewbus.pair-api.mjs && node test/crewbus.web-panel.mjs && node test/crewbus.web-approot.mjs && node test/crewbus.client-runtime.mjs && node test/crewbus.runtime-wiring.mjs && node test/crewbus.mobile-client.mjs && node test/crewbus.grok-hooks.mjs && node test/crewbus.holds-quotas.mjs && node test/crewbus.approval-protocol.mjs && node test/crewbus.approvals-init.mjs && node test/crewbus.approvals-web.mjs && node test/fault-injection.mjs && node test/integration.mjs",
     "bench": "node test/bench.mjs",
     "bench:load": "node test/load.mjs",
-    "vendor": "node scripts/vendor-runtime.mjs"
+    "vendor": "node scripts/vendor-runtime.mjs",
+    "prepack": "node sync-embeds.mjs --check",
+    "pack:check": "npm pack --dry-run",
+    "publish:npm": "npm publish --access public --registry https://registry.npmjs.org/",
+    "publish:github": "node scripts/publish-github.mjs"
   },
   "files": [
     "bin/",
@@ -39,8 +57,12 @@
   },
   "license": "MIT",
   "author": "eamonpluto",
+  "funding": {
+    "type": "custom",
+    "url": "https://www.paypal.me/cifwep"
+  },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org/"
   },
   "repository": {
     "type": "git",

@@ -17,6 +17,9 @@ const check = (label, cond) => {
 const runHook = (args, env) =>
   execFileSync("node", [HOOK, ...args], { env: { ...process.env, ...env } }).toString();
 
+const hookPkgVersion = JSON.parse(fs.readFileSync(path.join(HERE, "..", "package.json"), "utf8")).version;
+check("hook: --version prints package version", runHook(["--version"], {}).trim() === `crewbus-hook ${hookPkgVersion}`);
+
 // identity card on a plain registered agent
 const board = fs.mkdtempSync(path.join(os.tmpdir(), "cb-compact-"));
 fs.mkdirSync(path.join(board, "agents"), { recursive: true });

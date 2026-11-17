@@ -1,5 +1,30 @@
 # Changelog
 
+## 11.3.0
+
+Standard package polish and public npm publishing.
+
+- `crewbus --version`, `-v`, and `crewbus version [--json]` print the installed
+  package version. `crewbus <command> --help` prints the reference and exits 0
+  instead of running the command.
+- `crewbus update` now checks the public npm registry and GitHub Packages,
+  picks the highest release, and installs with an explicit registry (plus a
+  scoped-registry override) so a user `.npmrc` cannot silently point at the
+  wrong place. `--registry <url>` pins a single registry; if the first install
+  registry fails, the other is tried for the same version. `--check` output
+  names the registry that has the release.
+- `crewbus-mcp` and `crewbus-hook` gained `--version`/`--help`; the MCP server
+  no longer waits on stdio for those flags, and `serverInfo.version` now reads
+  `package.json` instead of the stale hardcoded `2.3.0`.
+- `crewbus doctor` reports the installed crewbus package version.
+- Public npm (`crewbus`) is now the canonical registry; GitHub Packages keeps
+  a scoped `@eamonpluto/crewbus` mirror. `publishConfig.registry` defaults to
+  npm; npm publishes use `--access public`. Added keywords/funding,
+  `pack:check`, and `publish:npm`/`publish:github` scripts, plus a "Publish"
+  workflow for both registries (npm with provenance).
+- README, quickstart, documentation, site, installers, and version references
+  now describe the unscoped public npm package instead of the scoped name.
+
 ## 11.2.1
 
 Kill robustness on Windows.

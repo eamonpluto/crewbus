@@ -60,6 +60,15 @@ function fail(msg, code = 1) {
   process.exit(code);
 }
 
+function packageVersion() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    return typeof pkg.version === "string" ? pkg.version : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
 function boardDir(args) {
   const i = args.indexOf("--board");
   if (i !== -1 && args[i + 1] && !String(args[i + 1]).startsWith("--")) return path.resolve(args[i + 1]);
@@ -549,12 +558,20 @@ async function main() {
       return await cmdMonitor(rest);
     case "compact":
       return await cmdCompact(rest);
+    case "--version":
+    case "-v":
+    case "-V":
+    case "version":
+      console.log(`crewbus-hook ${packageVersion()}`);
+      return;
     case undefined:
     case "-h":
     case "--help":
     case "help":
       console.log(
         "crewbus-hook — hook helper\n\n" +
+          "  crewbus-hook --version | -v\n" +
+          "    print the installed package version\n" +
           "  crewbus-hook session-start --from <you> [--board <path>]\n" +
           "  crewbus-hook poll --from <you> --style claude|codex|grok|antigravity-stop|antigravity-pre|qwen [--idle-after <sec>] [--board <path>]\n" +
           "    (max 5 messages per poll; --idle-after skips unless that long since last delivery)\n" +

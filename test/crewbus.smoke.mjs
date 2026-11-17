@@ -59,6 +59,17 @@ const check = (label, cond) => {
   if (!cond) failures++;
 };
 
+// 0. package version + help flags (no board needed)
+const pkgJson = JSON.parse(fs.readFileSync(path.join(path.dirname(CLI), "..", "package.json"), "utf8"));
+const verOut = run(["--version"]).trim();
+check("--version prints package version", verOut === `crewbus ${pkgJson.version} (${pkgJson.name})`);
+check("-v matches --version", run(["-v"]).trim() === verOut);
+const verJson = JSON.parse(run(["version", "--json"]));
+check("version --json matches package.json", verJson.version === pkgJson.version && verJson.name === pkgJson.name);
+const helpOut = run(["send", "--help"]);
+check("command --help prints usage", helpOut.includes("General:") && helpOut.includes("crewbus update"));
+check("command --help exits 0", true);
+
 // 1. board layout v2
 run(["init", "--board", board]);
 const meta = JSON.parse(fs.readFileSync(path.join(board, "board.json"), "utf8"));
@@ -1679,8 +1690,14 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   fs.writeFileSync(fakeNpm, [
     'import fs from "node:fs";',
     'const args = process.argv.slice(2);',
+    'const reg = args.includes("--registry") ? args[args.indexOf("--registry") + 1] : "";',
     'if (args[0] === "--version") { console.log("10.0.0"); }',
-    'else if (args[0] === "view") { console.log("10.9.9"); }',
+    'else if (args[0] === "view") {',
+    '  if (process.env.FAKE_NPM_FAIL && reg.includes(process.env.FAKE_NPM_FAIL)) process.exit(1);',
+    '  const spec = String(args[1] || "");',
+    '  const v = spec.includes("@") ? spec.slice(spec.lastIndexOf("@") + 1) : "";',
+    '  console.log(v === "latest" ? "10.9.9" : v);',
+    '}',
     'else if (args[0] === "install") { fs.appendFileSync(process.env.FAKE_NPM_LOG, args.join(" ") + "\\n"); }',
     'else { console.error("unexpected npm args: " + args.join(" ")); process.exit(9); }',
     '',
@@ -1693,7 +1710,7 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   const updEnv = { ...process.env, PATH: stubDir + path.delimiter + process.env.PATH, FAKE_NPM_LOG: npmLog, CREWBUS_DIR: path.join(updRoot, "board") };
   delete updEnv.CREWBUS_AGENT;
   delete updEnv.CREWBUS_TOKEN;
-  const updRun = (args) => execFileSync("node", [updCli, ...args], { env: updEnv }).toString();
+  const updRun = (args, extraEnv) => execFileSync("node", [updCli, ...args], { env: { ...updEnv, ...(extraEnv || {}) } }).toString();
   const loggedInstalls = () => fs.readFileSync(npmLog, "utf8");
   const updFails = (label, args) => {
     let bad = false;
@@ -1707,6 +1724,7 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   check("update: --check installs nothing", !loggedInstalls().includes("install"));
   const yes = updRun(["update", "--yes"]);
   check("update: --yes installs latest globally", loggedInstalls().includes("install -g crewbus-test-pkg@10.9.9"));
+  check("update: install pins the public npm registry", loggedInstalls().includes("--registry https://registry.npmjs.org/"));
   check("update: post-install restart note", yes.includes("still the old code") && yes.includes("init --force"));
   updFails("update: bare run refuses without --yes off-TTY", ["update"]);
   const same = updRun(["update", "--version", "9.9.9"]);
@@ -1714,6 +1732,10 @@ fs.rmSync(secBoard, { recursive: true, force: true });
   updFails("update: bad --version rejected", ["update", "--version", "abc"]);
   const down = updRun(["update", "--version", "8.0.0", "--yes"]);
   check("update: explicit downgrade honored", down.includes("Downgrading") && loggedInstalls().includes("install -g crewbus-test-pkg@8.0.0"));
+  const customCheck = updRun(["update", "--check", "--registry", "https://registry.example.test/"]);
+  check("update: --registry selects a single registry", customCheck.includes("https://registry.example.test/"));
+  const ghFallback = updRun(["update", "--check"], { FAKE_NPM_FAIL: "registry.npmjs.org" });
+  check("update: falls back when npm is unreachable", ghFallback.includes("10.9.9") && ghFallback.includes("GitHub Packages"));
   fs.writeFileSync(updPkg, JSON.stringify({ name: "crewbus-test-pkg", version: "99.0.0", type: "module" }));
   const newer = updRun(["update", "--check"]);
   check("update: newer-than-registry installs nothing", newer.includes("newer than registry") && !loggedInstalls().includes("@99.0.0"));
