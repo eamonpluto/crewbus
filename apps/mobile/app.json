@@ -18,7 +18,8 @@
         {
           "cameraPermission": "CrewBus scans the one-time pairing QR shown by your desktop or relay (crewbus://pair). The camera is never used otherwise."
         }
-      ]
+      ],
+      "./plugins/withCleartextTraffic.cjs"
     ],
     "ios": {
       "bundleIdentifier": "com.crewbus.mobile",
