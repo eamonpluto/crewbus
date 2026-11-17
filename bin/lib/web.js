@@ -16,17 +16,18 @@ import fs from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import http from "node:http";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, readBoardMeta, writeBoardMeta, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS } from "./store.js";
-import { readAgent, agentTokenMatches, authorizeCheck, ensureOrchestrator, mintToken, newSalt, hashToken, touchAgent } from "./identity.js";
+import { boardDir, requireBoard, getFlag, fail, writeJson, listJson, cleanWebName, readJson, readBoardMeta, writeBoardMeta, gitRevForBoard, newId, MAX_SPAWN, MAX_BODY_CHARS, writeExclusiveJson } from "./store.js";
+import { readAgent, agentTokenMatches, authorizeCheck, ensureOrchestrator, mintToken, newSalt, hashToken, touchAgent, timingSafeEqualStr } from "./identity.js";
 import { readDMs, readVisible, ackedIds, ackedIdSet, findMessageById, deliverDMs, parseRecipients } from "./mail.js";
 import { workerStatus, pidAlive, killWorkers, bootWorker, buildSpawnPrompt, buildSpawnTarget, formatSpawnCmd, installCliToUserPath, ensureBoardCliShim, buildOrchestratorPrompt, provisionOrchestrator,
            ORCHESTRATOR_NAME, isPidStale, parseModelList, modelForIndex } from "./spawn.js";
 import { groupTelemetryData, collectBatch, gatherTelemetry, listBatches } from "./groups.js";
 import { httpJson } from "./sync.js";
 import { readChainRecords, verifyChainRecords, appendChainRecord, readHold, readBoardQuotas } from "./export.js";
-import { launchDrivers, detectHarnessBinaries, validateLaunchPlan, advertiseEnv, buildPairUrl, HARNESS_MODELS, getDiscoveredModels, refreshDiscoveredModels } from "./launch.js";
-import { newPairToken, pairingPath, readRelayState } from "./relay.js";
+import { launchDrivers, detectHarnessBinaries, validateLaunchPlan, advertiseEnv, buildPairUrl, HARNESS_MODELS, getDiscoveredModels, refreshDiscoveredModels, PAIR_SCOPES } from "./launch.js";
+import { newPairToken, pairingPath, readRelayState, newDeviceCred, devicePath } from "./relay.js";
 
 export function escapeHtml(s) {
   return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, (c) => ({
@@ -2573,10 +2574,21 @@ export async function handleWebDashboardRoute(req, res, url, d) {
       fs.mkdirSync(path.join(d.root, "pairing"), { recursive: true });
       writeJson(pairingPath(d, doc.tokenHash), doc);
       try { appendChainRecord(d, ORCHESTRATOR_NAME, "pair", { label: "dashboard-oneclick", expiresAt: doc.expiresAt }); } catch {}
-      const envId = (readRelayState(d) && readRelayState(d).envId) || ("board:" + path.basename(d.root));
-      const pairUrl = buildPairUrl({ envId, routes: [], caps: ["hlc", "tombstones", "channels", "revoked", "holds", "launch"], pairToken: token });
+      const relayDoc = readRelayState(d);
+      const envId = (relayDoc && relayDoc.envId) || ("board:" + path.basename(d.root));
+      let routes = (relayDoc && Array.isArray(relayDoc.advertisedRoutes) && relayDoc.advertisedRoutes.length > 0)
+        ? relayDoc.advertisedRoutes
+        : [];
+      if (routes.length === 0) {
+        const port = req.socket.localPort || 8471;
+        routes = localNetworkRoutes(port);
+      }
+      if (routes.length === 0 && req.headers.host && !req.headers.host.startsWith("localhost") && !req.headers.host.startsWith("127.")) {
+        routes.push(`http://${req.headers.host}`);
+      }
+      const pairUrl = buildPairUrl({ envId, routes, caps: ["hlc", "tombstones", "channels", "revoked", "holds", "launch"], pairToken: token });
       res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-      res.end(JSON.stringify({ ok: true, pairUrl, expiresAt: doc.expiresAt, envId }));
+      res.end(JSON.stringify({ ok: true, pairUrl, expiresAt: doc.expiresAt, envId, routes }));
     } catch (err) {
       res.writeHead(500, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
       res.end(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
@@ -2586,17 +2598,32 @@ export async function handleWebDashboardRoute(req, res, url, d) {
   return false;
 }
 
+export function localNetworkRoutes(port) {
+  const routes = [];
+  try {
+    const ifaces = os.networkInterfaces();
+    for (const list of Object.values(ifaces)) {
+      for (const item of list || []) {
+        if (item.family === "IPv4" && !item.internal && item.address && !item.address.startsWith("169.254.") && !item.address.startsWith("127.")) {
+          routes.push(`http://${item.address}:${port}`);
+        }
+      }
+    }
+  } catch {}
+  return routes;
+}
+
 export async function cmdWeb(args) {
   const root = boardDir(args);
   const d = requireBoard(root);
   ensureBoardCliShim(d);
-  const host = getFlag(args, "--host") || "127.0.0.1";
+  const host = getFlag(args, "--host") || "0.0.0.0";
   const port = Number(getFlag(args, "--port") || 0);
   // Same local auto-provision as `serve`: the board's single orchestrator is
   // ensured on boot (minted on first use, token at logs/orchestrator.token).
   try { ensureOrchestrator(d); } catch {}
   if (!(port >= 0 && port < 65536)) fail("--port must be 0-65535 (0 = random)");
-  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1") {
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "::1" && host !== "0.0.0.0") {
     process.stderr.write(`crewbus: warning: binding non-local ${host} — the dashboard has no auth, anyone who can reach it can read the board\n`);
   }
   const server = http.createServer((req, res) => {
@@ -2616,6 +2643,144 @@ export async function cmdWeb(args) {
         }
         if (await handleWebDashboardRoute(req, res, url, d)) return;
         if (serveBrandAsset(req, res, url.pathname)) return;
+        if (req.method === "GET" && url.pathname === "/healthz") {
+          const s = readRelayState(d);
+          const uptimeSec = Math.floor(process.uptime());
+          const port = req.socket.localPort || 8471;
+          const routes = localNetworkRoutes(port);
+          res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+          res.end(JSON.stringify({
+            role: (s && s.role) || "dashboard",
+            weight: 100,
+            workers: 0,
+            advertisedRoutes: (s && Array.isArray(s.advertisedRoutes) && s.advertisedRoutes.length > 0) ? s.advertisedRoutes : routes,
+            uptimeSec,
+          }));
+          return;
+        }
+        if (req.method === "POST" && url.pathname === "/api/pair/exchange") {
+          const s = readRelayState(d);
+          if (s && s.role === "standby") {
+            res.writeHead(503, { "content-type": "application/json; charset=utf-8", "x-relay-role": "standby" });
+            res.end(JSON.stringify({ error: "standby relay: writes refused", role: "standby" }));
+            return;
+          }
+          if (!String(req.headers["content-type"] || "").includes("application/json")) {
+            res.writeHead(415, { "content-type": "application/json; charset=utf-8" });
+            res.end(JSON.stringify({ error: "content-type must be application/json" }));
+            return;
+          }
+          const chunks = [];
+          let size = 0;
+          let tooBig = false;
+          req.on("data", (c) => {
+            size += c.length;
+            if (size <= 65536) chunks.push(c);
+            else tooBig = true;
+          });
+          req.on("end", () => {
+            try {
+              if (tooBig) {
+                res.writeHead(413, { "content-type": "application/json; charset=utf-8" });
+                res.end(JSON.stringify({ error: "body too large (max 64KB)" }));
+                return;
+              }
+              let body = null;
+              try {
+                body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+              } catch {
+                res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+                res.end(JSON.stringify({ error: "invalid JSON body" }));
+                return;
+              }
+              const presented = String((body && body.pairToken) || "");
+              const label = String((body && body.label) || "").slice(0, 80);
+              let requested = null;
+              if (body && body.scopes !== undefined && body.scopes !== null) {
+                if (!Array.isArray(body.scopes)) {
+                  res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+                  res.end(JSON.stringify({ error: "scopes must be an array" }));
+                  return;
+                }
+                requested = [];
+                for (const sc of body.scopes) {
+                  const c = String(sc).trim();
+                  if (!PAIR_SCOPES.includes(c)) {
+                    res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+                    res.end(JSON.stringify({ error: `unknown scope "${c.slice(0, 60)}" (want ${PAIR_SCOPES.join("|")})` }));
+                    return;
+                  }
+                  if (!requested.includes(c)) requested.push(c);
+                }
+              }
+              let rec = null;
+              let recPath = null;
+              try {
+                const dir = path.join(d.root, "pairing");
+                for (const f of fs.readdirSync(dir)) {
+                  if (!f.endsWith(".json") || f.endsWith(".used.json")) continue;
+                  try {
+                    const pdoc = readJson(path.join(dir, f));
+                    if (pdoc && pdoc.tokenHash && pdoc.salt && timingSafeEqualStr(hashToken(presented, String(pdoc.salt)), String(pdoc.tokenHash))) {
+                      rec = pdoc;
+                      recPath = path.join(dir, f);
+                      break;
+                    }
+                  } catch {}
+                }
+              } catch {}
+              if (!rec) {
+                res.writeHead(403, { "content-type": "application/json; charset=utf-8" });
+                res.end(JSON.stringify({ error: "unknown pairing token" }));
+                return;
+              }
+              if (Date.parse(rec.expiresAt) <= Date.now()) {
+                res.writeHead(403, { "content-type": "application/json; charset=utf-8" });
+                res.end(JSON.stringify({ error: "pairing token expired" }));
+                return;
+              }
+              const granted = Array.isArray(rec.scopes) ? rec.scopes : null;
+              if (requested !== null && granted !== null) {
+                const wider = requested.filter((s) => !granted.includes(s));
+                if (wider.length > 0) {
+                  res.writeHead(403, { "content-type": "application/json; charset=utf-8" });
+                  res.end(JSON.stringify({ error: `scope widen refused (not granted: ${wider.join(",")})` }));
+                  return;
+                }
+              }
+              const usedPath = recPath.replace(/\.json$/, ".used.json");
+              if (!writeExclusiveJson(usedPath, { at: new Date().toISOString(), label })) {
+                res.writeHead(403, { "content-type": "application/json; charset=utf-8" });
+                res.end(JSON.stringify({ error: "pairing token already used" }));
+                return;
+              }
+              const dc = newDeviceCred();
+              const salt = newSalt();
+              fs.mkdirSync(path.join(d.root, "devices"), { recursive: true });
+              writeJson(devicePath(d, dc.id), {
+                id: dc.id, label, secretHash: hashToken(dc.secret, salt), salt,
+                createdBy: rec.createdBy || "", createdAt: new Date().toISOString(),
+                lastSeen: "", revoked: false,
+                scopes: requested !== null ? requested : granted,
+              });
+              try {
+                appendChainRecord(d, "relay", "device-issue", { id: dc.id, label, by: rec.createdBy || "" });
+              } catch {}
+              res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+              res.end(JSON.stringify({ deviceId: dc.id, credential: dc.cred }));
+            } catch (err) {
+              res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+              res.end(JSON.stringify({ error: `exchange failed: ${(err && err.message) || err}` }));
+            }
+          });
+          req.on("error", () => {
+            try {
+              res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+              res.end(JSON.stringify({ error: "unreadable body" }));
+            } catch {}
+          });
+          return;
+        }
         if (req.method === "POST" && url.pathname === "/api/kill") {
           // JSON-only (browsers preflight this; simple CSRF forms can't reach
           // it), token-checked like the CLI. Same trust zone as the board.
@@ -2660,12 +2825,22 @@ export async function cmdWeb(args) {
           return;
         }
         if (req.method === "GET" && url.pathname === "/api/routes") {
-          // Control-plane M1: reachability hints. The local dashboard is not
-          // a relay, so routes are empty — pair via `relay pair qr` on the
-          // relay instead. Same shape as the relay's /api/routes.
-          const envId = `board:${path.basename(d.root)}`;
+          // Control-plane M1: reachability hints. The local dashboard exposes
+          // LAN/relay routes so paired clients can reach it.
+          const relayDoc = readRelayState(d);
+          const envId = (relayDoc && relayDoc.envId) || `board:${path.basename(d.root)}`;
+          let routes = (relayDoc && Array.isArray(relayDoc.advertisedRoutes) && relayDoc.advertisedRoutes.length > 0)
+            ? relayDoc.advertisedRoutes
+            : [];
+          if (routes.length === 0) {
+            const effectivePort = req.socket.localPort || 8471;
+            routes = localNetworkRoutes(effectivePort);
+          }
+          if (routes.length === 0 && req.headers.host && !req.headers.host.startsWith("localhost") && !req.headers.host.startsWith("127.")) {
+            routes.push(`http://${req.headers.host}`);
+          }
           res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-          res.end(JSON.stringify(advertiseEnv({ envId, routes: [], capabilities: ["hlc", "tombstones", "channels", "revoked", "holds", "launch"] })));
+          res.end(JSON.stringify(advertiseEnv({ envId, routes, capabilities: ["hlc", "tombstones", "channels", "revoked", "holds", "launch"] })));
           return;
         }
         if (req.method === "POST" && url.pathname === "/api/launch") {
@@ -2713,7 +2888,10 @@ export async function cmdWeb(args) {
     server.on("error", reject);
     server.listen(port, host, () => {
       const a = server.address();
-      const shown = a && typeof a === "object" ? `${a.address}:${a.port}` : `${host}:${port}`;
+      const addr = a && typeof a === "object" ? a.address : host;
+      const effectivePort = a && typeof a === "object" ? a.port : port;
+      const displayHost = (addr === "0.0.0.0" || addr === "::" || addr === "0:0:0:0:0:0:0:0") ? "127.0.0.1" : addr;
+      const shown = `${displayHost}:${effectivePort}`;
       const webUrl = `http://${shown}`;
       console.log(`crewbus web at ${webUrl} [board ${d.root}]`);
       if (args.includes("--open")) {
