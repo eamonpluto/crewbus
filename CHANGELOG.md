@@ -1,5 +1,23 @@
 # Changelog
 
+## 11.3.1
+
+Mobile pairing over LAN and cleartext HTTP route support.
+
+- `crewbus web` now automatically detects active non-loopback IPv4 network
+  interfaces (e.g. `http://192.168.x.x:port`) and embeds them into one-click
+  mobile pairing QR codes (`crewbus://pair`) and `GET /api/routes`, so phone
+  apps scanning the QR code receive valid, reachable routes.
+- `crewbus web` binds to `0.0.0.0` by default so devices on the local Wi-Fi
+  network can connect, while maintaining loopback (`127.0.0.1`) display and
+  browser launch formatting.
+- `crewbus web` implements `GET /healthz` and `POST /api/pair/exchange` to
+  support direct mobile pairing and device credential provisioning without
+  requiring a standalone relay server.
+- Added `withCleartextTraffic` config plugin to `apps/mobile/app.json` so
+  standalone Android APKs permit cleartext HTTP traffic to local LAN relays
+  and dashboards.
+
 ## 11.3.0
 
 Standard package polish and public npm publishing.

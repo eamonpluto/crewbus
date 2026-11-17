@@ -16,12 +16,12 @@ with `node sync-embeds.mjs --check`.
 
 ## Versions (semver)
 
-- `package.json` `version` is the source of truth (currently 11.3.0).
+- `package.json` `version` is the source of truth (currently 11.3.1).
 - `board.json` `version: 2` is the **board schema version**, not the
   package version — do not "align" them; see README § Versions.
 - Add a `CHANGELOG.md` entry under `## Unreleased` for every user-visible
   change; maintainers fold it into a versioned section at release.
-- Tag releases `v<semver>` (e.g. `v11.3.0`) at the release commit.
+- Tag releases `v<semver>` (e.g. `v11.3.1`) at the release commit.
 - Publish: run `npm run pack:check`, then the "Publish" workflow (or
   `npm run publish:npm` / `npm run publish:github` locally). npm publishes
   unscoped `crewbus`; GitHub Packages carries the scoped
