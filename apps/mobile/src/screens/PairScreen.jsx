@@ -33,7 +33,11 @@ export function PairScreen({ ctx, navigation }) {
       const parsed = parsePairInput(data);
       setStatus(`pairing with env ${parsed.env || '(unknown)'}…`);
       const won = await walkPairRoutes(parsed.routes, ctx.connection.probe, { learned: ctx.connection.learned });
-      if (!won.ok) { setStatus(`no route worked (${won.reason}). Check relay.`); return; }
+      if (!won.ok) {
+        const detail = (won.attempts && won.attempts.find((a) => a.error))?.error || won.reason;
+        setStatus(`no route worked (${detail}). Check relay.`);
+        return;
+      }
       const api = ctx.apiFor(won.route);
       ctx.connection.updateRoutes(parsed.routes);
       const summary = await exchangeAndStore({

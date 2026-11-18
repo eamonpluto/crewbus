@@ -126,6 +126,9 @@ export async function walkRoutes(routes, probe, { allowLoopback = false, learned
     try {
       const res = await probe(route, index);
       verdict = !!res && res.ok !== false;
+      if (!verdict && res && typeof res === "object" && res.error) {
+        error = String(res.error);
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }

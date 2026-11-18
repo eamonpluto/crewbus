@@ -12,9 +12,13 @@ export function createHealthProbe({ fetchImpl = null, timeoutMs = DEFAULT_TIMEOU
   return async function probe(route) {
     try {
       const res = await fetchWithTimeout(impl, `${String(route).replace(/\/+$/, '')}/healthz`, { timeoutMs });
-      return { ok: res.ok };
-    } catch {
-      return { ok: false };
+      if (!res.ok) {
+        return { ok: false, error: `HTTP ${res.status}` };
+      }
+      return { ok: true, status: res.status };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
     }
   };
 }

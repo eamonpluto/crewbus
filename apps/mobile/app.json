@@ -3,7 +3,7 @@
     "name": "CrewBus Mobile",
     "slug": "crewbus-mobile",
     "scheme": "crewbus",
-    "version": "0.6.1",
+    "version": "0.6.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -35,7 +35,8 @@
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-foreground.png",
