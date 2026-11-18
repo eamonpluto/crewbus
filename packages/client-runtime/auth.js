@@ -167,22 +167,24 @@ export function createAuthStore({ secureStore = null, storeKey = "crewbus.device
   }
   let device = null; // { deviceId, credential, scopes, envId, label }
   const summary = () => device
-    ? { deviceId: device.deviceId, envId: device.envId, label: device.label, scopes: [...device.scopes] }
+    ? { deviceId: device.deviceId, envId: device.envId, label: device.label, scopes: [...device.scopes], routes: device.routes ? [...device.routes] : [] }
     : null;
   return {
     // Omitted scopes = full device grant (today's secret-equivalent).
-    async setDevice({ deviceId, credential, scopes, envId = "", label = "" }) {
+    async setDevice({ deviceId, credential, scopes, envId = "", label = "", routes = [] }) {
       if (!deviceId || typeof deviceId !== "string") throw new Error("deviceId required");
       if (!isDeviceCredential(credential)) throw new Error("device credential must be abd-…");
       const finalScopes = scopes === undefined ? [...getKnownScopes()] : validateScopes(scopes);
+      const safeRoutes = Array.isArray(routes) ? routes.filter((r) => typeof r === "string" && r.length > 0) : [];
       device = {
         deviceId,
         credential,
         scopes: Object.freeze(finalScopes),
         envId: String(envId ?? ""),
         label: String(label ?? ""),
+        routes: Object.freeze(safeRoutes),
       };
-      await backing.set(storeKey, JSON.stringify({ ...device, scopes: [...device.scopes] }));
+      await backing.set(storeKey, JSON.stringify({ ...device, scopes: [...device.scopes], routes: [...device.routes] }));
       return summary();
     },
 
@@ -227,12 +229,14 @@ export function createAuthStore({ secureStore = null, storeKey = "crewbus.device
       } catch {
         return null;
       }
+      const safeRoutes = Array.isArray(saved.routes) ? saved.routes.filter((r) => typeof r === "string" && r.length > 0) : [];
       device = {
         deviceId: saved.deviceId,
         credential: saved.credential,
         scopes: Object.freeze([...saved.scopes]),
         envId: saved.envId ?? "",
         label: saved.label ?? "",
+        routes: Object.freeze(safeRoutes),
       };
       return summary();
     },

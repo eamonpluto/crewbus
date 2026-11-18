@@ -18,11 +18,7 @@ export function BriefsScreen({ ctx, navigation }) {
   const [thread, setThread] = React.useState([]);
   const [status, setStatus] = React.useState('Load briefs from the Hub board.');
 
-  const currentApi = () => {
-    const route = ctx.connection.getState().route;
-    if (!route) throw new Error('no route connected — connect in Hub');
-    return ctx.apiFor(route);
-  };
+  const currentApi = () => (ctx.getApi ? ctx.getApi() : ctx.apiFor(ctx.connection.getState().route));
 
   const load = async () => {
     try {

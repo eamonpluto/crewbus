@@ -25,11 +25,7 @@ export function TriageScreen({ ctx, navigation }) {
   const [alert, setAlert] = React.useState(null);
   const [status, setStatus] = React.useState('Ready to sync inbox.');
 
-  const currentApi = () => {
-    const route = ctx.connection.getState().route;
-    if (!route) throw new Error('no route connected — connect in Hub');
-    return ctx.apiFor(route);
-  };
+  const currentApi = () => (ctx.getApi ? ctx.getApi() : ctx.apiFor(ctx.connection.getState().route));
   // Foreground watch while mounted (no push plugins per scaffold rule): approvals + dead workers alert + buzz.
   React.useEffect(() => {
     return startWatch({ getApi: () => currentApi(), agent: agent.trim() || 'mobile', onAlert: (a) => { buzz(); setAlert(a); } });

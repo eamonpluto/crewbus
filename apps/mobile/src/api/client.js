@@ -4,7 +4,7 @@
 //
 //   createApiClient({ baseUrl, getCredential, fetchImpl?, timeoutMs? })
 //     -> { baseUrl, fetchHealth, fetchRoutes, fetchBoard, fetchFleet,
-//          fetchInbox, fetchGather, fetchHarnesses, fetchDevices,
+//          fetchInbox, fetchGather, fetchHarnesses, fetchModels, fetchDevices,
 //          ack, approve, kill, launch, exchangePair }
 //
 // Rules: remote-only (loopback base URLs are REFUSED outright — there is no
@@ -74,6 +74,7 @@ export function createApiClient({ baseUrl, getCredential = () => null, fetchImpl
       return call(`/api/gather?batch=${encodeURIComponent(batch)}`);
     },
     fetchHarnesses() { return call('/api/harnesses'); },
+    fetchModels(refresh = false) { return call(`/api/models${refresh ? '?refresh=1' : ''}`); },
     fetchDevices({ from, agentToken }) {
       return call(`/api/pair/devices?from=${encodeURIComponent(from)}&token=${encodeURIComponent(agentToken)}`);
     },

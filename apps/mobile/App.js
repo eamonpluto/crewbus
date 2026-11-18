@@ -24,8 +24,21 @@ function buildContext() {
   const connection = createConnection({ initialRoutes: [] });
   const apiFor = (route) =>
     createApiClient({ baseUrl: route, getCredential: () => authStore.getCredential() });
+  const getApi = () => {
+    let route = connection.getState().route;
+    if (!route) {
+      const dev = authStore.getDevice();
+      if (dev && Array.isArray(dev.routes) && dev.routes.length > 0) {
+        route = connection.learned.preferred(dev.routes) || dev.routes[0];
+        connection.updateRoutes(dev.routes);
+        connection.connect().catch(() => null);
+      }
+    }
+    if (!route) throw new Error('no route connected — connect in Hub');
+    return apiFor(route);
+  };
   const queueWorker = createQueueWorker({ apiFor, connection });
-  return { authStore, cache, connection, apiFor, queueWorker };
+  return { authStore, cache, connection, apiFor, getApi, queueWorker };
 }
 
 const ctx = buildContext();
@@ -37,7 +50,12 @@ export default function App() {
       supervisor: ctx.connection.supervisor,
       cache: ctx.cache,
     });
-    ctx.authStore.restore().catch(() => null);
+    ctx.authStore.restore().then((dev) => {
+      if (dev && Array.isArray(dev.routes) && dev.routes.length > 0) {
+        ctx.connection.updateRoutes(dev.routes);
+        ctx.connection.connect().catch(() => null);
+      }
+    }).catch(() => null);
     return detach;
   }, []);
   return (

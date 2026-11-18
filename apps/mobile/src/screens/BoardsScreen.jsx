@@ -16,13 +16,23 @@ export function BoardsScreen({ ctx, navigation }) {
   prefTag: { color: T.amber, fontSize: 11 },
   btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   }), [T]);
-  const [routes, setRoutes] = React.useState([]);
+  const [routes, setRoutes] = React.useState(() => (ctx.authStore.getDevice()?.routes || []));
   const [board, setBoard] = React.useState(null);
   const [status, setStatus] = React.useState('Add or select a relay route.');
   const [draft, setDraft] = React.useState('');
   const [conn, setConn] = React.useState('unknown');
 
   const refreshConn = () => setConn(ctx.connection.getState().state);
+  React.useEffect(() => {
+    refreshConn();
+    const dev = ctx.authStore.getDevice();
+    const list = (dev && dev.routes) || [];
+    if (list.length > 0) {
+      setRoutes((prev) => [...new Set([...prev, ...list])]);
+      const pref = ctx.connection.learned.preferred(list) || list[0];
+      if (pref && !board) useRoute(pref).catch(() => null);
+    }
+  }, []);
   const addRoute = () => {
     const r = draft.trim();
     if (!r) return;

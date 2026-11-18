@@ -18,11 +18,7 @@ export function FleetScreen({ ctx, navigation }) {
   const [armed, setArmed] = React.useState(null);
   const [status, setStatus] = React.useState('Fleet monitoring ready.');
 
-  const currentApi = () => {
-    const route = ctx.connection.getState().route;
-    if (!route) throw new Error('no route connected — connect in Hub');
-    return ctx.apiFor(route);
-  };
+  const currentApi = () => (ctx.getApi ? ctx.getApi() : ctx.apiFor(ctx.connection.getState().route));
 
   const load = async () => {
     try {

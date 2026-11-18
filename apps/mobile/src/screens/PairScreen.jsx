@@ -40,9 +40,10 @@ export function PairScreen({ ctx, navigation }) {
       }
       const api = ctx.apiFor(won.route);
       ctx.connection.updateRoutes(parsed.routes);
+      await ctx.connection.connect().catch(() => null);
       const summary = await exchangeAndStore({
         api, pairToken: parsed.pairToken, label: 'mobile',
-        scopes: [...DEFAULT_PAIR_SCOPES], envId: parsed.env, authStore: ctx.authStore,
+        scopes: [...DEFAULT_PAIR_SCOPES], envId: parsed.env, routes: parsed.routes, authStore: ctx.authStore,
       });
       setPairedEnv(summary.envId || '(paired)');
       setStatus(`paired as ${summary.deviceId}`);

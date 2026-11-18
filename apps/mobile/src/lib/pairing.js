@@ -19,7 +19,7 @@ export function walkPairRoutes(routes, probe, { learned = null } = {}) {
   return walkRoutes(routes, probe, { learned });
 }
 
-export async function exchangeAndStore({ api, pairToken, label = 'mobile', scopes, envId = '', authStore }) {
+export async function exchangeAndStore({ api, pairToken, label = 'mobile', scopes, envId = '', routes = [], authStore }) {
   if (!authStore) throw new Error('exchange needs an auth store');
   const wanted = validateScopes(scopes);
   const res = await api.exchangePair({ pairToken, label, scopes: [...wanted] });
@@ -30,6 +30,7 @@ export async function exchangeAndStore({ api, pairToken, label = 'mobile', scope
     scopes: res.scopes ? [...res.scopes] : [...wanted],
     envId,
     label,
+    routes,
   });
   return summary;
 }
