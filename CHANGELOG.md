@@ -1,5 +1,16 @@
 # Changelog
 
+## 11.4.0
+
+Direct launch workflow, searchable single-page documentation, and mobile pairing resilience.
+
+- **Web Launch Studio Streamlining**: Removed the dry-run / preview plan requirement in `crewbus web`. Tapping "Launch Agents" now boots live agents directly, removing extra friction while keeping explicit prompt confirmation.
+- **Searchable Documentation**: Added zero-dependency instant client-side search to `documentation.html` with global shortcuts (`/` and `Ctrl+K`), live highlighted match snippets, and full keyboard navigation.
+- **Consolidated Architecture & Security Guides**: Consolidated 29 markdown files in `docs/` into unified technical reference guides: `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, and `docs/COMPATIBILITY.md`, with concise stubs preserving normative anchors.
+- **Expanded Reference Content**: Added authoritative sections to `documentation.html` covering Security, Threat Model & Isolation (§19), High Availability & Multi-Node Sync (§20), and Troubleshooting & FAQ (§21).
+- **Mobile Pairing Resilience**: Added cold ARP / socket timeout retry on QR code pairing in the mobile app, persistent multi-route discovery, and harness-specific model filtering.
+- **Updated Mobile Distribution**: Updated mobile build download links in `index.html` with the latest standalone Android APK.
+
 ## 11.3.1
 
 Mobile pairing over LAN and cleartext HTTP route support.
