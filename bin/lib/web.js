@@ -790,7 +790,7 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
             <select id="launch-lead" style="background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-size:12px" title="The board orchestrator: auto-provisions a persistent background coordinator to triage workers and report">
               <option value="auto">auto (board orchestrator)</option>
             </select>
-            <label class="dim" style="cursor:pointer;margin-left:6px"><input id="launch-dry" type="checkbox" checked> Dry-run</label>
+            <label class="dim" style="cursor:pointer;margin-left:6px;display:none"><input id="launch-dry" type="checkbox" checked> Dry-run</label>
           </div>
 
           <div class="composer-cwd-row" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px">
@@ -819,7 +819,7 @@ details.tech-details summary{cursor:pointer;font-weight:500;user-select:none}
               <span class="dim" style="font-size:11px">token <input id="launch-token-manual" type="password" size="14" placeholder="abt-…"></span>
             </details>
             <div class="launch-actions">
-              <button id="launch-preview" type="button">Preview Plan</button>
+              <button id="launch-preview" type="button" style="display:none">Preview Plan</button>
               <button id="launch-go" type="button" class="btn-launch danger">Launch Agents</button>
             </div>
           </div>
@@ -1534,9 +1534,10 @@ async function doLaunch(dry){
   }catch(e){out.textContent='launch failed: '+e.message;}
   refresh();
 }
-document.getElementById('launch-preview').onclick=function(){doLaunch(true);};
+if(document.getElementById('launch-preview')){document.getElementById('launch-preview').onclick=function(){doLaunch(true);};}
 document.getElementById('launch-go').onclick=function(){
-  var dry=document.getElementById('launch-dry').checked;
+  var dryEl=document.getElementById('launch-dry');
+  var dry=(dryEl&&dryEl.style.display!=='none')?dryEl.checked:false;
   if(!dry&&!confirm('live boot: spawn real workers from this board?'))return;
   doLaunch(dry);
 };

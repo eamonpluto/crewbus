@@ -24,19 +24,27 @@ function buildContext() {
   const connection = createConnection({ initialRoutes: [] });
   const apiFor = (route) =>
     createApiClient({ baseUrl: route, getCredential: () => authStore.getCredential() });
-  const getApi = () => {
+  const resolveRoute = async () => {
     let route = connection.getState().route;
     if (!route) {
-      const dev = authStore.getDevice();
+      let dev = authStore.getDevice();
+      if (!dev) {
+        dev = await authStore.restore().catch(() => null);
+      }
       if (dev && Array.isArray(dev.routes) && dev.routes.length > 0) {
         route = connection.learned.preferred(dev.routes) || dev.routes[0];
         connection.updateRoutes(dev.routes);
         connection.connect().catch(() => null);
       }
     }
-    if (!route) throw new Error('no route connected — connect in Hub');
-    return apiFor(route);
+    if (!route) throw new Error('no route connected — link via QR');
+    return route;
   };
+  const dynamicApi = createApiClient({
+    baseUrl: resolveRoute,
+    getCredential: () => authStore.getCredential(),
+  });
+  const getApi = () => dynamicApi;
   const queueWorker = createQueueWorker({ apiFor, connection });
   return { authStore, cache, connection, apiFor, getApi, queueWorker };
 }

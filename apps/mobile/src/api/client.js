@@ -48,20 +48,32 @@ async function readJson(res) {
 }
 
 export function createApiClient({ baseUrl, getCredential = () => null, fetchImpl = null, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  const base = String(baseUrl || '').replace(/\/+$/, '');
-  if (!/^https?:\/\//.test(base)) throw new Error('baseUrl must be an http(s) relay route');
-  if (isLoopbackUrl(base)) throw new Error('remote-only client refuses loopback base URLs');
-  const call = (path, opts = {}) =>
-    fetchWithTimeout(fetchImpl ?? globalThis.fetch, `${base}${path}`, {
+  const getBase = async () => {
+    const raw = typeof baseUrl === 'function' ? await baseUrl() : baseUrl;
+    const base = String(raw || '').replace(/\/+$/, '');
+    if (!/^https?:\/\//.test(base)) throw new Error('baseUrl must be an http(s) relay route');
+    if (isLoopbackUrl(base)) throw new Error('remote-only client refuses loopback base URLs');
+    return base;
+  };
+  const call = async (path, opts = {}) => {
+    const base = await getBase();
+    return fetchWithTimeout(fetchImpl ?? globalThis.fetch, `${base}${path}`, {
       ...opts,
       device: getCredential(),
       timeoutMs,
     }).then(readJson);
+  };
 
   return {
-    baseUrl: base,
+    get baseUrl() {
+      try {
+        const raw = typeof baseUrl === 'function' ? baseUrl() : baseUrl;
+        return typeof raw === 'string' ? raw.replace(/\/+$/, '') : '';
+      } catch { return ''; }
+    },
     // Probe = fetch(healthz) with timeout (spec §4.4: no loopback fallback).
-    fetchHealth(signalOpts = {}) {
+    async fetchHealth(signalOpts = {}) {
+      const base = await getBase();
       return fetchWithTimeout(fetchImpl ?? globalThis.fetch, `${base}/healthz`, { ...signalOpts, timeoutMs });
     },
     fetchRoutes() { return call('/api/routes'); },
@@ -90,9 +102,9 @@ export function createApiClient({ baseUrl, getCredential = () => null, fetchImpl
     kill({ from, agentToken, to = null, all = false }) {
       return call('/api/kill', { method: 'POST', body: { from, token: agentToken, ...(all ? { all: true } : { to }) } });
     },
-    // Dry-run preview is the DEFAULT; live launch needs explicit dryRun:false.
+    // Direct live launch by default; caller can pass dryRun: true if preview requested.
     launch(payload) {
-      return call('/api/launch', { method: 'POST', body: { dryRun: true, ...payload } });
+      return call('/api/launch', { method: 'POST', body: { dryRun: false, ...payload } });
     },
     exchangePair({ pairToken, label = '', scopes = null }) {
       return call('/api/pair/exchange', {
