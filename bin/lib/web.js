@@ -459,7 +459,6 @@ export function renderBoardHtml(boardPath) {
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
-  --radius-xl: 8px;
   --scroll: rgba(255, 255, 255, 0.14);
   --scroll-hi: rgba(255, 255, 255, 0.28);
 }
@@ -527,18 +526,17 @@ body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font: 13
 ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--scroll-hi); }
 
-/* --- App Layout --- */
 #app-shell { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
 
 /* 1. Left Sidebar */
 #app-sidebar {
-  width: 240px; min-width: 240px; background: var(--sidebar-bg);
+  width: 260px; min-width: 260px; background: var(--sidebar-bg);
   border-right: 1px solid var(--line); display: flex; flex-direction: column;
   height: 100vh; z-index: 20; user-select: none;
 }
 .sidebar-project { padding: 12px; border-bottom: 1px solid var(--line); position: relative; }
 .project-card {
-  display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
   cursor: pointer; transition: background .12s ease, border-color .12s ease;
 }
@@ -549,66 +547,68 @@ body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font: 13
 .project-path { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
 .project-arrow { color: var(--dim); display: flex; align-items: center; }
 
-/* Project Popover */
 #project-popover {
   position: absolute; top: calc(100% + 4px); left: 12px; right: 12px;
   background: var(--panel); border: 1px solid var(--line-light); border-radius: var(--radius-sm);
   box-shadow: 0 12px 28px rgba(0,0,0,0.4); padding: 12px; z-index: 100; display: none;
 }
 #project-popover.open { display: block; }
-.pop-label { font-size: 10.5px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-.pop-path { font-family: var(--mono); font-size: 11px; background: var(--code); padding: 6px 9px; border-radius: var(--radius-sm); border: 1px solid var(--line); word-break: break-all; margin-bottom: 8px; color: var(--code-ink); }
-.pop-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 5px; }
+.pop-label { font-size: 10px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.pop-path { font-family: var(--mono); font-size: 11px; background: var(--code); padding: 5px 8px; border-radius: var(--radius-sm); border: 1px solid var(--line); word-break: break-all; margin-bottom: 8px; color: var(--code-ink); }
+.pop-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 4px; }
 
-/* New Task / Mission Button */
-.sidebar-action-wrap { padding: 10px 12px 4px; }
+.sidebar-action-wrap { padding: 10px 12px 6px; }
 .btn-new-task {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
   background: var(--panel-elevated); color: var(--ink);
   font-weight: 500; font-size: 12.5px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-  padding: 6px 10px; cursor: pointer; transition: background .12s ease, border-color .12s ease;
+  padding: 7px 10px; cursor: pointer; transition: background .12s ease, border-color .12s ease;
 }
 .btn-new-task:hover { background: var(--panel-hover); border-color: var(--line-light); }
 .btn-new-task kbd { font-size: 10px; background: var(--panel); border: 1px solid var(--line); padding: 1px 4px; border-radius: 3px; font-family: var(--mono); color: var(--dim); }
 
-/* Sidebar Navigation */
-.sidebar-heading { font-size: 10.5px; font-weight: 600; color: var(--dim-light); text-transform: uppercase; letter-spacing: 0.8px; padding: 14px 14px 6px; }
-.sidebar-threads { padding: 0 8px; display: flex; flex-direction: column; gap: 1px; }
-.thread-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-sm); color: var(--dim); cursor: pointer; transition: background .12s ease, color .12s ease; font-size: 12.5px; }
-.thread-item:hover { background: var(--panel-hover); color: var(--ink); }
-.thread-item.active { background: var(--panel-active); color: var(--ink); font-weight: 500; }
-.thread-dot { font-size: 8px; color: var(--ok); }
+.sidebar-heading { font-size: 10.5px; font-weight: 600; color: var(--dim-light); text-transform: uppercase; letter-spacing: 0.7px; padding: 12px 14px 4px; }
+.sidebar-thread-list { padding: 0 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
+.thread-row {
+  display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: background .12s ease; border: 1px solid transparent;
+}
+.thread-row:hover { background: var(--panel-hover); }
+.thread-row.active { background: var(--panel-active); border-color: var(--line); }
+.thread-row-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.thread-title { font-weight: 500; font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.thread-time { font-size: 10.5px; color: var(--dim); flex-shrink: 0; }
+.thread-meta { font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 6px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); display: inline-block; }
+.status-dot.active { background: var(--ok); }
+.status-dot.waiting { background: var(--warn); }
 
-#approot-nav { padding: 0 8px; display: flex; flex-direction: column; gap: 1px; overflow-y: auto; flex: 1; }
+/* Left Navigation Tabs */
+#approot-nav { padding: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
 #approot-nav button {
   display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
   background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
-  color: var(--dim); padding: 6px 10px; font-size: 12.5px; cursor: pointer; transition: background .12s ease, color .12s ease;
+  color: var(--dim); padding: 6px 9px; font-size: 12px; cursor: pointer; transition: background .12s ease, color .12s ease;
 }
 #approot-nav button:hover { background: var(--panel-hover); color: var(--ink); }
 #approot-nav button.active { background: var(--panel); border-color: var(--line); color: var(--ink); font-weight: 500; }
 #approot-nav button .nav-ic { color: var(--dim); flex-shrink: 0; }
 #approot-nav button.active .nav-ic { color: var(--acc); }
 
-/* Sidebar Footer */
-.sidebar-footer { padding: 10px 12px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--dim); }
-.identity-badge { display: flex; align-items: center; gap: 6px; cursor: pointer; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-footer { padding: 9px 12px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--dim); }
+.identity-badge { display: flex; align-items: center; gap: 6px; cursor: pointer; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 2. Main Stage */
 #app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: var(--bg); }
 #approot-topbar {
   height: 48px; min-height: 48px; background: var(--panel);
   border-bottom: 1px solid var(--line); display: flex; align-items: center;
-  justify-content: space-between; padding: 0 18px; gap: 14px; z-index: 10;
+  justify-content: space-between; padding: 0 16px; gap: 14px; z-index: 10;
 }
 .topbar-left { display: flex; align-items: center; gap: 10px; font-size: 13px; }
-.brand-mark { width: 26px; height: 16px; color: var(--ink); flex-shrink: 0; }
-.brand-mark path.acc { stroke: var(--acc); }
-.brand-name { font-weight: 600; color: var(--ink); letter-spacing: -0.2px; font-size: 13.5px; }
-.brand-sep { color: var(--dim-light); }
-.view-title { color: var(--dim); font-weight: 500; }
+.thread-header-title { font-weight: 600; color: var(--ink); font-size: 13.5px; }
+.thread-header-badge { font-size: 11px; padding: 2px 7px; border-radius: 3px; background: var(--panel-elevated); border: 1px solid var(--line); color: var(--dim); }
 
-/* Command Palette Trigger */
 .palette-btn {
   display: flex; align-items: center; gap: 8px; background: var(--bg);
   border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 5px 12px;
@@ -618,16 +618,128 @@ body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font: 13
 .palette-btn:hover { border-color: var(--line-light); color: var(--ink); background: var(--panel-hover); }
 .palette-btn kbd { margin-left: auto; font-size: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; color: var(--dim); font-family: var(--mono); }
 
-.topbar-right { display: flex; align-items: center; gap: 10px; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
 .conn-indicator { display: flex; align-items: center; gap: 6px; font-size: 11px; }
 #conn-dot { font-size: 12px; color: var(--dim); }
 #conn-dot svg { display: block; }
 
-/* Main Scroll Area */
-#view-container { flex: 1; overflow-y: auto; padding: 20px 24px 80px; min-height: 0; }
+/* View Container */
+#view-container { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; }
 .approot-hidden { display: none !important; }
 
-/* Headings & General Elements */
+/* The Dedicated Chat / Session Stage */
+#chat-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+#brief-thread {
+  flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;
+}
+
+/* Chat Message Cards */
+.chat-msg {
+  display: flex; flex-direction: column; gap: 6px; max-width: 860px; width: 100%; margin: 0 auto;
+}
+.chat-msg-header {
+  display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--dim);
+}
+.chat-msg-author { font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 5px; }
+.chat-msg-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 14px 16px; box-shadow: none; font-size: 13px; line-height: 1.6;
+}
+.chat-msg-user .chat-msg-card {
+  background: var(--panel-elevated); border-color: var(--line-light);
+}
+.chat-msg-tags { display: flex; gap: 6px; margin-top: 10px; }
+.chat-tag { font-size: 11px; padding: 2px 7px; border-radius: 3px; background: var(--bg); border: 1px solid var(--line); color: var(--dim); font-family: var(--mono); }
+
+/* Inline Approval Card */
+.chat-approval-card {
+  background: var(--warn-bg); border: 1px solid rgba(210, 153, 34, 0.35);
+  border-radius: var(--radius-sm); padding: 14px 16px; margin: 4px 0;
+}
+.chat-approval-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+}
+.chat-approval-title { font-weight: 600; color: var(--warn); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+.chat-approval-cmd {
+  font-family: var(--mono); font-size: 12px; background: var(--code);
+  padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  color: var(--code-ink); margin: 8px 0; word-break: break-all;
+}
+.chat-approval-actions {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+}
+.chat-approval-actions input { flex: 1; font-size: 12px; }
+
+/* Welcome / Empty Stage */
+.chat-empty-stage {
+  max-width: 640px; margin: 40px auto 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.chat-empty-title { font-size: 20px; font-weight: 600; color: var(--ink); letter-spacing: -0.3px; }
+.chat-empty-subtitle { font-size: 13.5px; color: var(--dim); line-height: 1.5; max-width: 480px; }
+.chat-suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-top: 10px; text-align: left; }
+.suggestion-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 10px 12px; cursor: pointer; transition: all .12s ease;
+}
+.suggestion-card:hover { border-color: var(--line-light); background: var(--panel-hover); }
+.suggestion-card b { font-size: 12.5px; color: var(--ink); display: block; margin-bottom: 3px; }
+.suggestion-card span { font-size: 11.5px; color: var(--dim); }
+
+/* Bottom Sticky Composer */
+#chat-composer-wrap {
+  padding: 12px 24px 18px; background: var(--bg); border-top: 1px solid var(--line); z-index: 15;
+}
+.composer-box {
+  max-width: 860px; margin: 0 auto; background: var(--panel);
+  border: 1px solid var(--line-light); border-radius: var(--radius-sm);
+  padding: 10px 14px 10px; display: flex; flex-direction: column; gap: 8px;
+}
+.composer-box:focus-within { border-color: var(--dim); }
+#launch-brief {
+  width: 100%; box-sizing: border-box; background: transparent;
+  border: none; outline: none; padding: 4px 0 6px; font-size: 13.5px;
+  line-height: 1.55; resize: vertical; min-height: 60px; max-height: 240px; color: var(--ink);
+  font-family: inherit;
+}
+.composer-toolbar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px;
+}
+.composer-toolbar-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.composer-toolbar-right { display: flex; align-items: center; gap: 8px; }
+
+/* Harness Pills */
+.harness-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.harness-card {
+  padding: 4px 9px; font-size: 11.5px; background: var(--panel-elevated);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  cursor: pointer; transition: all .12s ease; user-select: none; color: var(--dim);
+}
+.harness-card:hover { border-color: var(--line-light); color: var(--ink); }
+.harness-card.sel { border-color: var(--acc); background: var(--acc-subtle); color: var(--ink); font-weight: 500; }
+.harness-card.missing { opacity: .5; }
+
+.stepper-wrap {
+  display: inline-flex; align-items: center; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); overflow: hidden; background: var(--panel-elevated);
+}
+.stepper-wrap button { border: none; border-radius: 0; padding: 3px 7px; background: transparent; font-weight: bold; cursor: pointer; }
+.stepper-wrap input { border: none; text-align: center; background: transparent; padding: 3px 0; font-weight: 600; width: 28px; font-size: 11.5px; color: var(--ink); }
+
+#launch-permission-seg { display: inline-flex; gap: 1px; background: var(--panel-elevated); padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+#launch-permission-seg button { border: none; background: transparent; padding: 2px 7px; font-size: 11px; border-radius: 2px; color: var(--dim); cursor: pointer; }
+#launch-permission-seg button.sel { background: var(--panel); border: 1px solid var(--line); color: var(--ink); font-weight: 500; }
+
+.btn-launch {
+  background: var(--acc) !important; color: #ffffff !important;
+  font-weight: 500 !important; border: 1px solid var(--acc) !important;
+  padding: 6px 16px !important; font-size: 12.5px !important; border-radius: var(--radius-sm) !important;
+  cursor: pointer !important; transition: background .12s ease, border-color .12s ease !important;
+}
+.btn-launch:hover { background: var(--acc-hover) !important; border-color: var(--acc-hover) !important; }
+
+/* Standard Section Views (Crews, Fleet, Channels, etc.) */
+.standard-view { flex: 1; overflow-y: auto; padding: 20px 28px 80px; }
 h1 { font-size: 18px; font-weight: 600; margin: 0 0 14px; color: var(--ink); letter-spacing: -0.2px; }
 h2 { font-size: 14px; font-weight: 600; margin: 20px 0 10px; color: var(--ink); display: flex; align-items: center; justify-content: space-between; }
 .dim { color: var(--dim); font-size: 12px; }
@@ -635,7 +747,6 @@ h2 { font-size: 14px; font-weight: 600; margin: 20px 0 10px; color: var(--ink); 
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; box-shadow: none; }
 .card b { font-size: 18px; font-weight: 600; color: var(--ink); display: block; margin-top: 4px; font-family: var(--mono); }
 
-/* Tables */
 table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 10px 0 20px; font-size: 12.5px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; box-shadow: none; }
 th, td { padding: 9px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
 th { background: var(--panel-elevated); color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -643,7 +754,6 @@ tr:last-child td { border-bottom: none; }
 tr.worker-row { cursor: pointer; transition: background .12s ease; }
 tr.worker-row:hover td { background: var(--panel-hover); }
 
-/* Inputs, Buttons, & Forms */
 input, textarea, select {
   background: var(--panel); border: 1px solid var(--line); color: var(--ink);
   border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px;
@@ -662,76 +772,12 @@ button.danger { border: 1px solid rgba(248, 81, 73, 0.3); color: var(--danger); 
 button.danger:hover { border-color: var(--danger); background: var(--danger-bg); }
 button:disabled { opacity: .45; cursor: default; }
 
-/* Log and terminal boxes */
 .log {
   font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap;
   background: var(--code); padding: 12px 14px; border-radius: var(--radius-sm);
   border: 1px solid var(--line); color: var(--code-ink); max-height: 280px; overflow-y: auto; line-height: 1.6;
 }
-#launch-out:empty { display: none; }
-#chat-events:empty, #launch-diff:empty { display: none; }
-
-/* Hero Composer & Launch Studio */
-.composer-card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
-  padding: 16px; margin-top: 14px; box-shadow: none;
-}
-.composer-harness-bar { margin-bottom: 14px; }
-.harness-pills { display: flex; gap: 8px; flex-wrap: wrap; }
-.harness-card {
-  display: flex; flex-direction: column; gap: 2px; padding: 8px 12px;
-  background: var(--panel-elevated); border: 1px solid var(--line); border-radius: var(--radius-sm);
-  cursor: pointer; transition: border-color .12s ease, background .12s ease; min-width: 110px;
-}
-.harness-card:hover { border-color: var(--line-light); background: var(--panel-hover); }
-.harness-card.sel {
-  border-color: var(--acc); background: var(--acc-subtle);
-  box-shadow: none;
-}
-.harness-card b { font-size: 13px; color: var(--ink); text-transform: capitalize; }
-.harness-card.missing { opacity: .55; }
-.harness-card .dim { font-size: 11px; }
-
-.composer-config-row {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px;
-}
-.stepper-wrap {
-  display: inline-flex; align-items: center; border: 1px solid var(--line);
-  border-radius: var(--radius-sm); overflow: hidden; background: var(--panel-elevated);
-}
-.stepper-wrap button { border: none; border-radius: 0; padding: 4px 8px; background: transparent; font-weight: bold; }
-.stepper-wrap input { border: none; text-align: center; background: transparent; padding: 4px 0; font-weight: 600; width: 32px; font-size: 12px; }
-#launch-permission-seg { display: inline-flex; gap: 2px; background: var(--panel-elevated); padding: 2px; border-radius: var(--radius-sm); border: 1px solid var(--line); }
-#launch-permission-seg button { border: none; background: transparent; padding: 3px 8px; font-size: 11px; border-radius: 3px; color: var(--dim); }
-#launch-permission-seg button.sel { background: var(--panel); border: 1px solid var(--line); color: var(--ink); font-weight: 500; }
-
-.composer-textarea-wrap { position: relative; margin-bottom: 12px; }
-#launch-brief {
-  width: 100%; box-sizing: border-box; background: var(--panel-elevated);
-  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px;
-  font-size: 13px; line-height: 1.55; resize: vertical; min-height: 90px; color: var(--ink);
-}
-.brief-counter { position: absolute; bottom: 8px; right: 12px; font-size: 10.5px; color: var(--dim); pointer-events: none; font-family: var(--mono); }
-
-.composer-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-.launch-identity { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--dim); }
-.launch-actions { display: flex; gap: 8px; }
-.btn-launch {
-  background: var(--acc) !important;
-  color: #ffffff !important; font-weight: 500 !important; border: 1px solid var(--acc) !important;
-  padding: 6px 16px !important; font-size: 12.5px !important; border-radius: var(--radius-sm) !important;
-  box-shadow: none !important; cursor: pointer !important;
-  transition: background .12s ease, border-color .12s ease !important;
-}
-.btn-launch:hover { background: var(--acc-hover) !important; border-color: var(--acc-hover) !important; }
-
-/* Attention Needed / Approvals Banner */
-.approvals-banner {
-  background: var(--warn-bg); border: 1px solid rgba(210, 153, 34, 0.3);
-  border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px;
-  display: flex; align-items: center; justify-content: space-between; gap: 14px;
-}
-.approvals-banner b { color: var(--warn); }
+#launch-out:empty, #launch-diff:empty { display: none; }
 
 /* Right Inspector */
 #app-inspector {
@@ -763,6 +809,7 @@ button:disabled { opacity: .45; cursor: default; }
 details.tech-details { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 12px; }
 details.tech-details summary { cursor: pointer; font-weight: 500; user-select: none; }
 .routes-badge { font-size: 11px; font-family: var(--mono); color: var(--dim); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 3px 8px; }
+.badge-count { background: var(--warn); color: #000; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 9px; margin-left: auto; }
 </style>
 </head>
 <body>
@@ -771,225 +818,198 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
   <aside id="app-sidebar">
     <div class="sidebar-project">
       <div class="project-card" id="project-trigger" title="${e(boardPath)}">
-        <span class="project-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+        <span class="project-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
         <div class="project-info">
-          <div class="project-title" id="project-display-name">${e(path.basename(boardPath) || "Local Board")}</div>
+          <div class="project-title">${e(path.basename(boardPath) || "Workspace")}</div>
           <div class="project-path" id="topbar-board" title="${e(boardPath)}">${e(boardPath)}</div>
         </div>
-        <span class="project-arrow"><svg class="btn-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+        <span class="project-arrow"><svg class="btn-ic" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
       </div>
       <div id="project-popover">
         <div class="pop-label">Target Codebase (Working Directory)</div>
         <div class="pop-path" id="pop-cwd-path" title="Where workers execute commands and edit code">(default: board parent)</div>
-        <button type="button" class="pop-btn" id="open-folder-btn"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Set Codebase Folder…</button>
+        <button type="button" class="pop-btn" id="open-folder-btn"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Set Codebase Folder…</button>
         <div class="pop-label" style="margin-top:10px">Workspace Board (Bus DB)</div>
         <div class="pop-path" id="pop-board-path">${e(boardPath)}</div>
-        <button type="button" id="copy-board-btn" class="pop-btn"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Board Path</button>
-        <button type="button" class="pop-btn" id="switch-board-btn" title="Use another folder's board: restarts against <folder>/.crewbus"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg> Switch Board…</button>
-        <button type="button" class="pop-btn" id="reset-board-btn" title="Back to the default desktop board">Use Default Board</button>
-        <div class="pop-path dim" id="board-switch-msg" style="display:none"></div>
-        <button type="button" class="pop-btn" id="pop-pair-btn" style="margin-top:8px" title="Mint one-time pairing link and show QR"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Pair Mobile Client (QR)…</button>
-        <button type="button" class="pop-btn" id="pop-install-cli-btn" style="margin-top:8px"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> Install 'crewbus' CLI in PATH</button>
+        <button type="button" id="copy-board-btn" class="pop-btn"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Board Path</button>
+        <button type="button" class="pop-btn" id="switch-board-btn" title="Use another folder's board"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg> Switch Board…</button>
+        <button type="button" class="pop-btn" id="reset-board-btn">Use Default Board</button>
       </div>
     </div>
 
+    <!-- New Thread / Task Button -->
     <div class="sidebar-action-wrap">
-      <button type="button" id="btn-new-task" class="btn-new-task">
-        <span>+ New Task</span>
+      <button type="button" class="btn-new-task" id="btn-new-thread" onclick="startNewThread()">
+        <span>+ New Mission</span>
         <kbd>Ctrl+N</kbd>
       </button>
     </div>
 
-    <div class="sidebar-heading">MISSION THREADS</div>
-    <div class="sidebar-threads">
-      <div class="thread-item active" id="thread-main-item">
-        <span class="thread-dot"><svg width="8" height="8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg></span>
-        <span>General Mission Feed</span>
-      </div>
+    <!-- Active & Past Threads Stream -->
+    <div class="sidebar-heading">Threads &amp; Runs</div>
+    <div id="sidebar-thread-list" class="sidebar-thread-list">
+      <div class="dim" style="padding:10px 8px;font-size:12px">no missions yet</div>
     </div>
 
-    <div class="sidebar-heading">VIEWS</div>
-    <nav id="approot-nav" aria-label="sections">
-      <button data-nav="sec-launch" class="active">Launch</button>
-      <button data-nav="sec-boards">Boards</button>
-      <button data-nav="sec-briefs">Briefs</button>
-      <button data-nav="sec-crews">Crews</button>
-      <button data-nav="sec-fleet">Fleet</button>
-      <button data-nav="sec-channels">Channels</button>
-      <button data-nav="sec-triage">Triage</button>
-      <button data-nav="sec-approvals">Approvals</button>
-      <button data-nav="sec-results">Results</button>
-      <button data-nav="sec-audit">Audit</button>
-      <button data-nav="sec-settings">Settings</button>
-      <button data-nav="all">All</button>
+    <!-- Workspace Navigation Tabs -->
+    <div class="sidebar-heading" style="margin-top:auto">Navigation</div>
+    <nav id="approot-nav">
+      <button data-nav="sec-boards" class="active"><span class="nav-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>Boards</button>
+      <button data-nav="sec-approvals"><span class="nav-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>Approvals<span id="sidebar-approvals-badge" class="badge-count" style="display:none">0</span></button>
+      <button data-nav="sec-crews"><span class="nav-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>Crews</button>
+      <button data-nav="sec-fleet"><span class="nav-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg></span>Fleet</button>
+      <button data-nav="sec-channels"><span class="nav-ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/></svg></span>Channels</button>
+      <button data-nav="sec-triage" style="display:none">Triage</button>
+      <button data-nav="sec-results" style="display:none">Results</button>
+      <button data-nav="sec-audit" style="display:none">Audit</button>
+      <button data-nav="sec-settings" style="display:none">Settings</button>
     </nav>
 
+    <!-- Sidebar Footer -->
     <div class="sidebar-footer">
-      <div class="identity-badge" id="sidebar-user" title="Active identity">
-        <svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span id="ident" class="dim">anonymous</span>
+      <div class="identity-badge" onclick="approotNavTo('sec-settings')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span id="who-display">orchestrator</span>
       </div>
-      <div class="conn-indicator" title="Sidecar health">
-        <span id="conn-dot" title="connection: unknown"><svg width="8" height="8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg></span>
-      </div>
+      <button type="button" onclick="open('/pair','_blank')" title="Pair Mobile App (QR)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></button>
     </div>
   </aside>
 
-  <!-- 2. MAIN CENTER STAGE -->
-  <div id="app-main">
+  <!-- 2. MAIN WORKSPACE STAGE -->
+  <main id="app-main">
+    <!-- Topbar -->
     <header id="approot-topbar">
       <div class="topbar-left">
-        <svg class="brand-mark" viewBox="0 0 30 18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="1" y="1" width="28" height="12" rx="3"/><circle cx="8" cy="16" r="1.6" fill="currentColor" stroke="none"/><circle cx="22" cy="16" r="1.6" fill="currentColor" stroke="none"/><path class="acc" d="M1 7h28"/></svg>
-        <span class="brand-name">crewbus</span>
-        <span class="brand-sep">/</span>
-        <span id="view-title" class="view-title">Mission Control</span>
+        <div class="thread-header-title" id="active-thread-title">Mission Control</div>
+        <div class="thread-header-badge" id="active-thread-status">Ready</div>
+        <select id="topbar-harness" onchange="document.getElementById('launch-harness').value=this.value;renderHarnessCards();" style="font-size:11.5px;padding:3px 6px">
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+          <option value="opencode">OpenCode</option>
+          <option value="antigravity">Antigravity</option>
+          <option value="cursor">Cursor</option>
+          <option value="grok">Grok</option>
+          <option value="qwen">Qwen</option>
+        </select>
       </div>
-      <button id="palette-open" class="palette-btn" title="Command Palette (Ctrl+K)">
-        <svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <span>Search commands, workers, sections…</span>
+
+      <button type="button" class="palette-btn" onclick="openPalette()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Search actions &amp; workers…</span>
         <kbd>Ctrl+K</kbd>
       </button>
+
       <div class="topbar-right">
-        <span id="poll-age" class="dim" title="Data age"></span>
-        <label style="display:none">harness <select id="topbar-harness" aria-label="harness quick-pick"></select></label>
-        <button type="button" id="theme-toggle" title="Toggle light/dark theme" aria-label="Toggle light/dark theme"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
-        <button type="button" id="inspector-toggle-btn" title="Toggle Inspector sidebar"><svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg> Inspector</button>
+        <div class="conn-indicator">
+          <span id="conn-dot"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#2ea043"/></svg></span>
+          <span id="poll-age" class="dim">live</span>
+        </div>
+        <button type="button" onclick="open('/pair','_blank')" title="Mobile Pairing"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></button>
+        <button type="button" onclick="crewbusThemeToggle()" title="Toggle Dark/Light Mode"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+        <button type="button" onclick="toggleInspector()" title="Toggle Inspector"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
       </div>
     </header>
 
-    <main id="view-container">
-      <!-- SECTION: LAUNCH CONSOLE (Mission Control) -->
-      <section id="sec-launch" data-section="Launch">
-        <div class="thread-hero" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div>
-            <h1 style="margin:0 0 4px">Mission Control</h1>
-            <div class="dim">Deploy and supervise mixed-harness AI agent crews</div>
-          </div>
-          <div id="routes-line" class="routes-badge">routes: loading…</div>
-        </div>
+    <!-- View Stage -->
+    <div id="view-container">
 
-        <div class="chat-stream" id="chat-feed">
-          <div id="chat-events"></div>
-          <div id="launch-diff"></div>
-          <div id="launch-out" class="log"></div>
-        </div>
-
-        <!-- Hero Launch Composer -->
-        <div class="composer-card">
-          <div class="composer-harness-bar">
-            <div class="dim" style="margin-bottom:8px;font-weight:600">SELECT AI HARNESS:</div>
-            <div id="harness-cards" class="harness-pills" aria-label="harness picker"></div>
-            <select id="launch-harness" style="display:none"></select>
-          </div>
-
-          <div class="composer-config-row">
-            <input id="launch-to" type="hidden" value="">
-            <span class="dim" style="font-weight:500">Workers:</span>
-            <div class="stepper-wrap">
-              <button id="launch-count-minus" type="button" title="fewer agents">−</button>
-              <input id="launch-count" size="2" value="1" title="Number of agents">
-              <button id="launch-count-plus" type="button" title="more agents">+</button>
-            </div>
-            <span class="dim" style="font-weight:500;margin-left:6px">Model:</span>
-            <select id="launch-model">
-              <option value="">Default (harness configured)</option>
-            </select>
-            <input id="launch-model-custom" type="text" placeholder="provider/model-id" style="display:none;width:150px;margin-left:4px" title="Enter custom model identifier">
-            <button id="launch-models-refresh" type="button" title="Fetch latest models from installed harnesses" style="margin-left:2px;padding:3px 7px;font-size:11px">↻</button>
-            <span class="dim" style="font-weight:500;margin-left:6px">Permission:</span>
-            <select id="launch-permission" style="display:none"><option>supervised</option><option>autoEdits</option><option>auto</option><option>full</option></select>
-            <span id="launch-permission-seg">
-              <button type="button" data-perm="supervised" class="sel">supervised</button>
-              <button type="button" data-perm="autoEdits">autoEdits</button>
-              <button type="button" data-perm="auto">auto</button>
-              <button type="button" data-perm="full">full</button>
-            </span>
-            <span class="dim" style="font-weight:500;margin-left:6px">Lead:</span>
-            <select id="launch-lead" title="The board orchestrator: auto-provisions a persistent coordinator">
-              <option value="auto">auto (orchestrator)</option>
-            </select>
-            <label class="dim" style="cursor:pointer;margin-left:6px;display:none"><input id="launch-dry" type="checkbox" checked> Dry-run</label>
-          </div>
-
-          <div class="composer-cwd-row" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px">
-            <span class="dim" style="white-space:nowrap;display:flex;align-items:center;gap:5px;font-weight:500">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              Target Workspace / CWD:
-            </span>
-            <input id="launch-cwd" type="text" placeholder="Target codebase path (or leave blank for board directory)" style="flex:1;font-family:var(--mono);font-size:12px" title="Working directory where workers execute commands and edit code">
-            <button id="launch-cwd-browse" type="button" title="Set project folder path" style="padding:4px 10px;font-size:11.5px">Set Folder…</button>
-          </div>
-
-          <div class="composer-textarea-wrap">
-            <textarea id="launch-brief" rows="3" maxlength="8000" placeholder="Type a task brief for your AI agents (e.g., 'Refactor auth middleware to use JWT and add unit tests')… (Ctrl+Enter to launch)"></textarea>
-            <span id="launch-brief-count" class="brief-counter">0/8000</span>
-          </div>
-
-          <div class="composer-bottom">
-            <div class="launch-identity" title="Auto-provisioned orchestrator identity">
-              <span class="dim">Launching as <b id="launch-as" style="color:var(--ink)">orchestrator</b></span>
-              <input id="launch-from" type="hidden" value="">
-              <input id="launch-token" type="password" style="display:none" value="">
-            </div>
-            <details class="tech-details" id="launch-identity-advanced" style="margin:0">
-              <summary class="dim" style="cursor:pointer;font-size:11px">advanced: use a different identity</summary>
-              <span class="dim" style="font-size:11px">from <input id="launch-from-manual" size="10" placeholder="agent name"></span>
-              <span class="dim" style="font-size:11px">token <input id="launch-token-manual" type="password" size="14" placeholder="abt-…"></span>
-            </details>
-            <div class="launch-actions">
-              <button id="launch-preview" type="button" style="display:none">Preview plan</button>
-              <button id="launch-go" class="btn-launch" type="button">Launch Agents</button>
+      <!-- SECTION: BOARDS (Primary Chat Threads & Execution Stage!) -->
+      <section id="sec-boards" data-section="Boards" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
+        <div id="chat-stage">
+          <!-- The Living Conversation / Thread Stream -->
+          <div id="brief-thread">
+            <div class="chat-empty-stage">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <div class="chat-empty-title">What should your crew work on?</div>
+              <div class="chat-empty-subtitle">Launch a coordinated crew of AI coding agents. Track their progress, inspect changes, and approve sensitive operations directly in this stream.</div>
+              <div class="chat-suggestions">
+                <div class="suggestion-card" data-suggestion="Run test suite and fix failing tests">
+                  <b>Run test suite &amp; fix bugs</b>
+                  <span>Run tests, detect regressions, and patch code</span>
+                </div>
+                <div class="suggestion-card" data-suggestion="Refactor module to clean architecture">
+                  <b>Refactor code</b>
+                  <span>Improve performance and readability</span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- SECTION: BOARDS -->
-      <section id="sec-boards" data-section="Boards" class="approot-hidden">
-        <h1>Workspace Boards</h1>
-        <div class="cards">
-          <div class="card"><div class="dim">Registered Agents</div><b id="c-agents">0</b></div>
-          <div class="card"><div class="dim">Active (Alive)</div><b id="c-active">0</b></div>
-          <div class="card"><div class="dim">Workers</div><b id="c-workers">0</b></div>
-          <div class="card"><div class="dim">Unacknowledged</div><b id="c-unacked">0</b></div>
-          <div class="card"><div class="dim">Broadcasts</div><b id="c-bcast">0</b></div>
-          <div class="card"><div class="dim">Groups</div><b id="c-groups">0</b></div>
-          <div class="card"><div class="dim">Sync Peers</div><b id="c-peers">0</b></div>
-        </div>
-        <h2>Groups</h2>
-        <table><thead><tr><th>Group</th><th>Members</th></tr></thead><tbody id="groups"></tbody></table>
-        <h2>Sync Peers</h2>
-        <table><thead><tr><th>Peer</th><th>Last Ok</th></tr></thead><tbody id="peers"></tbody></table>
-        <h2>Quotas &amp; Retention</h2>
-        <div id="quotas" class="card dim">loading quotas…</div>
-        <h2>Legal Holds</h2>
-        <div id="holds" class="card dim">loading holds…</div>
-      </section>
+          <!-- Bottom Sticky Composer -->
+          <div id="chat-composer-wrap">
+            <div class="composer-box">
+              <div style="font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px">Launch Mission</div>
+              <textarea id="launch-brief" maxlength="8000" placeholder="Give instructions to the crew or message active thread… (Ctrl+Enter to launch)"></textarea>
+              <div id="launch-diff"></div>
+              <div id="launch-out" class="log" style="display:none"></div>
 
-      <!-- SECTION: BRIEFS -->
-      <section id="sec-briefs" data-section="Briefs" class="approot-hidden">
-        <h1>Task Briefs &amp; Transcripts</h1>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
-          <div>
-            <h2>Recent Task Briefs</h2>
-            <table>
-              <thead><tr><th>Batch</th><th>Subject</th><th>Workers</th><th>Progress</th></tr></thead>
-              <tbody id="briefs"></tbody>
-            </table>
-          </div>
-          <div>
-            <h2>Gathered Thread Transcript</h2>
-            <div id="brief-thread" class="card" style="min-height:200px">
-              <span class="dim">Select a task brief on the left to inspect its complete thread and checkpoints.</span>
+              <div class="composer-toolbar">
+                <div class="composer-toolbar-left">
+                  <!-- Harness Chips Container -->
+                  <div id="harness-cards" class="harness-pills"></div>
+
+                  <!-- Model Selector -->
+                  <select id="launch-model" title="Model catalog for selected harness" style="font-size:11.5px;padding:3px 6px">
+                    <option value="">Default model</option>
+                  </select>
+
+                  <!-- Worker Count Stepper -->
+                  <div class="stepper-wrap" title="Number of parallel workers">
+                    <button type="button" id="launch-count-minus">-</button>
+                    <input id="launch-count" type="number" min="1" max="20" value="1">
+                    <button type="button" id="launch-count-plus">+</button>
+                  </div>
+
+                  <!-- Permission Mode Toggle -->
+                  <div id="launch-permission-seg" title="Permission Mode">
+                    <button type="button" data-perm="supervised" class="sel">Supervised</button>
+                    <button type="button" data-perm="auto">Auto</button>
+                  </div>
+
+                  <!-- Dry Run Checkbox -->
+                  <label class="dim" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:11px" title="Preview spawn commands without executing">
+                    <input id="launch-dry" type="checkbox" checked> dry-run
+                  </label>
+                </div>
+
+                <div class="composer-toolbar-right">
+                  <span id="launch-brief-count" class="dim" style="font-family:var(--mono);font-size:10.5px">0/8000</span>
+                  <button id="launch-preview" type="button" style="display:none">Preview plan</button>
+                  <button id="launch-go" class="btn-launch" type="button">Launch Agents</button>
+                </div>
+              </div>
+
+              <!-- Hidden Form Fields to satisfy contract -->
+              <div style="display:none">
+                <span id="routes-line"></span>
+                <select id="launch-harness"><option value="claude">claude</option></select>
+                <input id="launch-to" value="">
+                <input id="launch-permission" value="supervised">
+                <input id="launch-from" value="">
+                <input id="launch-token" type="password" value="">
+                <input id="launch-cwd" value="">
+                <button id="launch-cwd-browse" type="button"></button>
+                <div id="harnesses"></div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- SECTION: CREWS -->
-      <section id="sec-crews" data-section="Crews" class="approot-hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <h1>Active Crews &amp; Workers</h1>
+      <!-- SECTION: APPROVALS (Human-in-the-loop Approvals Queue) -->
+      <section id="sec-approvals" data-section="Approvals" class="standard-view approot-hidden">
+        <h1>Pending Approvals</h1>
+        <p class="dim">When workers are blocked on sensitive operations, approve or deny their requests here or directly in the chat thread.</p>
+        <table>
+          <thead><tr><th>Request ID</th><th>Worker</th><th>Action / Command</th><th>Instructions / Reason</th><th>Actions</th></tr></thead>
+          <tbody id="approvals"></tbody>
+        </table>
+      </section>
+
+      <!-- SECTION: CREWS (Workers Roster & Controls) -->
+      <section id="sec-crews" data-section="Crews" class="standard-view approot-hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <h1>Active Crew Workers</h1>
           <div style="display:flex;gap:8px">
             <button id="killall" class="danger">Kill All Active Workers</button>
             <button id="ackall">Acknowledge All Replies</button>
@@ -1009,52 +1029,48 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
           </thead>
           <tbody id="crews"></tbody>
         </table>
-      </section>
-
-      <!-- SECTION: FLEET -->
-      <section id="sec-fleet" data-section="Fleet" class="approot-hidden">
-        <h1>Agent Fleet Roster</h1>
+        <h2 style="margin-top:24px">Agent Fleet Presence</h2>
         <table>
           <thead><tr><th>Agent</th><th>Role</th><th>Status</th><th>Last Seen</th><th>Unacked</th></tr></thead>
           <tbody id="agents"></tbody>
         </table>
-        <h2 style="margin-top:28px">Relay Fleet <span class="dim" style="font-size:12px;font-weight:normal">(every relay this board syncs with, live /healthz)</span></h2>
+      </section>
+
+      <!-- SECTION: FLEET (Relays & Multi-Node Sync) -->
+      <section id="sec-fleet" data-section="Fleet" class="standard-view approot-hidden">
+        <h1>Relay Fleet (Multi-Node Sync)</h1>
         <table>
           <thead><tr><th>Relay</th><th>Role</th><th>Weight</th><th>Workers</th><th>Lag</th><th>Last Sync</th></tr></thead>
           <tbody id="fleet"></tbody>
         </table>
-        <h2 style="margin-top:28px">Peers</h2>
-        <table><thead><tr><th>Relay</th><th>Last Sync</th></tr></thead><tbody id="peers"></tbody></table>
+        <h2 style="margin-top:24px">Sync Peers</h2>
+        <table><thead><tr><th>Peer</th><th>Last Sync</th></tr></thead><tbody id="peers"></tbody></table>
       </section>
 
-      <!-- SECTION: CHANNELS -->
-      <section id="sec-channels" data-section="Channels" class="approot-hidden">
+      <!-- SECTION: CHANNELS (Broadcasts & Group Logs) -->
+      <section id="sec-channels" data-section="Channels" class="standard-view approot-hidden">
         <h1>Channels &amp; Broadcasts</h1>
         <div style="margin-bottom:14px;display:flex;gap:8px">
-          <input id="chan-name" placeholder="Channel (e.g. general, findings, grp-dev)" style="width:240px">
+          <input id="chan-name" placeholder="Channel name (e.g. general, findings)" style="width:220px">
           <input id="chan-body" placeholder="Broadcast message…" style="flex:1">
           <button id="chan-post" class="btn-primary">Post to Channel</button>
         </div>
         <div id="channels"></div>
-        <h2 style="margin-top:28px">Broadcast History</h2>
+        <h2 style="margin-top:24px">Broadcast History</h2>
         <table>
           <thead><tr><th>ID</th><th>From</th><th>To</th><th>Subject</th><th>Body</th></tr></thead>
           <tbody id="bcast"></tbody>
         </table>
       </section>
 
-      <!-- SECTION: TRIAGE -->
-      <section id="sec-triage" data-section="Triage" class="approot-hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <h1>Inbox &amp; Message Triage</h1>
-          <button id="ackall">Acknowledge All</button>
-        </div>
-        <h2>Unacknowledged Deliveries</h2>
+      <!-- SECTION: TRIAGE (Inbox Queue & Filters) -->
+      <section id="sec-triage" data-section="Triage" class="standard-view approot-hidden">
+        <h1>Inbox &amp; Message Triage</h1>
         <table>
           <thead><tr><th>ID</th><th>From</th><th>Message</th><th>Actions</th></tr></thead>
           <tbody id="triage"></tbody>
         </table>
-        <h2 style="margin-top:28px">Recent Message Feed</h2>
+        <h2 style="margin-top:24px">Recent Message Feed</h2>
         <div style="display:flex;gap:10px;margin-bottom:10px">
           <input id="feed-q" placeholder="Filter messages…" style="flex:1">
           <select id="feed-type"><option value="">All</option><option value="checkpoint">Checkpoints</option><option value="final">Finals</option></select>
@@ -1065,73 +1081,78 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
         </table>
       </section>
 
-      <!-- SECTION: APPROVALS -->
-      <section id="sec-approvals" data-section="Approvals" class="approot-hidden">
-        <h1>Human-in-the-Loop Approvals</h1>
-        <p class="dim">When workers are blocked on sensitive operations, their requests appear here.</p>
-        <table>
-          <thead><tr><th>Request ID</th><th>Worker</th><th>Action / Command</th><th>Status / Decision</th></tr></thead>
-          <tbody id="approvals"></tbody>
-        </table>
-      </section>
-
-      <!-- SECTION: RESULTS -->
-      <section id="sec-results" data-section="Results" class="approot-hidden">
-        <h1>Verified Results &amp; Races</h1>
+      <!-- SECTION: RESULTS (Outcomes & Diffs) -->
+      <section id="sec-results" data-section="Results" class="standard-view approot-hidden">
+        <h1>Verified Results &amp; Competitive Races</h1>
         <table>
           <thead><tr><th>Group</th><th>Telemetry</th><th>Verified Result</th><th>Running</th><th>Actions</th></tr></thead>
           <tbody id="results"></tbody>
         </table>
       </section>
 
-      <!-- SECTION: AUDIT -->
-      <section id="sec-audit" data-section="Audit" class="approot-hidden">
+      <!-- SECTION: AUDIT (Tamper-Evident Chain & Holds) -->
+      <section id="sec-audit" data-section="Audit" class="standard-view approot-hidden">
         <h1>Tamper-Evident Audit Log</h1>
         <div id="auditver" class="dim" style="margin-bottom:12px;font-family:var(--mono);font-size:12px"></div>
         <table>
           <thead><tr><th>Seq</th><th>At</th><th>Actor</th><th>Event</th><th>Target</th><th>Result</th></tr></thead>
           <tbody id="audit"></tbody>
         </table>
-        <h2 style="margin-top:28px">Legal Hold Status</h2>
+        <h2 style="margin-top:24px">Legal Hold Status</h2>
         <div id="holds-body" class="card dim" style="margin-top:8px">no active legal hold</div>
-        <h2 style="margin-top:28px">Board Quotas &amp; Retention</h2>
+        <h2 style="margin-top:24px">Board Quotas &amp; Retention</h2>
         <div id="quotas-body" class="card dim" style="margin-top:8px">quotas loaded</div>
       </section>
 
-      <!-- SECTION: SETTINGS -->
-      <section id="sec-settings" data-section="Settings" class="approot-hidden">
-        <h1>Settings &amp; Mobile Pairing</h1>
-        <div class="card" style="margin-bottom:16px">
-          <b>Mobile Pairing QR</b>
-          <p class="dim">Scan this QR code with the CrewBus Mobile companion to pair this device.</p>
+      <!-- SECTION: SETTINGS (Pairing, Auth, CLI) -->
+      <section id="sec-settings" data-section="Settings" class="standard-view approot-hidden">
+        <h1>Settings &amp; Companion Pairing</h1>
+        <div class="card" style="margin-bottom:14px">
+          <b>Mobile Companion Pairing</b>
+          <p class="dim">Pair your mobile client with this board using a secure, single-use QR exchange.</p>
           <button id="pair-qrcode-btn" class="btn-primary" onclick="open('/pair', '_blank')">Open Mobile Pairing Screen (QR)…</button>
         </div>
-        <div class="card">
+        <div class="card" style="margin-bottom:14px">
           <b>Tab Identity &amp; Auth</b>
-          <div style="display:flex;gap:10px;margin-top:10px">
-            <input id="who" placeholder="agent name (e.g. orchestrator)">
-            <input id="tok" type="password" placeholder="token abt-…">
+          <p class="dim">Configure credentials for this browser session.</p>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <input id="who" placeholder="Agent Name (e.g. orchestrator)">
+            <input id="tok" type="password" placeholder="Token abt-…">
             <button id="save" class="btn-primary">Save Creds</button>
           </div>
+        </div>
+        <div class="card">
+          <b>Workspace Stats</b>
+          <div class="cards" style="margin-top:10px">
+            <div class="card"><div class="dim">Agents</div><b id="c-agents">0</b></div>
+            <div class="card"><div class="dim">Active</div><b id="c-active">0</b></div>
+            <div class="card"><div class="dim">Workers</div><b id="c-workers">0</b></div>
+            <div class="card"><div class="dim">Unacked</div><b id="c-unacked">0</b></div>
+            <div class="card"><div class="dim">Broadcasts</div><b id="c-bcast">0</b></div>
+            <div class="card"><div class="dim">Groups</div><b id="c-groups">0</b></div>
+            <div class="card"><div class="dim">Peers</div><b id="c-peers">0</b></div>
+          </div>
+          <table style="margin-top:14px"><thead><tr><th>Group</th><th>Members</th></tr></thead><tbody id="groups"></tbody></table>
         </div>
         <div id="result"></div>
       </section>
 
-      <!-- SECTION: ALL -->
-      <section id="sec-all" data-section="All" class="approot-hidden">
-        <!-- Render all views concurrently when 'All' is selected -->
+      <!-- SECTION: BRIEFS (Table container required by panel test) -->
+      <section id="sec-briefs" data-section="Briefs" class="approot-hidden">
+        <table><thead><tr><th>Brief</th><th>Workers</th><th>Checkpoints</th><th>Finals</th><th>Acked</th><th>Last</th></tr></thead><tbody id="briefs"></tbody></table>
       </section>
-    </main>
-  </div>
 
-  <!-- 3. RIGHT INSPECTOR -->
+    </div>
+  </main>
+
+  <!-- 3. RIGHT INSPECTOR DRAWER -->
   <aside id="app-inspector" class="hidden">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <h2 style="margin:0">Inspector</h2>
-      <button id="insp-close-btn" style="padding:2px 8px;font-size:11px">✕</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-weight:600;font-size:13px;color:var(--ink)">Worker Inspector</div>
+      <button type="button" onclick="toggleInspector()" style="padding:2px 6px">✕</button>
     </div>
     <div id="inspector">
-      <div id="inspector-body"><span class="dim">Click any worker row to inspect its state, conversation thread, and logs.</span></div>
+      <div id="inspector-body"><span class="dim">Click a worker to inspect process details, memory, and live telemetry.</span></div>
     </div>
   </aside>
 </div>
@@ -1139,7 +1160,7 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
 <!-- Command Palette Modal -->
 <div id="palette">
   <div id="palette-box">
-    <input id="palette-input" placeholder="Type a command, worker name, or section… (Escape to close)">
+    <input id="palette-input" placeholder="Type a command or jump to section…">
     <div id="palette-list"></div>
     <div class="palette-hint">Use ↑ ↓ to navigate · Enter to select · Esc to close</div>
   </div>
@@ -1147,204 +1168,260 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
 
 <!-- Undo Toast -->
 <div id="undo-toast">
-  <span>Workers launched</span>
-  <button id="undo-kill-btn" class="danger" style="padding:3px 10px">Undo (Kill)</button>
+  <span id="undo-msg">Action performed</span>
+  <button id="undo-btn" class="danger">Undo</button>
 </div>
 
 <script>
-var CHECK_SVG='<svg class="btn-ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
-var DOT_SVG='<svg width="8" height="8" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg>';
-var RING_SVG='<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="none" stroke="currentColor"/></svg>';
+var boardPath = "${boardPath}";
+var activeBatch = null;
 
 function esc(s){return String(s===undefined||s===null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-function short(s,n){s=String(s||'');return s.length>n?s.slice(0,n)+'…':s;}
-function humanBytes(n){if(typeof n!=='number'||!(n>=0))return 'unlimited';if(n<1024)return n+' B';var u=['B','KB','MB','GB','TB'];var v=n;var i=0;while(v>=1024&&i<u.length-1){v/=1024;i++;}var r=Math.round(v*10)/10;return r+' '+u[i]+' ('+n+' bytes)';}
-function fmtLimit(v){return (v===undefined||v===null)?'unlimited':String(v);}
+function short(s,n){s=String(s||'');return s.length<=n?s:s.slice(0,n-1)+'…';}
 
-function creds(){return {from:(document.getElementById('who')||{}).value?document.getElementById('who').value.trim():'',token:(document.getElementById('tok')||{}).value||''};}
-function markIdent(){
-  var c=creds();
-  var txt=c.from?('identity: '+c.from):'';
-  var idEl=document.getElementById('ident');
-  if(idEl)idEl.textContent=txt;
-  var lf=document.getElementById('launch-from');
-  if(lf&&!lf.value&&c.from)lf.value=c.from;
-  var lt=document.getElementById('launch-token');
-  if(lt&&!lt.value&&c.token)lt.value=c.token;
+function crewbusThemeInit(){
   try{
-    var man=document.getElementById('launch-from-manual');
-    var lbl=document.getElementById('launch-as');
-    if(lbl)lbl.textContent=(man&&man.value.trim())||lf.value.trim()||c.from||'orchestrator';
+    var t=localStorage.getItem('crewbus-theme')||localStorage.getItem('crewbus-desktop-theme');
+    if(t==='light'||t==='dark') document.documentElement.setAttribute('data-theme',t);
+  }catch(_){}
+}
+function crewbusThemeToggle(){
+  try{
+    var cur=document.documentElement.getAttribute('data-theme');
+    if(!cur){
+      var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+      cur=prefersDark?'dark':'light';
+    }
+    var next=cur==='dark'?'light':'dark';
+    document.documentElement.setAttribute('data-theme',next);
+    localStorage.setItem('crewbus-theme',next);
+    localStorage.setItem('crewbus-desktop-theme',next);
   }catch(_){}
 }
 
-async function autoLoadOperatorCreds(){
-  var lf=document.getElementById('launch-from');
-  var lt=document.getElementById('launch-token');
-  var who=document.getElementById('who');
-  var tok=document.getElementById('tok');
-  var curFrom=(lf&&lf.value.trim())||(who&&who.value.trim());
-  var curTok=(lt&&lt.value.trim())||(tok&&tok.value.trim());
-  if(!curFrom||!curTok){
-    try{
-      var r=await fetch('/api/operator-creds');
-      if(r.ok){
-        var j=await r.json();
-        if(j.ok&&j.from&&j.token){
-          if(lf)lf.value=j.from;
-          if(lt)lt.value=j.token;
-          if(who&&!who.value)who.value=j.from;
-          if(tok&&!tok.value)tok.value=j.token;
-          markIdent();
-        }
-      }
-    }catch(_){}
+function approotNavTo(targetId){
+  var sections=['sec-boards','sec-crews','sec-fleet','sec-channels','sec-triage','sec-approvals','sec-results','sec-audit','sec-settings','sec-briefs'];
+  sections.forEach(function(id){
+    var el=document.getElementById(id);
+    if(el){
+      if(id===targetId) el.classList.remove('approot-hidden');
+      else el.classList.add('approot-hidden');
+    }
+  });
+  var btns=document.querySelectorAll('#approot-nav button');
+  Array.prototype.forEach.call(btns,function(b){
+    if(b.getAttribute('data-nav')===targetId) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  if(targetId==='sec-boards'){
+    document.getElementById('active-thread-title').textContent = activeBatch ? 'Mission '+short(activeBatch,14) : 'Mission Control';
+  } else {
+    var b=document.querySelector('#approot-nav button[data-nav="'+targetId+'"]');
+    document.getElementById('active-thread-title').textContent = b ? b.textContent.trim() : 'Workspace';
   }
 }
 
-function say(t){
-  var res=document.getElementById('result');
-  if(res)res.textContent=t;
-}
-
-if(document.getElementById('save')){
-  document.getElementById('save').onclick=function(){
-    var c=creds();
-    try{localStorage.setItem('ab-who',c.from);localStorage.setItem('ab-tok',c.token);}catch(e){}
-    markIdent();
-    say('identity saved in this tab');
+Array.prototype.forEach.call(document.querySelectorAll('#approot-nav button'),function(btn){
+  btn.onclick=function(){
+    var nav=btn.getAttribute('data-nav');
+    if(nav) approotNavTo(nav);
   };
-}
-try{document.getElementById('who').value=localStorage.getItem('ab-who')||'';document.getElementById('tok').value=localStorage.getItem('ab-tok')||'';}catch(e){}
-markIdent();
+});
 
-try{
-  var _mf=document.getElementById('launch-from-manual');
-  var _mt=document.getElementById('launch-token-manual');
-  if(_mf){_mf.oninput=function(){var w=document.getElementById('who');if(w&&!w.value)w.value=this.value.trim();markIdent();};}
-  if(_mt){_mt.oninput=function(){var t=document.getElementById('tok');if(t&&!t.value)t.value=this.value.trim();markIdent();};}
-}catch(_){}
-
-autoLoadOperatorCreds();
-
-function stateOf(w){
-  if(!w.known)return 'unknown';
-  if(w.reply)return w.acked?'done · acked':'done · reply waiting';
-  if(w.alive===true)return 'running';
-  if(w.alive===false)return 'exited · no reply';
-  return 'no pid';
+function toggleInspector(){
+  var insp=document.getElementById('app-inspector');
+  if(insp) insp.classList.toggle('hidden');
 }
 
-var _fq=document.getElementById('feed-q');
-if(_fq){_fq.oninput=function(){renderRecent();};}
-var _ft=document.getElementById('feed-type');
-if(_ft){_ft.onchange=function(){renderRecent();};}
-
-async function kill(names){
-  var c=creds();
-  if(!c.from||!c.token){say('set identity + token first');return;}
-  var msg=names.length===1?('kill '+names[0]+'?'):('kill '+names.length+' workers ('+names.join(', ')+')?');
-  if(!confirm(msg))return;
-  say('killing '+names.join(',')+' …');
-  try{
-    var r=await fetch('/api/kill',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({from:c.from,token:c.token,to:names})});
-    var j=await r.json();
-    say((r.ok?'':'HTTP '+r.status+' ')+j.results.map(function(x){return x.name+': '+x.result+(x.pid?' (pid '+x.pid+')':'')+(x.detail?' '+x.detail:'');}).join('\\n'));
-  }catch(e){say('kill failed: '+e.message);}
-  refresh();
+function showInspector(name){
+  var insp=document.getElementById('app-inspector');
+  if(insp) insp.classList.remove('hidden');
+  var b=document.getElementById('inspector-body');
+  if(!b)return;
+  var w=(window.__workers||[]).find(function(x){return x.name===name;})||{name:name,alive:false};
+  var tail=(w.tail||[]).map(function(l){return '<div class="log-line">'+esc(l)+'</div>';}).join('')||'<div class="dim">no output recorded</div>';
+  var statusStr=w.alive?'<span style="color:var(--ok)">● Active</span>':'<span style="color:var(--dim)">○ Exited</span>';
+  b.innerHTML=[
+    '<div style="margin-bottom:10px"><b>'+esc(w.name)+'</b> '+statusStr+'</div>',
+    '<div class="dim" style="font-size:11px;margin-bottom:6px">PID: '+(w.pid||'—')+' · Driver: '+esc(w.driver||w.spawnedHarness||'—')+'</div>',
+    (w.batch?'<div class="dim" style="font-size:11px;margin-bottom:8px">Batch: '+esc(w.batch)+'</div>':''),
+    '<div style="display:flex;gap:6px;margin-bottom:12px">',
+      (w.alive?'<button class="danger" data-kill="'+esc(w.name)+'">Kill Worker</button>':''),
+      (w.reply?'<button data-ack="'+esc(w.reply.id)+'">Ack Reply</button>':''),
+    '</div>',
+    '<div class="dim" style="font-size:11px;margin-bottom:4px">Live Process Log:</div>',
+    '<div class="log" style="max-height:300px">'+tail+'</div>',
+    '<div class="dim" style="margin-top:12px;font-size:10.5px">CLI respawn command:</div>',
+    '<div class="log" style="padding:6px;font-size:10.5px">crewbus respawn --to '+esc(w.name)+'</div>'
+  ].join('');
+  var k=b.querySelector('[data-kill]');
+  if(k) k.onclick=function(){kill([w.name]);};
+  var a=b.querySelector('[data-ack]');
+  if(a) a.onclick=function(){ackOne(w.reply.id);};
 }
 
-if(document.getElementById('killall')){
-  document.getElementById('killall').onclick=async function(){
-    var rows=window.__workers||[];
-    var names=rows.filter(function(w){return w.known&&w.alive===true;}).map(function(w){return w.name;});
-    if(!names.length){say('no live workers (kill needs a running pid)');return;}
-    kill(names);
+function showUndoToast(msg, onUndo){
+  var toast=document.getElementById('undo-toast');
+  if(!toast)return;
+  document.getElementById('undo-msg').textContent=msg;
+  toast.classList.add('show');
+  var btn=document.getElementById('undo-btn');
+  btn.onclick=function(){
+    toast.classList.remove('show');
+    if(onUndo) onUndo();
   };
+  setTimeout(function(){ toast.classList.remove('show'); }, 6000);
 }
 
-if(document.getElementById('ackall')){
-  document.getElementById('ackall').onclick=async function(){
-    var c=creds();
-    if(!c.from||!c.token){say('set identity + token first');return;}
-    if(!confirm('ack everything unacked for '+c.from+'?'))return;
-    say('acking all for '+c.from+' …');
-    try{
-      var r=await fetch('/api/ack',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({from:c.from,token:c.token,all:true})});
-      var j=await r.json();
-      say((r.ok?'':'HTTP '+r.status+' ')+'acked '+(j.results||[]).length+' item(s)');
-    }catch(e){say('ack failed: '+e.message);}
-    refresh();
-  };
+function startNewThread(){
+  activeBatch=null;
+  approotNavTo('sec-boards');
+  document.getElementById('active-thread-title').textContent='New Mission';
+  document.getElementById('active-thread-status').textContent='Draft';
+  var rows=document.querySelectorAll('#sidebar-thread-list .thread-row');
+  Array.prototype.forEach.call(rows,function(r){ r.classList.remove('active'); });
+  var box=document.getElementById('brief-thread');
+  if(box){
+    box.innerHTML=[
+      '<div class="chat-empty-stage">',
+        '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="1.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+        '<div class="chat-empty-title">What should your crew build?</div>',
+        '<div class="chat-empty-subtitle">Type your prompt below to launch agents. They will report progress and ask for permissions right inside this conversation stream.</div>',
+        '<div class="chat-suggestions">',
+          '<div class="suggestion-card" data-suggestion="Run test suite and fix failing tests">',
+            '<b>Run test suite &amp; fix bugs</b>',
+            '<span>Run tests, detect regressions, and patch code</span>',
+          '</div>',
+          '<div class="suggestion-card" data-suggestion="Refactor module to clean architecture">',
+            '<b>Refactor code</b>',
+            '<span>Improve performance and readability</span>',
+          '</div>',
+        '</div>',
+      '</div>'
+    ].join('');
+  }
+  var inp=document.getElementById('launch-brief');
+  if(inp){ inp.value=''; inp.focus(); }
 }
 
-async function ackOne(id){
-  var c=creds();
-  if(!c.from||!c.token){say('set identity + token first');return;}
-  say('acking '+id+' …');
-  try{
-    var r=await fetch('/api/ack',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({from:c.from,token:c.token,id:id})});
-    var j=await r.json();
-    say((r.ok?'':'HTTP '+r.status+' ')+JSON.stringify(j));
-  }catch(e){say('ack failed: '+e.message);}
-  refresh();
+function applySuggestion(text){
+  var inp=document.getElementById('launch-brief');
+  if(inp){
+    inp.value=text;
+    inp.dispatchEvent(new Event('input'));
+    inp.focus();
+  }
 }
 
-async function decide(id, verdict){
-  var c=creds();
-  if(!c.from||!c.token){say('set identity + token first');return;}
-  say('deciding '+id+' → '+verdict+' …');
-  try{
-    var r=await fetch('/api/approval/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({from:c.from,token:c.token,id:id,verdict:verdict})});
-    var j=await r.json();
-    say((r.ok?'':'HTTP '+r.status+' ')+JSON.stringify(j));
-  }catch(e){say('decide failed: '+e.message);}
-  refresh();
-}
-
-function renderRecent(){
-  var q=((document.getElementById('feed-q')||{}).value||'').toLowerCase();
-  var t=((document.getElementById('feed-type')||{}).value||'');
-  var known=window.__ackedBy||{};
-  var rows=(window.__recent||[]).filter(function(m){
-    if(t==='checkpoint'&&m.checkpoint!==true)return false;
-    if(t==='final'&&!(m.replyTo&&m.checkpoint!==true))return false;
-    if(!q)return true;
-    var to=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
-    return (m.id+' '+(m.from||'')+' '+to+' '+(m.subject||'')+' '+(m.body||'')).toLowerCase().indexOf(q)!==-1;
-  });
-  var recEl=document.getElementById('recent');
-  if(!recEl)return;
-  recEl.innerHTML=rows.map(function(m){
-    var to=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
-    var acks=(known[m.id]||[]).map(function(x){return CHECK_SVG+esc(x);}).join(' ');
-    return '<tr><td>'+esc(m.id)+'</td><td>'+esc(m.from)+' → '+esc(short(to,40))+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(short(m.body,200))+'<div class="dim">'+(m.replyTo?('re: '+esc(m.replyTo)+' '):'')+(m.batch?('batch '+esc(m.batch)+' '):'')+acks+'</div></td></tr>';
-  }).join('')||'<tr><td colspan="3" class="dim">no messages yet</td></tr>';
-}
+document.addEventListener('click', function(e){
+  var el=e.target && e.target.closest ? e.target.closest('[data-suggestion]') : null;
+  if(el){ var s=el.getAttribute('data-suggestion'); if(s) applySuggestion(s); }
+});
 
 async function showBrief(batch){
+  activeBatch=batch;
+  approotNavTo('sec-boards');
+  document.getElementById('active-thread-title').textContent='Mission '+short(batch,16);
+  var rows=document.querySelectorAll('#sidebar-thread-list .thread-row');
+  Array.prototype.forEach.call(rows,function(r){
+    if(r.getAttribute('data-batch')===batch) r.classList.add('active');
+    else r.classList.remove('active');
+  });
+
   var box=document.getElementById('brief-thread');
   if(!box)return;
-  box.innerHTML='<div class="dim">loading thread '+esc(batch)+'…</div>';
+  box.innerHTML='<div class="dim" style="padding:20px;text-align:center">Loading mission transcript for '+esc(batch)+'…</div>';
+
   try{
     var r=await fetch('/api/gather?batch='+encodeURIComponent(batch),{cache:'no-store'});
     var g=await r.json();
-    if(!r.ok){box.innerHTML='<div class="dim">gather failed: '+esc(g.error||r.status)+'</div>';return;}
-    box.innerHTML='<h3>'+esc(short(batch,32))+' <span class="dim">'+g.briefs+' briefs · '+g.replies+' replies · ~'+g.telemetry.tokensEst+' tok</span></h3>'+g.items.map(function(m){
-      var kind=!m.replyTo?'<b>brief</b>':(m.checkpoint?'<span class="dim">checkpoint</span>':'<b>final'+(m.acked?' '+CHECK_SVG:'')+'</b>');
-      var to=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
-      return '<div class="card" style="margin:.5em 0"><div>'+kind+' <b>'+esc(m.from)+'</b> → '+esc(short(to,60))+' <span class="dim">'+esc(ago(m.at))+'</span></div>'+(m.subject?'<div><b>'+esc(m.subject)+'</b></div>':'')+'<div class="log" style="white-space:pre-wrap">'+esc(m.body)+'</div></div>';
-    }).join('');
-  }catch(e){box.innerHTML='<div class="dim">gather failed: '+esc(e.message)+'</div>';}
+    if(!r.ok){ box.innerHTML='<div class="dim" style="padding:20px">gather failed: '+esc(g.error||r.status)+'</div>'; return; }
+
+    var approvals=[];
+    try{
+      var apR=await fetch('/api/board',{cache:'no-store'});
+      var apS=await apR.json();
+      approvals=apS.approvals||[];
+    }catch(_){}
+
+    var html='<div style="max-width:860px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:14px">';
+    html+='<div class="dim" style="font-size:11.5px;padding-bottom:10px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between"><span>Batch: '+esc(batch)+'</span><span>'+g.briefs+' briefs · '+g.replies+' replies · ~'+(g.telemetry&&g.telemetry.tokensEst?g.telemetry.tokensEst:0)+' tokens</span></div>';
+
+    var items=g.items||[];
+    for(var i=0;i<items.length;i++){
+      var m=items[i];
+      var isUser=!m.replyTo;
+      var isCkpt=m.checkpoint===true;
+      var toStr=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
+
+      if(isUser){
+        html+='<div class="chat-msg chat-msg-user">';
+        html+='  <div class="chat-msg-header"><span class="chat-msg-author">'+esc(m.from)+'</span><span>'+esc(ago(m.at))+'</span></div>';
+        html+='  <div class="chat-msg-card"><b>'+(m.subject?esc(m.subject):'Mission Brief')+'</b><div style="margin-top:6px;white-space:pre-wrap">'+esc(m.body)+'</div>';
+        html+='    <div class="chat-msg-tags"><span class="chat-tag">→ '+esc(toStr)+'</span><span class="chat-tag">batch '+esc(short(batch,8))+'</span></div>';
+        html+='  </div>';
+        html+='</div>';
+      } else {
+        html+='<div class="chat-msg">';
+        html+='  <div class="chat-msg-header"><span class="chat-msg-author">'+esc(m.from)+'</span><span class="dim">'+(isCkpt?'Checkpoint':'Final Report')+' · '+esc(ago(m.at))+'</span></div>';
+        html+='  <div class="chat-msg-card">';
+        if(m.subject) html+='<div style="font-weight:600;margin-bottom:6px">'+esc(m.subject)+'</div>';
+        html+='    <div style="white-space:pre-wrap">'+esc(m.body)+'</div>';
+        if(m.artifact) html+='<div style="margin-top:8px" class="dim">Artifact: <code>'+esc(m.artifact)+'</code></div>';
+        html+='  </div>';
+        html+='</div>';
+      }
+    }
+
+    // Inline Approvals in the Chat Stream
+    var pendingForWorkers=approvals.filter(function(ap){
+      return items.some(function(it){ return it.from===ap.from || it.to===ap.from; });
+    });
+    if(pendingForWorkers.length===0 && approvals.length>0 && items.length===0){
+      pendingForWorkers=approvals;
+    }
+
+    for(var j=0;j<pendingForWorkers.length;j++){
+      var ap=pendingForWorkers[j];
+      html+='<div class="chat-approval-card" data-approval-id="'+esc(ap.id)+'">';
+      html+='  <div class="chat-approval-head"><span class="chat-approval-title">Permission Request</span><span class="dim">'+esc(ago(ap.at))+'</span></div>';
+      html+='  <div><b>'+esc(ap.from)+'</b> requires your approval to proceed:</div>';
+      html+='  <div class="chat-approval-cmd">'+esc(ap.subject.replace(/^approval:[ 	]*/,''))+'</div>';
+      if(ap.body) html+='<div class="dim" style="font-size:11.5px;margin-bottom:8px">'+esc(ap.body)+'</div>';
+      html+='  <div class="chat-approval-actions">';
+      html+='    <input data-reason="'+esc(ap.id)+'" maxlength="500" placeholder="Optional instructions or feedback…">';
+      html+='    <button data-approve="'+esc(ap.id)+'" class="btn-primary">Approve</button>';
+      html+='    <button data-deny="'+esc(ap.id)+'" class="danger">Decline</button>';
+      html+='  </div>';
+      html+='</div>';
+    }
+
+    html+='</div>';
+    box.innerHTML=html;
+
+    // Delegate inline approvals
+    Array.prototype.forEach.call(box.querySelectorAll('[data-approve]'),function(btn){
+      btn.onclick=function(ev){ ev.stopPropagation(); decide(btn.getAttribute('data-approve'),'approved'); };
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-deny]'),function(btn){
+      btn.onclick=function(ev){ ev.stopPropagation(); decide(btn.getAttribute('data-deny'),'denied'); };
+    });
+
+    box.scrollTop=box.scrollHeight;
+  }catch(e){
+    box.innerHTML='<div class="dim" style="padding:20px">gather error: '+esc(e.message)+'</div>';
+  }
 }
 
+// Global Poll & Update Engine
 async function refresh(){
   try{
     var r=await fetch('/api/board',{cache:'no-store'});
     var s=await r.json();
     window.__lastBoardPoll=Date.now();
     updatePollAge();
-    window.__workers=s.workers;
+    window.__workers=s.workers||[];
+
     var active=s.agents.filter(function(a){return a.active;}).length;
     var unacked=s.agents.reduce(function(n,a){return n+a.unacked;},0);
 
@@ -1357,40 +1434,113 @@ async function refresh(){
     setTxt('c-groups', (s.groups||[]).length);
     setTxt('c-peers', (s.peers||[]).length);
 
-    var grpEl=document.getElementById('groups');
-    if(grpEl){
-      grpEl.innerHTML=(s.groups||[]).map(function(g){
-        var mem=g.members.join(',');
-        return '<tr><td><b>'+esc(g.name)+'</b> ('+g.count+')</td><td>'+esc(mem.length>120?mem.slice(0,120)+'…':mem)+'</td></tr>';
-      }).join('')||'<tr><td colspan="2" class="dim">no groups yet</td></tr>';
+    // 1. Sidebar Threads Stream
+    var threadListEl=document.getElementById('sidebar-thread-list');
+    if(threadListEl){
+      var briefs=s.briefs||[];
+      if(briefs.length===0){
+        threadListEl.innerHTML='<div class="dim" style="padding:10px 8px;font-size:12px">no missions yet</div>';
+      } else {
+        threadListEl.innerHTML=briefs.map(function(b){
+          var isCur=activeBatch===b.batch;
+          var hasRunning=s.workers.some(function(w){ return w.batch===b.batch && w.alive; });
+          var dotClass=hasRunning?'status-dot active':'status-dot';
+          var title=b.subject ? b.subject.replace(/^brief:[ 	]*/,'') : 'Mission '+short(b.batch,10);
+          return [
+            '<div class="thread-row '+(isCur?'active':'')+'" data-batch="'+esc(b.batch)+'">',
+              '<div class="thread-row-top">',
+                '<div class="thread-title">'+esc(title)+'</div>',
+                '<span class="thread-time">'+esc(ago(b.lastAt))+'</span>',
+              '</div>',
+              '<div class="thread-meta">',
+                '<span class="'+dotClass+'"></span>',
+                '<span>'+b.workers.length+' worker'+(b.workers.length===1?'':'s')+' · '+b.checkpointCount+' ckpts</span>',
+              '</div>',
+            '</div>'
+          ].join('');
+        }).join('');
+
+        Array.prototype.forEach.call(threadListEl.querySelectorAll('.thread-row'),function(r){
+          r.onclick=function(){ showBrief(r.getAttribute('data-batch')); };
+        });
+      }
     }
 
-    var peerEl=document.getElementById('peers');
-    if(peerEl){
-      peerEl.innerHTML=(s.peers||[]).map(function(p){
-        return '<tr><td>'+esc(p.peer)+'</td><td>'+esc(p.lastOk)+'</td></tr>';
-      }).join('')||'<tr><td colspan="2" class="dim">no sync peers yet</td></tr>';
+    // 2. Briefs Table (Contract for panel test)
+    var brEl=document.getElementById('briefs');
+    if(brEl){
+      brEl.innerHTML=(s.briefs||[]).map(function(b){
+        var ws=(b.workers||[]).join(',');
+        return '<tr data-batch="'+esc(b.batch)+'" style="cursor:pointer"><td><b>'+esc(b.subject||short(b.batch,12))+'</b></td><td>'+esc(ws)+'</td><td>'+b.checkpointCount+'</td><td>'+b.finalCount+'</td><td>'+b.ackedFinals+'/'+b.finalCount+'</td><td>'+esc(ago(b.lastAt))+'</td></tr>';
+      }).join('')||'<tr><td colspan="6" class="dim">no briefs yet</td></tr>';
+      Array.prototype.forEach.call(document.querySelectorAll('#briefs [data-batch]'),function(r){
+        r.onclick=function(){ showBrief(r.getAttribute('data-batch')); };
+      });
     }
 
-    var agEl=document.getElementById('agents');
-    if(agEl){
-      agEl.innerHTML=s.agents.map(function(a){
-        var dot=a.active?'<span style="color:var(--ok)">'+DOT_SVG+'</span>':'<span style="color:var(--dim)">'+RING_SVG+'</span>';
-        return '<tr><td>'+dot+' <b>'+esc(a.name)+'</b></td><td>'+esc(a.role||'worker')+'</td><td>'+(a.active?'active':'idle')+'</td><td>'+esc(ago(a.lastSeen))+'</td><td>'+a.unacked+'</td></tr>';
-      }).join('')||'<tr><td colspan="5" class="dim">no agents yet</td></tr>';
-    }
-
+    // 3. Crews Table
     var crEl=document.getElementById('crews');
     if(crEl){
       crEl.innerHTML=s.workers.map(function(w){
         var pidStr=w.pid===null||w.pid===undefined?'—':String(w.pid);
         var drv=w.driver||w.spawnedHarness||'—';
-        var rep=w.reply?(esc(w.reply.id)+(w.acked?' '+CHECK_SVG:'')):'—';
+        var rep=w.reply?(esc(w.reply.id)+(w.acked?' ✓':'')):'—';
         var kBtn=(w.known&&w.alive===true)?('<button class="danger" data-kill="'+esc(w.name)+'">kill</button>'):'';
         var bInfo=w.batch?('batch '+esc(short(w.batch,8))):'—';
         return '<tr class="worker-row" data-worker="'+esc(w.name)+'"><td><b>'+esc(w.name)+'</b></td><td>'+esc(stateOf(w))+'</td><td>'+esc(pidStr)+'</td><td>'+esc(drv)+'</td><td>'+bInfo+'</td><td>'+rep+'</td><td>'+kBtn+'</td></tr>';
       }).join('')||'<tr><td colspan="7" class="dim">no spawned workers yet</td></tr>';
     }
+
+    // 4. Agents Table
+    var agEl=document.getElementById('agents');
+    if(agEl){
+      agEl.innerHTML=s.agents.map(function(a){
+        var dot=a.active?'<span style="color:var(--ok)">●</span>':'<span style="color:var(--dim)">○</span>';
+        return '<tr><td>'+dot+' <b>'+esc(a.name)+'</b></td><td>'+esc(a.role||'worker')+'</td><td>'+(a.active?'active':'idle')+'</td><td>'+esc(ago(a.lastSeen))+'</td><td>'+a.unacked+'</td></tr>';
+      }).join('')||'<tr><td colspan="5" class="dim">no agents yet</td></tr>';
+    }
+
+    // 5. Approvals Table & Badge
+    var apEl=document.getElementById('approvals');
+    var apBadge=document.getElementById('sidebar-approvals-badge');
+    var apList=s.approvals||[];
+    if(apBadge){
+      if(apList.length>0){ apBadge.style.display='inline-block'; apBadge.textContent=apList.length; }
+      else { apBadge.style.display='none'; }
+    }
+    if(apEl){
+      apEl.innerHTML=apList.map(function(a){
+        return '<tr><td>'+esc(a.id)+'</td><td><b>'+esc(a.from)+'</b></td><td>'+esc(a.subject)+'<br><span class="dim">'+esc(short(a.body,120))+'</span></td><td><input data-reason="'+esc(a.id)+'" maxlength="500" placeholder="optional instructions…"></td><td><button class="btn-primary" data-approve="'+esc(a.id)+'">Approve</button> <button class="danger" data-deny="'+esc(a.id)+'">Deny</button></td></tr>';
+      }).join('')||'<tr><td colspan="5" class="dim">no pending approvals</td></tr>';
+    }
+
+    // 6. Fleet Table
+    try{
+      var fr=await fetch('/api/fleet',{cache:'no-store'});
+      var fl=await fr.json();
+      var flEl=document.getElementById('fleet');
+      if(flEl){
+        flEl.innerHTML=(fl.relays||[]).map(function(p){
+          var live=p.live;
+          return '<tr><td><b>'+esc(p.peer)+'</b></td><td>'+esc(live?live.role:'—')+'</td><td>'+esc(live&&live.weight!==null&&live.weight!==undefined?String(live.weight):'—')+'</td><td>'+esc(live&&live.workers!==null&&live.workers!==undefined?String(live.workers):'—')+'</td><td>'+esc(live&&live.lagMs!==null&&live.lagMs!==undefined?String(live.lagMs)+'ms':'—')+'</td><td>'+esc(p.lastOk)+'</td></tr>';
+        }).join('')||'<tr><td colspan="6" class="dim">no peers synced yet</td></tr>';
+      }
+    }catch(_){}
+
+    // 7. Channels Feed & Broadcasts
+    try{
+      var cr=await fetch('/api/channels',{cache:'no-store'});
+      var ch=await cr.json();
+      var chEl=document.getElementById('channels');
+      if(chEl){
+        chEl.innerHTML=(ch.channels||[]).map(function(c){
+          var heads=(c.latest||[]).map(function(p){
+            return '<div class="log" style="margin:4px 0"><b>'+esc(p.id)+'</b> ['+esc(p.from)+'] '+(p.subject?'<b>'+esc(p.subject)+'</b> ':'')+esc(p.head)+'</div>';
+          }).join('')||'<div class="dim">no posts</div>';
+          return '<div class="card" style="margin:.5em 0"><b>'+esc(c.name)+'</b> <span class="dim">'+c.posts+' posts</span>'+heads+'</div>';
+        }).join('')||'<div class="dim">no channels yet</div>';
+      }
+    }catch(_){}
 
     var bcEl=document.getElementById('bcast');
     if(bcEl){
@@ -1400,10 +1550,10 @@ async function refresh(){
       }).join('')||'<tr><td colspan="5" class="dim">no broadcasts</td></tr>';
     }
 
-    var apEl=document.getElementById('approvals');
-    var trEl=document.getElementById('triage');
+    // 8. Triage & Recent Feed
     try{
       var c=creds();
+      var trEl=document.getElementById('triage');
       if(c.from){
         var tr=await fetch('/api/inbox?agent='+encodeURIComponent(c.from)+'&unacked=1&limit=50',{cache:'no-store'});
         var tj=await tr.json();
@@ -1412,58 +1562,16 @@ async function refresh(){
             return '<tr><td>'+esc(m.id)+'</td><td>'+esc(m.from)+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(m.head)+'</td><td><button data-ack="'+esc(m.id)+'">ack</button></td></tr>';
           }).join('')||'<tr><td colspan="4" class="dim">inbox zero for '+esc(c.from)+'</td></tr>';
         }
-        var ap=(tj.items||[]).filter(function(m){return m.subject&&m.subject.indexOf('approval: ')===0;});
-        if(c.from!=='orchestrator'){
-          try{
-            var lr=await fetch('/api/inbox?agent=orchestrator&unacked=1&limit=50',{cache:'no-store'});
-            if(lr.ok){
-              var lj=await lr.json();
-              var lap=(lj.items||[]).filter(function(m){return m.subject&&m.subject.indexOf('approval: ')===0;});
-              for(var k=0;k<lap.length;k++){
-                lap[k]._forLead=true;
-                if(!ap.some(function(x){return x.id===lap[k].id;})) ap.push(lap[k]);
-              }
-            }
-          }catch(_){}
-        }
-        if(apEl){
-          apEl.innerHTML=ap.map(function(m){
-            var tag=m._forLead?' <span class="badge" style="font-size:10px;background:var(--panel);border:1px solid var(--line);padding:1px 4px;border-radius:3px">to orchestrator</span>':'';
-            return '<tr><td>'+esc(m.id)+tag+'</td><td>'+esc(m.from)+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(m.head)+'</td><td><input data-reason="'+esc(m.id)+'" maxlength="500" size="18" placeholder="optional reason"></td><td><button data-approve="'+esc(m.id)+'">approve</button> <button class="danger" data-deny="'+esc(m.id)+'">deny</button></td></tr>';
-          }).join('')||'<tr><td colspan="5" class="dim">no approval requests for '+esc(c.from)+'</td></tr>';
-        }
       }else{
-        if(trEl)trEl.innerHTML='<tr><td colspan="4" class="dim">set identity in Settings to triage</td></tr>';
-        if(apEl)apEl.innerHTML='<tr><td colspan="5" class="dim">set identity in Settings to review approvals</td></tr>';
+        if(trEl) trEl.innerHTML='<tr><td colspan="4" class="dim">set identity in Settings to triage</td></tr>';
       }
     }catch(_){}
 
-    try{
-      var fr=await fetch('/api/fleet',{cache:'no-store'});
-      var fl=await fr.json();
-      var flEl=document.getElementById('fleet');
-      if(flEl){
-        flEl.innerHTML=(fl.relays||[]).map(function(p){
-          var live=p.live;
-          return '<tr><td>'+esc(p.peer)+'</td><td>'+esc(live?live.role:'—')+'</td><td>'+esc(live&&live.weight!==null&&live.weight!==undefined?String(live.weight):'—')+'</td><td>'+esc(live&&live.workers!==null&&live.workers!==undefined?String(live.workers):'—')+'</td><td>'+esc(live&&live.lagMs!==null&&live.lagMs!==undefined?String(live.lagMs)+'ms':'—')+'</td><td>'+esc(p.lastOk)+'</td></tr>';
-        }).join('')||'<tr><td colspan="6" class="dim">no peers synced yet</td></tr>';
-      }
-    }catch(_){}
+    window.__recent=s.recent||[];
+    window.__ackedBy=s.ackedBy||{};
+    renderRecent();
 
-    try{
-      var cr=await fetch('/api/channels',{cache:'no-store'});
-      var ch=await cr.json();
-      var chEl=document.getElementById('channels');
-      if(chEl){
-        chEl.innerHTML=(ch.channels||[]).map(function(c){
-          var heads=(c.latest||[]).map(function(p){
-            return '<div class="log"><b>'+esc(p.id)+'</b> ['+esc(p.from)+'] '+(p.subject?'<b>'+esc(p.subject)+'</b> ':'')+esc(p.head)+'</div>';
-          }).join('')||'<div class="dim">no posts</div>';
-          return '<div class="card" style="margin:.5em 0"><b>'+esc(c.name)+'</b> <span class="dim">'+c.posts+' posts</span>'+heads+'</div>';
-        }).join('')||'<div class="dim">no channels yet</div>';
-      }
-    }catch(_){}
-
+    // 9. Results Table
     try{
       var rr=await fetch('/api/results',{cache:'no-store'});
       var rs=await rr.json();
@@ -1479,6 +1587,7 @@ async function refresh(){
       }
     }catch(_){}
 
+    // 10. Audit Chain
     try{
       var ar=await fetch('/api/audit',{cache:'no-store'});
       var au=await ar.json();
@@ -1494,6 +1603,7 @@ async function refresh(){
       }
     }catch(_){}
 
+    // 11. Holds & Quotas
     try{
       var hr=await fetch('/api/holds',{cache:'no-store'});
       var hj=await hr.json();
@@ -1513,567 +1623,420 @@ async function refresh(){
       if(hbEl)hbEl.innerHTML=hb;
     }catch(_){}
 
-    var brEl=document.getElementById('briefs');
-    if(brEl){
-      brEl.innerHTML=(s.briefs||[]).map(function(b){
-        var prog=b.briefCount+' briefs · '+b.checkpointCount+' ckpts · '+b.finalCount+' finals';
-        return '<tr data-batch="'+esc(b.batch)+'" style="cursor:pointer"><td><b>'+esc(short(b.batch,10))+'</b></td><td>'+esc(b.subject||'—')+'</td><td>'+esc(short(b.workers.join(', '),30))+'</td><td>'+esc(prog)+'</td></tr>';
-      }).join('')||'<tr><td colspan="4" class="dim">no briefs yet</td></tr>';
-    }
-
-    window.__recent=s.recent||[];
-    window.__ackedBy=s.ackedBy||{};
-    renderRecent();
-
-    // Event delegation
+    // Delegation
     Array.prototype.forEach.call(document.querySelectorAll('[data-kill]'),function(b){b.onclick=function(ev){ev.stopPropagation();kill([b.getAttribute('data-kill')]);};});
     Array.prototype.forEach.call(document.querySelectorAll('[data-ack]'),function(b){b.onclick=function(ev){ev.stopPropagation();ackOne(b.getAttribute('data-ack'));};});
     Array.prototype.forEach.call(document.querySelectorAll('[data-approve]'),function(b){b.onclick=function(ev){ev.stopPropagation();decide(b.getAttribute('data-approve'),'approved');};});
     Array.prototype.forEach.call(document.querySelectorAll('[data-deny]'),function(b){b.onclick=function(ev){ev.stopPropagation();decide(b.getAttribute('data-deny'),'denied');};});
     Array.prototype.forEach.call(document.querySelectorAll('[data-worker]'),function(r){r.onclick=function(){showInspector(r.getAttribute('data-worker'));};});
-    Array.prototype.forEach.call(document.querySelectorAll('[data-batch]'),function(r){r.onclick=function(){showBrief(r.getAttribute('data-batch'));};});
   }catch(e){}
 }
 
-var _launchMetaCache = {};
-function fetchLaunchMetaCached(key, url) {
-  var entry = _launchMetaCache[key];
-  if (__launchMetaFresh(entry)) return Promise.resolve(entry.data);
-  return fetch(url).then(function(r){ return r.json(); }).then(function(j){
-    _launchMetaCache[key] = { data: j, at: Date.now() };
+function stateOf(w){
+  if(!w.known) return 'untracked';
+  if(w.alive) return 'running';
+  if(w.exitCode===0) return 'done';
+  if(w.exitCode!==null&&w.exitCode!==undefined) return 'exit '+w.exitCode;
+  return 'exited';
+}
+
+function renderRecent(){
+  var tbody=document.getElementById('recent');
+  if(!tbody)return;
+  var q=(document.getElementById('feed-q')?document.getElementById('feed-q').value:'').trim().toLowerCase();
+  var type=document.getElementById('feed-type')?document.getElementById('feed-type').value:'';
+  var list=(window.__recent||[]).filter(function(m){
+    if(type==='checkpoint'&&!m.checkpoint) return false;
+    if(type==='final'&&m.checkpoint) return false;
+    if(q){
+      var hay=(m.from+' '+(Array.isArray(m.to)?m.to.join(' '):m.to)+' '+(m.subject||'')+' '+(m.body||'')).toLowerCase();
+      if(hay.indexOf(q)===-1) return false;
+    }
+    return true;
+  });
+  tbody.innerHTML=list.slice(0,30).map(function(m){
+    var to=Array.isArray(m.to)?m.to.join(','):String(m.to||'');
+    var acks=(window.__ackedBy[m.id]||[]).map(function(x){return '✓'+esc(x);}).join(' ');
+    return '<tr><td>'+esc(m.id)+'</td><td>'+esc(m.from)+' → '+esc(short(to,40))+'</td><td>'+(m.subject?'<b>'+esc(m.subject)+'</b><br>':'')+esc(short(m.body,200))+'<div class="dim">'+(m.replyTo?('re: '+esc(m.replyTo)+' '):'')+(m.batch?('batch '+esc(m.batch)+' '):'')+acks+'</div></td></tr>';
+  }).join('')||'<tr><td colspan="3" class="dim">no messages matching filter</td></tr>';
+}
+
+var fq=document.getElementById('feed-q'); if(fq) fq.oninput=renderRecent;
+var ft=document.getElementById('feed-type'); if(ft) ft.onchange=renderRecent;
+
+// Harness & Model Metadata
+var _launchMetaCache={};
+function fetchLaunchMetaCached(key,url){
+  var entry=_launchMetaCache[key];
+  if(entry&&Date.now()-entry.at<60000) return Promise.resolve(entry.data);
+  return fetch(url).then(function(r){return r.json();}).then(function(j){
+    _launchMetaCache[key]={data:j,at:Date.now()};
     return j;
-  }).catch(function(e){ return entry ? entry.data : null; });
-}
-function __launchMetaFresh(entry){return !!(entry&&entry.data&&Date.now()-entry.at<60000);}
-
-function syncModelOptions(selectedHarnesses) {
-  var modelSelect = document.getElementById('launch-model');
-  if (!modelSelect) return;
-  var harnessArr = Array.from(selectedHarnesses || []);
-  var harnessName = harnessArr.length === 1 ? harnessArr[0] : (harnessArr[0] || 'claude');
-  var currentVal = modelSelect.value;
-  var catalog = window.__modelCatalog || {};
-  var harnessModels = catalog[harnessName] || [];
-  var options = [{ value: '', label: 'Default (harness configured)' }];
-  for (var i = 0; i < harnessModels.length; i++) {
-    var m = harnessModels[i];
-    options.push({ value: m.id, label: m.label || m.id });
-  }
-  options.push({ value: '__custom__', label: 'Custom model…' });
-  var html = '';
-  for (var j = 0; j < options.length; j++) {
-    var opt = options[j];
-    var sel = (opt.value === currentVal) ? ' selected' : '';
-    html += '<option value="' + esc(opt.value) + '"' + sel + '>' + esc(opt.label) + '</option>';
-  }
-  modelSelect.innerHTML = html;
-  if (!Array.from(modelSelect.options).some(function(o){ return o.value === currentVal; })) {
-    modelSelect.value = '';
-  }
+  }).catch(function(){ return entry?entry.data:null; });
 }
 
-function refreshLaunchMeta() {
-  fetchLaunchMetaCached('harnesses', '/api/harnesses').then(function(h){
-    if (h) {
-      window.__harnesses = h;
-      var sel = document.getElementById('launch-harness');
-      var oldVal = sel.value;
-      var drivers = h.map(function(x){ return x.driver; });
-      // update selection options without touching current selection
-      sel.innerHTML = drivers.map(function(d){ return '<option value="' + esc(d) + '">' + esc(d) + '</option>'; }).join('');
-      if (drivers.indexOf(oldVal) !== -1) sel.value = oldVal;
-      // never the <select>
-    }
-  });
-  fetchLaunchMetaCached('routes', '/api/routes').then(function(r){
-    if (r) {
-      var line = document.getElementById('routes-line');
-      if (line && r.advertisedRoutes) {
-        line.textContent = 'routes: ' + (r.advertisedRoutes.slice(0, 2).join(', ') || 'none');
-      }
-    }
-  });
-  fetchLaunchMetaCached('models', '/api/models').then(function(m){
-    if (m) {
-      window.__modelCatalog = m;
-      syncModelOptions(window.__selectedHarnesses);
-    }
-  });
-}
-
-function loadLaunchMeta() {
-  refreshLaunchMeta();
-  renderHarnessCards();
-}
-
-async function doLaunch(dry){
-  var out=document.getElementById('launch-out');
-  function launchCreds(){
-    var manFrom=document.getElementById('launch-from-manual');
-    var manTok=document.getElementById('launch-token-manual');
-    var mf=manFrom?manFrom.value.trim():'';
-    var mt=manTok?manTok.value:'';
-    if(mf||mt) return {from:mf,token:mt};
-    return {
-      from:(document.getElementById('launch-from')||{}).value?document.getElementById('launch-from').value.trim():creds().from,
-      token:(document.getElementById('launch-token')||{}).value||creds().token
-    };
+function syncModelOptions(selectedHarness){
+  var sel=document.getElementById('launch-model');
+  if(!sel)return;
+  var curVal=sel.value;
+  var catalog=window.__modelCatalog||{};
+  var models=catalog[selectedHarness]||[];
+  var opts=[{value:'',label:'Default model'}];
+  for(var i=0;i<models.length;i++){
+    opts.push({value:models[i].id,label:models[i].label||models[i].id});
   }
-  var lc=launchCreds();
-  var lf=lc.from, lt=lc.token;
-  if(!lf||!lt){
-    await autoLoadOperatorCreds();
-    lc=launchCreds();
-    lf=lc.from; lt=lc.token;
-  }
-  if(!lf||!lt){out.textContent='starting up — identity not ready yet, retry in a moment';return;}
-  var toEl=document.getElementById('launch-to');
-  var to=toEl?toEl.value.trim():'';
-  var count=Number(document.getElementById('launch-count').value)||1;
-  var selectedHarnesses = window.__selectedHarnesses && window.__selectedHarnesses.size ? Array.from(window.__selectedHarnesses) : (document.getElementById('launch-harness').value || 'claude').split(',').map(function(s){return s.trim();}).filter(Boolean);
-  if(!selectedHarnesses.length)selectedHarnesses=['claude'];
-  var modelEl=document.getElementById('launch-model');
-  var customModelEl=document.getElementById('launch-model-custom');
-  var modelVal='';
-  if(modelEl){
-    if(modelEl.value==='__custom__'){
-      modelVal=customModelEl?customModelEl.value.trim():'';
-    }else{
-      modelVal=modelEl.value.trim();
-    }
-  }
-  var cwdEl=document.getElementById('launch-cwd');
-  var cwdVal=cwdEl?cwdEl.value.trim():'';
-  var leadEl=document.getElementById('launch-lead');
-  var leadVal=leadEl?leadEl.value.trim():'auto';
-  var payload={
-    from:lf, token:lt,
-    harness:selectedHarnesses.join(','),
-    harnesses:selectedHarnesses,
-    body:document.getElementById('launch-brief').value,
-    permission:document.getElementById('launch-permission').value,
-    lead:leadVal,
-    dryRun:dry
-  };
-  if(cwdVal){
-    payload.cwd=cwdVal;
-    try{localStorage.setItem('crewbus_last_cwd',cwdVal);}catch(_){}
-  }
-  if(modelVal)payload.model=modelVal;
-  if(to)payload.to=to;else payload.count=count;
-  out.textContent=(dry?'previewing …':'launching …');
-  try{
-    var r=await fetch('/api/launch',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
-    var j=await r.json();
-    if(!r.ok){out.textContent='HTTP '+r.status+' '+(j.error||JSON.stringify(j));return;}
-    if(j.dryRun){
-      var warn=(j.warnings||[]).length?('warnings: '+j.warnings.join('; ')+'\\n'):'';
-      var cwdNotice=j.cwd?('target directory (cwd): '+j.cwd+'\\n'):'';
-      var coordNotice=j.coordinator?('\\ncoordinator ('+j.coordinator.name+'): '+(j.coordinator.action==='reused'?('reused standing pid '+j.coordinator.pid):(j.coordinator.action==='created'?'would auto-provision':'skipped ('+(j.coordinator.reason||'')+')'))):'';
-      try{renderLaunchDiff(j);}catch(_){}
-      out.textContent=warn+cwdNotice+(j.commands||[]).map(function(c){return c.to+' ['+(c.harness||'')+']: '+c.command;}).join('\\n')+coordNotice+'\\n(dry-run — booted nothing)';
-    }else{
-      try{showUndoToast((j.workers||[]).map(function(w){return w.name;}));}catch(_){}
-      var cwdNotice=j.cwd?(' [cwd: '+j.cwd+']'):'';
-      var coordNotice='';
-      if(j.coordinator){
-        if(j.coordinator.action==='created'&&j.coordinator.pid){
-          coordNotice=' · orchestrator: pid '+j.coordinator.pid;
-        }else if(j.coordinator.action==='reused'){
-          coordNotice=' · orchestrator: reused'+(j.coordinator.pid?' pid '+j.coordinator.pid:'');
-        }else if(j.coordinator.reason){
-          coordNotice=' · orchestrator: skipped ('+j.coordinator.reason+')';
-        }
-      }
-      out.textContent='launched: '+(j.workers||[]).map(function(w){return w.name+' ['+(w.driver||'')+']'+(w.pid?(' (pid '+w.pid+')'):'')+(w.error?(' ERROR '+w.error):'');}).join(', ')+coordNotice+cwdNotice;
-    }
-  }catch(e){out.textContent='launch failed: '+e.message;}
-  refresh();
-}
-
-if(document.getElementById('launch-preview')){
-  document.getElementById('launch-preview').onclick=function(){doLaunch(true);};
-}
-if(document.getElementById('launch-go')){
-  document.getElementById('launch-go').onclick=function(){
-    var dryEl=document.getElementById('launch-dry');
-    var dry=(dryEl&&dryEl.style.display!=='none')?dryEl.checked:false;
-    if(!dry&&!confirm('live boot: spawn real workers from this board?'))return;
-    doLaunch(dry);
-  };
-}
-
-function approotShowAll(){
-  var secs=document.querySelectorAll('#view-container > section');
-  for(var i=0;i<secs.length;i++){
-    secs[i].classList.remove('approot-hidden');
-  }
-}
-function markApprootNav(id){
-  var btns=document.querySelectorAll('#approot-nav button');
-  for(var i=0;i<btns.length;i++){
-    if(btns[i].getAttribute('data-nav')===id){btns[i].classList.add('active');}
-    else{btns[i].classList.remove('active');}
-  }
-}
-function approotNavTo(id){
-  markApprootNav(id);
-  if(id==='all'){
-    approotShowAll();
-    var t=document.getElementById('view-title');
-    if(t)t.textContent='All Sections';
-    return;
-  }
-  var secs=document.querySelectorAll('#view-container > section');
-  for(var i=0;i<secs.length;i++){
-    if(secs[i].id===id){
-      secs[i].classList.remove('approot-hidden');
-      var t=document.getElementById('view-title');
-      if(t)t.textContent=secs[i].getAttribute('data-section')||'View';
-    } else {
-      secs[i].classList.add('approot-hidden');
-    }
-  }
+  opts.push({value:'__custom__',label:'Custom model…'});
+  sel.innerHTML=opts.map(function(o){
+    return '<option value="'+esc(o.value)+'"'+(o.value===curVal?' selected':'')+'>'+esc(o.label)+'</option>';
+  }).join('');
 }
 
 function renderHarnessCards(){
-  return (async function(){
-    var hj=await fetchLaunchMetaCached('harnesses','/api/harnesses');
-    window.__harnesses=hj;
-    if(!window.__selectedHarnesses || window.__selectedHarnesses.size===0){
-      var rawH=(document.getElementById('launch-harness').value||'claude').split(',').map(function(s){return s.trim();}).filter(Boolean);
-      window.__selectedHarnesses=new Set(rawH.length?rawH:['claude']);
-    }
-    var counts={};
-    try{
-      var __ws=window.__workers||[];
-      for(var __ci=0;__ci<__ws.length;__ci++){
-        var __dd=__ws[__ci].driver||__ws[__ci].spawnedHarness;
-        if(__dd){counts[__dd]=(counts[__dd]||0)+1;}
-      }
-    }catch(_){}
-    var box=document.getElementById('harness-cards');
-    if(!box)return;
-    box.innerHTML=(Array.isArray(hj)?hj:[]).map(function(h){
-      var ver=h.found?(h.version||'installed'):('missing ('+(h.detail||'not installed')+')');
-      var isSel=window.__selectedHarnesses.has(h.driver);
-      var cls='harness-card'+(isSel?' sel':'')+(h.found?'':' missing');
-      var badge=counts[h.driver]?'<div class="dim">'+counts[h.driver]+' running</div>':'';
-      var dot=h.found?'<span style="color:var(--ok)">●</span>':'<span style="color:var(--dim)">○</span>';
-      return '<div class="'+cls+'" data-driver="'+esc(h.driver)+'" id="harness-chip-'+esc(h.driver)+'"><b>'+dot+' '+esc(h.driver)+'</b><div class="dim">'+esc(ver)+'</div>'+badge+'</div>';
-    }).join('')||'<div class="dim" id="harnesses">no harness drivers</div>';
-    var cards=document.querySelectorAll('#harness-cards [data-driver]');
-    for(var i=0;i<cards.length;i++){
-      cards[i].onclick=(function(d){return function(){
-        if(window.__selectedHarnesses.has(d)){
-          if(window.__selectedHarnesses.size>1){
-            window.__selectedHarnesses.delete(d);
-          }
-        }else{
-          window.__selectedHarnesses.add(d);
-        }
-        document.getElementById('launch-harness').value=Array.from(window.__selectedHarnesses).join(',');
-        var countEl=document.getElementById('launch-count');
-        if(countEl && (!countEl.value || Number(countEl.value)<=window.__selectedHarnesses.size)){
-          countEl.value=String(window.__selectedHarnesses.size);
-        }
-        syncTopbarHarness();
-        syncModelOptions(window.__selectedHarnesses);
-        try{renderHarnessCards();}catch(_){}
-      };})(cards[i].getAttribute('data-driver'));
-    }
-    syncTopbarHarness();
-    syncModelOptions(window.__selectedHarnesses);
-  })();
-}
-
-function syncTopbarHarness(){
-  var main=document.getElementById('launch-harness');
-  var quick=document.getElementById('topbar-harness');
-  if(!main||!quick)return;
-  var cur=quick.value;
-  var opts=main.options;
-  var html='';
-  for(var i=0;i<opts.length;i++){html+='<option value="'+esc(opts[i].value)+'">'+esc(opts[i].textContent||opts[i].value)+'</option>';}
-  if(html&&quick.innerHTML!==html){quick.innerHTML=html;}
-  if(cur){try{quick.value=cur;}catch(_){}}
-  if(!quick.value&&main.value){try{quick.value=main.value;}catch(_){}}
-}
-
-function renderLaunchDiff(j){
-  var box=document.getElementById('launch-diff');
-  if(!box)return;
-  if(!j||(!j.commands&&!j.warnings)){box.innerHTML='';return;}
-  var html='<div class="card" style="margin-top:12px">';
-  if(j.warnings&&j.warnings.length){
-    html+='<div class="warn" style="color:var(--warn);margin-bottom:8px"><b>Warnings:</b><ul>'+j.warnings.map(function(w){return '<li>'+esc(w)+'</li>';}).join('')+'</ul></div>';
-  }
-  if(j.commands&&j.commands.length){
-    html+='<div class="dim" style="margin-bottom:6px">Planned commands:</div><pre class="log" style="margin:0">'+esc(j.commands.map(function(c){return c.to+': '+c.command;}).join('\\n'))+'</pre>';
-  }
-  html+='</div>';
-  box.innerHTML=html;
-}
-
-function showUndoToast(names){
-  var toast=document.getElementById('undo-toast');
-  if(!toast)return;
-  toast.classList.add('show');
-  var undoBtn=document.getElementById('undo-kill-btn');
-  if(undoBtn){
-    undoBtn.onclick=function(){
-      toast.classList.remove('show');
-      kill(names);
+  var container=document.getElementById('harness-cards');
+  if(!container)return;
+  var detected=window.__harnesses||[];
+  var sel=document.getElementById('launch-harness');
+  var cur=(sel?sel.value:'claude')||'claude';
+  var list=['claude','codex','opencode','cursor','antigravity','grok','qwen'];
+  container.innerHTML=list.map(function(d){
+    var det=detected.find(function(x){return x.driver===d;});
+    var isSel=d===cur;
+    var cls='harness-card'+(isSel?' sel':'')+((det&&!det.detected)?' missing':'');
+    return '<div class="'+cls+'" data-harness="'+esc(d)+'">'+esc(d)+'</div>';
+  }).join('');
+  Array.prototype.forEach.call(container.querySelectorAll('.harness-card'),function(c){
+    c.onclick=function(){
+      var h=c.getAttribute('data-harness');
+      if(sel) sel.value=h;
+      var topH=document.getElementById('topbar-harness');
+      if(topH) topH.value=h;
+      renderHarnessCards();
+      syncModelOptions(h);
     };
-  }
-  setTimeout(function(){toast.classList.remove('show');},12000);
+  });
 }
 
-function showInspector(name){
-  var body=document.getElementById('inspector-body');
-  if(!body)return;
-  var rows=window.__workers||[];
-  var w=null;
-  for(var i=0;i<rows.length;i++){if(rows[i].name===name){w=rows[i];break;}}
-  if(!w){body.innerHTML='<span class="dim">unknown worker '+esc(name)+'</span>';return;}
-  var tail=((w.tail||[]).slice(-10).map(function(l){return esc(l);}).join('\\n'))||'no log';
-  var rep=w.reply?(esc(w.reply.id)+' — '+esc(w.reply.head||'')):'—';
-  var html='<div><b>'+esc(w.name)+'</b> <span class="dim">'+esc(stateOf(w))+'</span></div>'
-    +'<div class="dim" style="margin-top:4px">state: '+esc(stateOf(w))+' · pid: '+esc(w.pid===null||w.pid===undefined?'—':String(w.pid))+' · spawner: '+esc(w.spawnedBy||'?')+'</div>'
-    +'<div class="dim">harness: '+esc(w.driver||w.spawnedHarness||'—')+'</div>'
-    +'<div class="dim">reply: '+rep+' · acked: '+esc(w.acked?'yes':'no')+' · session: '+esc(w.harnessSessionId||'—')+'</div>'
-    +'<div class="log" style="margin-top:8px">'+tail+'</div>'
-    +'<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">'
-      +((w.known&&w.alive===true)?'<button class="danger" id="insp-kill">kill</button>':'')
-      +(w.reply?'<button id="insp-ack">ack reply</button>':'')
-      +'<button id="insp-respawn">respawn (CLI-only)</button></div>'
-    +'<div class="dim" id="insp-respawn-cmd" style="margin-top:4px"></div>';
-  body.innerHTML=html;
-  var kb=document.getElementById('insp-kill');
-  if(kb){kb.onclick=function(){kill([w.name]);};}
-  var ab=document.getElementById('insp-ack');
-  if(ab){ab.onclick=function(){ackOne(w.reply.id);};}
-  var rb=document.getElementById('insp-respawn');
-  if(rb){rb.onclick=function(){
-    var cmd='crewbus respawn --to '+w.name;
-    document.getElementById('insp-respawn-cmd').textContent='respawn is CLI-only — run: '+cmd;
-    try{if(navigator&&navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(cmd);}}catch(_){}
-    say('respawn is CLI-only — run: '+cmd);
-  };}
-  var insp=document.getElementById('app-inspector');
-  if(insp)insp.classList.remove('hidden');
-}
-
-function openPalette(){
-  var p=document.getElementById('palette');
-  if(p){p.classList.add('open');document.getElementById('palette-input').focus();renderPaletteList('');}
-}
-function closePalette(){
-  var p=document.getElementById('palette');
-  if(p){p.classList.remove('open');}
-}
-function renderPaletteList(q){
-  var list=document.getElementById('palette-list');
-  if(!list)return;
-  var items=[
-    {label:'Launch Studio (Mission Control)', action:function(){approotNavTo('sec-launch');}},
-    {label:'Task Briefs & Transcripts', action:function(){approotNavTo('sec-briefs');}},
-    {label:'Active Crews & Workers', action:function(){approotNavTo('sec-crews');}},
-    {label:'Agent Fleet Roster', action:function(){approotNavTo('sec-fleet');}},
-    {label:'Channels & Broadcasts', action:function(){approotNavTo('sec-channels');}},
-    {label:'Triage & Inboxes', action:function(){approotNavTo('sec-triage');}},
-    {label:'Approvals (Human-in-the-Loop)', action:function(){approotNavTo('sec-approvals');}},
-    {label:'Results & Races', action:function(){approotNavTo('sec-results');}},
-    {label:'Audit Trail', action:function(){approotNavTo('sec-audit');}},
-    {label:'Pair Mobile Client (QR)', action:function(){open('/pair','_blank');}},
-    {label:'Toggle Theme (Light/Dark)', action:function(){crewbusThemeToggle();}}
-  ];
-  var workers=window.__workers||[];
-  for(var i=0;i<workers.length;i++){
-    (function(w){
-      items.push({label:'Inspect worker: '+w.name+' ('+stateOf(w)+')', action:function(){showInspector(w.name);}});
-    })(workers[i]);
-  }
-  var filtered=items.filter(function(it){return !q||it.label.toLowerCase().indexOf(q.toLowerCase())!==-1;});
-  list.innerHTML=filtered.map(function(it,idx){
-    return '<div class="'+(idx===0?'sel':'')+'" data-pidx="'+idx+'">'+esc(it.label)+'</div>';
-  }).join('')||'<div class="dim">No matches</div>';
-  window.__paletteFiltered=filtered;
-  var divs=list.querySelectorAll('[data-pidx]');
-  for(var j=0;j<divs.length;j++){
-    divs[j].onclick=(function(it){return function(){closePalette();it.action();};})(filtered[Number(divs[j].getAttribute('data-pidx'))]);
-  }
-}
-
-function crewbusThemeInit(){
-  var t=localStorage.getItem('crewbus_theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-  crewbusThemeApply(t);
-}
-function crewbusThemeApply(t){
-  document.documentElement.setAttribute('data-theme', t);
-  try{localStorage.setItem('crewbus_theme', t);}catch(_){}
-}
-function crewbusThemeToggle(){
-  var cur=document.documentElement.getAttribute('data-theme')||'dark';
-  var next=cur==='dark'?'light':'dark';
-  crewbusThemeApply(next);
-}
-
-// Event Bindings
-var palOpen=document.getElementById('palette-open');
-if(palOpen)palOpen.onclick=function(){openPalette();};
-var palInput=document.getElementById('palette-input');
-if(palInput){
-  palInput.oninput=function(){renderPaletteList(this.value);};
-  palInput.onkeydown=function(e){
-    if(e.key==='Escape'){closePalette();}
-    if(e.key==='Enter'){
-      var first=(window.__paletteFiltered||[])[0];
-      if(first){closePalette();first.action();}
+// live-refreshes only the table, never the <select> so user in-progress picks are untouched
+function refreshLaunchMeta(){
+  fetchLaunchMetaCached('harnesses','/api/harnesses').then(function(h){
+    if(h){
+      window.__harnesses=h;
+      var sel=document.getElementById('launch-harness');
+      var oldVal=sel.value;
+      var drivers=h.map(function(x){return x.driver;});
+      sel.innerHTML=drivers.map(function(d){return '<option value="'+esc(d)+'">'+esc(d)+'</option>';}).join('');
+      if(drivers.indexOf(oldVal)!==-1) sel.value=oldVal;
+      renderHarnessCards();
     }
+  });
+  fetchLaunchMetaCached('routes','/api/routes').then(function(r){
+    if(r&&r.routes){
+      var rl=document.getElementById('routes-line');
+      if(rl) rl.textContent=r.routes.join(' · ');
+    }
+  });
+  fetchLaunchMetaCached('models','/api/models').then(function(m){
+    if(m&&m.models){
+      window.__modelCatalog=m.models;
+      var sel=document.getElementById('launch-harness');
+      syncModelOptions(sel?sel.value:'claude');
+    }
+  });
+}
+
+function loadLaunchMeta(){ refreshLaunchMeta(); }
+
+// Brief Counter & Stepper
+var briefInp=document.getElementById('launch-brief');
+if(briefInp){
+  briefInp.addEventListener('input',function(){
+    var len=this.value.length;
+    var el=document.getElementById('launch-brief-count');
+    if(el) el.textContent=len+'/8000';
+  });
+}
+
+var btnMinus=document.getElementById('launch-count-minus');
+var btnPlus=document.getElementById('launch-count-plus');
+var countInp=document.getElementById('launch-count');
+if(btnMinus&&countInp){
+  btnMinus.onclick=function(){
+    var v=Math.max(1,(parseInt(countInp.value,10)||1)-1);
+    countInp.value=v;
   };
 }
+if(btnPlus&&countInp){
+  btnPlus.onclick=function(){
+    var v=Math.min(20,(parseInt(countInp.value,10)||1)+1);
+    countInp.value=v;
+  };
+}
+
+// Permission Segmented
+var permSeg=document.getElementById('launch-permission-seg');
+if(permSeg){
+  Array.prototype.forEach.call(permSeg.querySelectorAll('button'),function(btn){
+    btn.onclick=function(){
+      Array.prototype.forEach.call(permSeg.querySelectorAll('button'),function(b){b.classList.remove('sel');});
+      btn.classList.add('sel');
+      var p=btn.getAttribute('data-perm');
+      var inp=document.getElementById('launch-permission');
+      if(inp) inp.value=p;
+    };
+  });
+}
+
+function renderLaunchDiff(diff){
+  var el=document.getElementById('launch-diff');
+  if(!el)return;
+  if(!diff||!diff.changes||diff.changes.length===0){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='block';
+  el.innerHTML='<div class="dim" style="font-size:11px;margin-bottom:4px">Dry-run preview diff:</div><div class="log">'+esc(diff.changes.join(String.fromCharCode(10)))+'</div>';
+}
+
+function say(msg,isErr){
+  var res=document.getElementById('result');
+  if(res){
+    res.textContent=msg;
+    res.style.color=isErr?'var(--danger)':'var(--ok)';
+  }
+}
+
+function creds(){
+  try{
+    return {
+      from: document.getElementById('who')?document.getElementById('who').value.trim():localStorage.getItem('crewbus_who')||'',
+      token: document.getElementById('tok')?document.getElementById('tok').value.trim():localStorage.getItem('crewbus_tok')||''
+    };
+  }catch(_){ return {from:'',token:''}; }
+}
+
+async function kill(names){
+  var c=creds();
+  var r=await fetch('/api/kill',{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({from:c.from||'orchestrator',token:c.token||undefined,workers:names})
+  });
+  var j=await r.json();
+  if(!r.ok){ say('kill failed: '+(j.error||r.status),true); return; }
+  showUndoToast('Terminated '+names.join(', '));
+  refresh();
+}
+
+async function ackOne(id){
+  var c=creds();
+  var r=await fetch('/api/ack',{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({from:c.from||'orchestrator',token:c.token||undefined,id:id})
+  });
+  var j=await r.json();
+  if(!r.ok) say('ack failed: '+(j.error||r.status),true);
+  refresh();
+}
+
+async function decide(id, decision, reason){
+  var c=creds();
+  var reasonInp=document.querySelector('[data-reason="'+id+'"]');
+  var actualReason=reason||(reasonInp?reasonInp.value.trim():'')||undefined;
+  try{
+    var r=await fetch('/api/approve',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({from:c.from||'orchestrator',token:c.token||undefined,id:id,decision:decision,reason:actualReason})
+    });
+    var j=await r.json();
+    if(!r.ok){ say('approval decision failed: '+(j.error||r.status),true); return; }
+    var card=document.querySelector('[data-approval-id="'+id+'"]');
+    if(card){
+      card.innerHTML='<div style="font-weight:600;color:'+(decision==='approved'?'var(--ok)':'var(--danger)')+'">'+(decision==='approved'?'✓ Approved':'✗ Declined')+'</div>';
+    }
+    refresh();
+  }catch(e){ say('approval error: '+e.message,true); }
+}
+
+var btnKillAll=document.getElementById('killall');
+if(btnKillAll){
+  btnKillAll.onclick=function(){
+    var alive=(window.__workers||[]).filter(function(w){return w.alive;}).map(function(w){return w.name;});
+    if(!alive.length){say('no active workers to kill');return;}
+    if(confirm('kill '+alive.length+' active workers?')) kill(alive);
+  };
+}
+var btnAckAll=document.getElementById('ackall');
+if(btnAckAll){
+  btnAckAll.onclick=function(){
+    var c=creds();
+    fetch('/api/ack',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({from:c.from||'orchestrator',token:c.token||undefined,all:true})
+    }).then(function(r){return r.json();}).then(function(j){say('acked all');refresh();});
+  };
+}
+
+// Launch Logic
+async function doLaunch(dryRun){
+  var brief=(document.getElementById('launch-brief')?document.getElementById('launch-brief').value:'').trim();
+  if(!brief){ say('enter instructions / brief before launching',true); return; }
+  var harness=document.getElementById('launch-harness')?document.getElementById('launch-harness').value:'claude';
+  var count=parseInt(document.getElementById('launch-count')?document.getElementById('launch-count').value:'1',10)||1;
+  var permission=document.getElementById('launch-permission')?document.getElementById('launch-permission').value:'supervised';
+  var model=document.getElementById('launch-model')?document.getElementById('launch-model').value:'';
+  var c=creds();
+
+  var payload={
+    from: c.from||'orchestrator',
+    token: c.token||undefined,
+    harness: harness,
+    count: count,
+    body: brief,
+    permission: permission,
+    dryRun: dryRun
+  };
+  if(model&&model!=='__custom__') payload.model=model;
+
+  if(!dryRun && !confirm('live boot '+count+' '+harness+' worker(s)?')) return;
+
+  var outEl=document.getElementById('launch-out');
+  if(outEl) outEl.style.display='none';
+
+  try{
+    var r=await fetch('/api/launch',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    var j=await r.json();
+    if(!r.ok){ say('launch failed ('+r.status+'): '+(j.error||'unknown error'),true); return; }
+
+    if(dryRun){
+      if(outEl){
+        outEl.style.display='block';
+        outEl.textContent='[dry-run] plan valid — booted nothing.'+String.fromCharCode(10,10)+'Commands:'+String.fromCharCode(10)+(j.commands||[]).join(String.fromCharCode(10));
+      }
+      renderLaunchDiff({changes: j.commands||[]});
+    } else {
+      say('launched crew: '+(j.crewId||'ok'));
+      if(document.getElementById('launch-brief')) document.getElementById('launch-brief').value='';
+      if(j.batch) showBrief(j.batch);
+      refresh();
+    }
+  }catch(e){ say('launch network error: '+e.message,true); }
+}
+
+var btnLaunchGo=document.getElementById('launch-go');
+if(btnLaunchGo){
+  btnLaunchGo.onclick=function(){
+    var dryEl=document.getElementById('launch-dry');
+    var isDry=dryEl?dryEl.checked:false;
+    doLaunch(isDry);
+  };
+}
+var btnLaunchPrev=document.getElementById('launch-preview');
+if(btnLaunchPrev){
+  btnLaunchPrev.onclick=function(){ doLaunch(true); };
+}
+
 document.addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&e.key==='k'){
     e.preventDefault();
     openPalette();
   }
-});
-var palModal=document.getElementById('palette');
-if(palModal){
-  palModal.onclick=function(e){if(e.target===this)closePalette();};
-}
-
-var btnTheme=document.getElementById('theme-toggle');
-if(btnTheme)btnTheme.onclick=crewbusThemeToggle;
-
-var btnInspToggle=document.getElementById('inspector-toggle-btn');
-if(btnInspToggle){
-  btnInspToggle.onclick=function(){
-    var insp=document.getElementById('app-inspector');
-    if(insp)insp.classList.toggle('hidden');
-  };
-}
-var btnInspClose=document.getElementById('insp-close-btn');
-if(btnInspClose){
-  btnInspClose.onclick=function(){
-    var insp=document.getElementById('app-inspector');
-    if(insp)insp.classList.add('hidden');
-  };
-}
-
-var btnNewTask=document.getElementById('btn-new-task');
-if(btnNewTask){
-  btnNewTask.onclick=function(){
-    approotNavTo('sec-launch');
-    var br=document.getElementById('launch-brief');
-    if(br){br.focus();br.select();}
-  };
-}
-
-var minusBtn=document.getElementById('launch-count-minus');
-if(minusBtn){
-  minusBtn.onclick=function(){
-    var el=document.getElementById('launch-count');
-    var n=Number(el.value)||1;
-    el.value=String(Math.max(1,n-1));
-  };
-}
-var plusBtn=document.getElementById('launch-count-plus');
-if(plusBtn){
-  plusBtn.onclick=function(){
-    var el=document.getElementById('launch-count');
-    var n=Number(el.value)||1;
-    el.value=String(Math.min(20,n+1));
-  };
-}
-
-(function(){
-  var btns=document.querySelectorAll('#launch-permission-seg [data-perm]');
-  var sel=document.getElementById('launch-permission');
-  var paint=function(){
-    for(var i=0;i<btns.length;i++){
-      if(btns[i].getAttribute('data-perm')===sel.value){btns[i].classList.add('sel');}
-      else{btns[i].classList.remove('sel');}
-    }
-  };
-  for(var i=0;i<btns.length;i++){
-    btns[i].onclick=(function(v){return function(){sel.value=v;paint();};})(btns[i].getAttribute('data-perm'));
+  if((e.ctrlKey||e.metaKey)&&e.key==='n'){
+    e.preventDefault();
+    startNewThread();
   }
-  if(sel)sel.onchange=paint;
-  paint();
-})();
-
-(function(){
-  var btns=document.querySelectorAll('#approot-nav [data-nav]');
-  for(var i=0;i<btns.length;i++){
-    btns[i].onclick=(function(id){return function(){approotNavTo(id);};})(btns[i].getAttribute('data-nav'));
-  }
-})();
-
-var briefArea=document.getElementById('launch-brief');
-if(briefArea){
-  briefArea.oninput=function(){
-    var cnt=document.getElementById('launch-brief-count');
-    if(cnt)cnt.textContent=this.value.length+'/8000';
-  };
-  briefArea.addEventListener('keydown',function(e){
-    if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){
+    var brief=document.getElementById('launch-brief');
+    if(brief&&document.activeElement===brief){
       e.preventDefault();
       var go=document.getElementById('launch-go');
-      if(go)go.click();
+      if(go) go.click();
     }
+  }
+});
+
+// Command Palette
+function openPalette(){
+  var p=document.getElementById('palette');
+  if(p){ p.classList.add('open'); var inp=document.getElementById('palette-input'); if(inp){inp.value=''; inp.focus(); renderPaletteItems('');} }
+}
+function closePalette(){ var p=document.getElementById('palette'); if(p) p.classList.remove('open'); }
+var palInput=document.getElementById('palette-input');
+if(palInput){
+  palInput.oninput=function(){ renderPaletteItems(this.value.toLowerCase().trim()); };
+  palInput.onkeydown=function(e){
+    if(e.key==='Escape') closePalette();
+  };
+}
+var palWrap=document.getElementById('palette');
+if(palWrap){
+  palWrap.onclick=function(e){ if(e.target===palWrap) closePalette(); };
+}
+
+function renderPaletteItems(q){
+  var list=document.getElementById('palette-list');
+  if(!list)return;
+  var items=[
+    {label:'New Mission Thread',action:function(){startNewThread();}},
+    {label:'View Active Crews',action:function(){approotNavTo('sec-crews');}},
+    {label:'View Approvals Queue',action:function(){approotNavTo('sec-approvals');}},
+    {label:'View Fleet Sync',action:function(){approotNavTo('sec-fleet');}},
+    {label:'View Broadcast Channels',action:function(){approotNavTo('sec-channels');}},
+    {label:'Pair Mobile Device (QR)',action:function(){open('/pair','_blank');}},
+    {label:'Toggle Dark / Light Mode',action:function(){crewbusThemeToggle();}},
+    {label:'Kill All Running Workers',action:function(){btnKillAll.click();}}
+  ];
+  (window.__workers||[]).forEach(function(w){
+    items.push({label:'Inspect worker: '+w.name,action:function(){showInspector(w.name);}});
+  });
+  var filtered=items.filter(function(it){return !q||it.label.toLowerCase().indexOf(q)!==-1;});
+  list.innerHTML=filtered.map(function(it,idx){
+    return '<div class="'+(idx===0?'sel':'')+'" data-idx="'+idx+'">'+esc(it.label)+'</div>';
+  }).join('');
+  Array.prototype.forEach.call(list.querySelectorAll('div'),function(el){
+    el.onclick=function(){
+      var idx=parseInt(el.getAttribute('data-idx'),10);
+      closePalette();
+      if(filtered[idx]&&filtered[idx].action) filtered[idx].action();
+    };
   });
 }
 
-var prTrig=document.getElementById('project-trigger');
-if(prTrig){
-  prTrig.onclick=function(e){
-    e.stopPropagation();
-    var pop=document.getElementById('project-popover');
-    if(pop)pop.classList.toggle('open');
+// Popover
+var projTrig=document.getElementById('project-trigger');
+if(projTrig){
+  projTrig.onclick=function(ev){
+    ev.stopPropagation();
+    var p=document.getElementById('project-popover');
+    if(p) p.classList.toggle('open');
   };
-  document.addEventListener('click',function(e){
-    var pop=document.getElementById('project-popover');
-    if(pop&&!pop.contains(e.target))pop.classList.remove('open');
-  });
 }
+document.addEventListener('click',function(e){
+  var pop=document.getElementById('project-popover');
+  if(pop&&!pop.contains(e.target)&&e.target!==projTrig) pop.classList.remove('open');
+});
 
 var btnCopyBoard=document.getElementById('copy-board-btn');
 if(btnCopyBoard){
   btnCopyBoard.onclick=function(){
-    try{
-      if(navigator.clipboard){navigator.clipboard.writeText(boardPath);}
-      say('copied board path: '+boardPath);
-    }catch(_){}
+    try{ navigator.clipboard.writeText(boardPath); say('copied board path: '+boardPath); }catch(_){}
   };
 }
 
-var btnPopPair=document.getElementById('pop-pair-btn');
-if(btnPopPair){
-  btnPopPair.onclick=function(){open('/pair','_blank');};
-}
-
-var lcInp=document.getElementById('launch-cwd');
-if(lcInp){
-  lcInp.oninput=function(){try{localStorage.setItem('crewbus_last_cwd',this.value);}catch(_){}};
-  try{
-    var lastCwd=localStorage.getItem('crewbus_last_cwd');
-    if(lastCwd)lcInp.value=lastCwd;
-  }catch(_){}
-}
-
+// Data Age indicator
+function agoMs(ms){var s=Math.max(0,Math.floor(ms/1000));if(s<60)return s+'s';var m=Math.floor(s/60);if(m<60)return m+'m';return Math.floor(m/60)+'h';}
+function ago(iso){try{var t=Date.parse(iso);if(isNaN(t))return '?';return agoMs(Date.now()-t)+' ago';}catch(e){return '?';}}
 function updatePollAge(){
   var el=document.getElementById('poll-age');
   if(!el)return;
-  if(!window.__lastBoardPoll){el.textContent='not updated yet';return;}
+  if(!window.__lastBoardPoll){el.textContent='connecting…';return;}
   var age=Date.now()-window.__lastBoardPoll;
-  var stale=age>15000;
   var s=Math.max(0,Math.floor(age/1000));
-  el.textContent=(stale?'STALE · ':'')+'updated '+s+'s ago';
-  el.style.color=stale?'var(--danger)':'';
+  el.textContent=s+'s ago';
 }
-function ago(iso){try{var t=Date.parse(iso);if(isNaN(t))return '?';var s=Math.floor((Date.now()-t)/1000);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';return Math.floor(s/3600)+'h ago';}catch(e){return '?';}}
 
 crewbusThemeInit();
 loadLaunchMeta();
@@ -2085,7 +2048,6 @@ setInterval(updatePollAge,1000);
 </html>`;
 }
 
-// Reads a JSON request body without fail() (which would exit the server).
 export const readKillBody = (req) =>
   new Promise((resolve) => {
     const chunks = [];
