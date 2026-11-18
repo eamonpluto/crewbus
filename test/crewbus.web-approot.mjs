@@ -95,6 +95,7 @@ check("approot: rendered client script parses", scrParses);
 check("approot: harness cards container", page.text.includes('id="harness-cards"') && page.text.includes("renderHarnessCards"));
 check("approot: count stepper", page.text.includes('id="launch-count-minus"') && page.text.includes('id="launch-count-plus"'));
 check("approot: permission segmented", page.text.includes('id="launch-permission-seg"') && page.text.includes("data-perm"));
+check("approot: permission segmented has all 4 modes", page.text.includes('data-perm="supervised"') && page.text.includes('data-perm="autoEdits"') && page.text.includes('data-perm="auto"') && page.text.includes('data-perm="full"'));
 check("approot: dry-run diff view", page.text.includes('id="launch-diff"') && page.text.includes("renderLaunchDiff"));
 check("approot: undo toast via existing kill()",
   page.text.includes('id="undo-toast"') && page.text.includes("showUndoToast") && page.text.includes("kill(names"));

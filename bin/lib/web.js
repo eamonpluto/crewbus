@@ -871,7 +871,7 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span id="who-display">orchestrator</span>
       </div>
-      <button type="button" onclick="open('/pair','_blank')" title="Pair Mobile App (QR)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></button>
+      <button type="button" onclick="window.open('/pair','_blank')" title="Pair Mobile App (QR)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></button>
     </div>
   </aside>
 
@@ -904,7 +904,7 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
           <span id="conn-dot"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#2ea043"/></svg></span>
           <span id="poll-age" class="dim">live</span>
         </div>
-        <button type="button" onclick="open('/pair','_blank')" title="Mobile Pairing"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></button>
+        <button type="button" onclick="window.open('/pair','_blank')" title="Mobile Pairing"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></button>
         <button type="button" onclick="crewbusThemeToggle()" title="Toggle Dark/Light Mode"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
         <button type="button" onclick="toggleInspector()" title="Toggle Inspector"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
       </div>
@@ -965,8 +965,10 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
 
                   <!-- Permission Mode Toggle -->
                   <div id="launch-permission-seg" title="Permission Mode">
-                    <button type="button" data-perm="supervised" class="sel">Supervised</button>
-                    <button type="button" data-perm="auto">Auto</button>
+                    <button type="button" data-perm="supervised" class="sel" title="Supervised: interactive approval for commands and edits">supervised</button>
+                    <button type="button" data-perm="autoEdits" title="AutoEdits: auto-accept code edits, prompt for terminal commands">autoEdits</button>
+                    <button type="button" data-perm="auto" title="Auto: unattended execution for non-destructive actions">auto</button>
+                    <button type="button" data-perm="full" title="Full: fully unattended mode with danger confirmations bypassed">full</button>
                   </div>
                 </div>
 
@@ -982,7 +984,7 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
                 <span id="routes-line"></span>
                 <select id="launch-harness"><option value="claude">claude</option></select>
                 <input id="launch-to" value="">
-                <input id="launch-permission" value="supervised">
+                <select id="launch-permission"><option value="supervised">supervised</option><option value="autoEdits">autoEdits</option><option value="auto">auto</option><option value="full">full</option></select>
                 <input id="launch-from" value="">
                 <input id="launch-token" type="password" value="">
                 <input id="launch-cwd" value="">
@@ -1109,7 +1111,7 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
         <div class="card" style="margin-bottom:14px">
           <b>Mobile Companion Pairing</b>
           <p class="dim">Pair your mobile client with this board using a secure, single-use QR exchange.</p>
-          <button id="pair-qrcode-btn" class="btn-primary" onclick="open('/pair', '_blank')">Open Mobile Pairing Screen (QR)…</button>
+          <button id="pair-qrcode-btn" class="btn-primary" onclick="window.open('/pair', '_blank')">Open Mobile Pairing Screen (QR)…</button>
         </div>
         <div class="card" style="margin-bottom:14px">
           <b>Tab Identity &amp; Auth</b>
@@ -2007,6 +2009,10 @@ async function doLaunch(dryRun){
     cwd: cwd
   };
   if(model) payload.model=model;
+  if(permission==='full'){
+    if(!confirm('DANGER: permission "full" runs workers in completely unattended mode with all confirmations bypassed. Proceed?')) return;
+    payload.iUnderstandDanger=true;
+  }
 
   var harnLabel=harnesses.join(', ');
   if(!dryRun && !confirm('live boot '+count+' worker(s) ('+harnLabel+')?')) return;
@@ -2096,7 +2102,7 @@ function renderPaletteItems(q){
     {label:'View Approvals Queue',action:function(){approotNavTo('sec-approvals');}},
     {label:'View Fleet Sync',action:function(){approotNavTo('sec-fleet');}},
     {label:'View Broadcast Channels',action:function(){approotNavTo('sec-channels');}},
-    {label:'Pair Mobile Device (QR)',action:function(){open('/pair','_blank');}},
+    {label:'Pair Mobile Device (QR)',action:function(){window.open('/pair','_blank');}},
     {label:'Toggle Dark / Light Mode',action:function(){crewbusThemeToggle();}},
     {label:'Kill All Running Workers',action:function(){btnKillAll.click();}}
   ];
