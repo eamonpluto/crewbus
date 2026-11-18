@@ -32,7 +32,12 @@ export function PairScreen({ ctx, navigation }) {
     try {
       const parsed = parsePairInput(data);
       setStatus(`pairing with env ${parsed.env || '(unknown)'}…`);
-      const won = await walkPairRoutes(parsed.routes, ctx.connection.probe, { learned: ctx.connection.learned });
+      let won = await walkPairRoutes(parsed.routes, ctx.connection.probe, { learned: ctx.connection.learned });
+      if (!won.ok) {
+        setStatus('retrying route…');
+        await new Promise((r) => setTimeout(r, 600));
+        won = await walkPairRoutes(parsed.routes, ctx.connection.probe, { learned: ctx.connection.learned });
+      }
       if (!won.ok) {
         const detail = (won.attempts && won.attempts.find((a) => a.error))?.error || won.reason;
         setStatus(`no route worked (${detail}). Check relay.`);
