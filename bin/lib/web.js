@@ -882,7 +882,7 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
       <div class="topbar-left">
         <div class="thread-header-title" id="active-thread-title">Mission Control</div>
         <div class="thread-header-badge" id="active-thread-status">Ready</div>
-        <select id="topbar-harness" onchange="document.getElementById('launch-harness').value=this.value;renderHarnessCards();" style="font-size:11.5px;padding:3px 6px">
+        <select id="topbar-harness" onchange="document.getElementById('launch-harness').value=this.value;selectSingleHarness(this.value);" style="font-size:11.5px;padding:3px 6px">
           <option value="claude">Claude</option>
           <option value="codex">Codex</option>
           <option value="opencode">OpenCode</option>
@@ -946,12 +946,15 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
               <div class="composer-toolbar">
                 <div class="composer-toolbar-left">
                   <!-- Harness Chips Container -->
-                  <div id="harness-cards" class="harness-pills"></div>
+                  <div id="harness-cards" class="harness-pills" title="Click harnesses to toggle multi-harness crew"></div>
 
-                  <!-- Model Selector -->
-                  <select id="launch-model" title="Model catalog for selected harness" style="font-size:11.5px;padding:3px 6px">
-                    <option value="">Default model</option>
-                  </select>
+                  <!-- Model Selector & Custom Model Input -->
+                  <div style="display:inline-flex;align-items:center;gap:4px">
+                    <select id="launch-model" title="Model catalog for selected harness(es)" style="font-size:11.5px;padding:3px 6px">
+                      <option value="">Default model</option>
+                    </select>
+                    <input id="launch-model-custom" type="text" placeholder="Custom model ID…" style="display:none;font-size:11.5px;padding:3px 8px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel-elevated);color:var(--ink);width:170px" title="Enter custom model identifier">
+                  </div>
 
                   <!-- Worker Count Stepper -->
                   <div class="stepper-wrap" title="Number of parallel workers">
@@ -965,11 +968,6 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
                     <button type="button" data-perm="supervised" class="sel">Supervised</button>
                     <button type="button" data-perm="auto">Auto</button>
                   </div>
-
-                  <!-- Dry Run Checkbox -->
-                  <label class="dim" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:11px" title="Preview spawn commands without executing">
-                    <input id="launch-dry" type="checkbox" checked> dry-run
-                  </label>
                 </div>
 
                 <div class="composer-toolbar-right">
@@ -989,6 +987,7 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
                 <input id="launch-token" type="password" value="">
                 <input id="launch-cwd" value="">
                 <button id="launch-cwd-browse" type="button"></button>
+                <input id="launch-dry" type="checkbox" checked>
                 <div id="harnesses"></div>
               </div>
             </div>
@@ -1119,6 +1118,13 @@ details.tech-details summary { cursor: pointer; font-weight: 500; user-select: n
             <input id="who" placeholder="Agent Name (e.g. orchestrator)">
             <input id="tok" type="password" placeholder="Token abt-…">
             <button id="save" class="btn-primary">Save Creds</button>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:14px">
+          <b>Holds &amp; Quotas</b>
+          <div style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap">
+            <div class="card" id="holds-card" style="flex:1;min-width:240px"><b>Hold</b><div id="holds-body" class="dim">loading…</div></div>
+            <div class="card" id="quotas-card" style="flex:1;min-width:240px"><b>Quotas</b><div id="quotas-body" class="dim">loading…</div></div>
           </div>
         </div>
         <div class="card">
@@ -1622,6 +1628,21 @@ async function refresh(){
       var hbEl=document.getElementById('holds-body');
       if(hbEl)hbEl.innerHTML=hb;
     }catch(_){}
+    try{
+      var qr=await fetch('/api/quotas',{cache:'no-store'});
+      var qj=await qr.json();
+      var q=(qj&&qj.quotas)||{};
+      var agN=(s.agents||[]).length;
+      var qb='<div>maxBytes: '+esc(q.maxBytes===undefined||q.maxBytes===null?'unlimited':humanBytes(q.maxBytes))+'</div>';
+      var agOver=(q.maxAgents!==undefined&&q.maxAgents!==null&&agN>q.maxAgents)?' <b>OVER QUOTA</b>':'';
+      qb+='<div>maxAgents: '+esc(q.maxAgents===undefined||q.maxAgents===null?'unlimited':q.maxAgents)+' <span class="dim">('+agN+' agents)</span>'+agOver+'</div>';
+      if(q.maxChannels!==undefined&&q.maxChannels!==null){
+        qb+='<div>maxChannels: '+esc(q.maxChannels)+'</div>';
+      }
+      if(q.tenant){qb+='<div>tenant: '+esc(q.tenant)+'</div>';}
+      var qbEl=document.getElementById('quotas-body');
+      if(qbEl)qbEl.innerHTML=qb;
+    }catch(_){}
 
     // Delegation
     Array.prototype.forEach.call(document.querySelectorAll('[data-kill]'),function(b){b.onclick=function(ev){ev.stopPropagation();kill([b.getAttribute('data-kill')]);};});
@@ -1638,6 +1659,17 @@ function stateOf(w){
   if(w.exitCode===0) return 'done';
   if(w.exitCode!==null&&w.exitCode!==undefined) return 'exit '+w.exitCode;
   return 'exited';
+}
+
+function humanBytes(n){
+  if(typeof n!=='number'||!(n>=0)) return 'unlimited';
+  if(n<1024) return n+' B';
+  var u=['B','KB','MB','GB','TB'];
+  var v=n;
+  var i=0;
+  while(v>=1024&&i<u.length-1){v/=1024;i++;}
+  var r=Math.round(v*10)/10;
+  return r+' '+u[i]+' ('+n+' bytes)';
 }
 
 function renderRecent(){
@@ -1665,14 +1697,28 @@ var fq=document.getElementById('feed-q'); if(fq) fq.oninput=renderRecent;
 var ft=document.getElementById('feed-type'); if(ft) ft.onchange=renderRecent;
 
 // Harness & Model Metadata
-var _launchMetaCache={};
+var __launchMetaCache={};
 function fetchLaunchMetaCached(key,url){
-  var entry=_launchMetaCache[key];
+  var entry=__launchMetaCache[key];
   if(entry&&Date.now()-entry.at<60000) return Promise.resolve(entry.data);
   return fetch(url).then(function(r){return r.json();}).then(function(j){
-    _launchMetaCache[key]={data:j,at:Date.now()};
+    __launchMetaCache[key]={data:j,at:Date.now()};
     return j;
   }).catch(function(){ return entry?entry.data:null; });
+}
+
+window.__selectedHarnesses = ['claude'];
+
+function updateCustomModelInputVisibility(){
+  var sel=document.getElementById('launch-model');
+  var customInp=document.getElementById('launch-model-custom');
+  if(!sel||!customInp)return;
+  if(sel.value==='__custom__'){
+    customInp.style.display='inline-block';
+    customInp.focus();
+  }else{
+    customInp.style.display='none';
+  }
 }
 
 function syncModelOptions(selectedHarness){
@@ -1680,40 +1726,97 @@ function syncModelOptions(selectedHarness){
   if(!sel)return;
   var curVal=sel.value;
   var catalog=window.__modelCatalog||{};
-  var models=catalog[selectedHarness]||[];
-  var opts=[{value:'',label:'Default model'}];
-  for(var i=0;i<models.length;i++){
-    opts.push({value:models[i].id,label:models[i].label||models[i].id});
+  var harnesses=selectedHarness?[selectedHarness]:(window.__selectedHarnesses||['claude']);
+
+  var html='';
+  if(harnesses.length===1){
+    var h=harnesses[0];
+    var models=catalog[h]||[];
+    html+='<option value="">Default '+esc(h)+' model</option>';
+    for(var i=0;i<models.length;i++){
+      var m=models[i];
+      var isSel=(m.id===curVal)?' selected':'';
+      html+='<option value="'+esc(m.id)+'"'+isSel+'>'+esc(m.label||m.id)+'</option>';
+    }
+  }else{
+    html+='<option value="">Default models (per harness)</option>';
+    for(var j=0;j<harnesses.length;j++){
+      var hj=harnesses[j];
+      var hModels=catalog[hj]||[];
+      if(hModels.length>0){
+        html+='<optgroup label="'+esc(hj.toUpperCase())+' Models">';
+        for(var k=0;k<hModels.length;k++){
+          var mk=hModels[k];
+          var isSelK=(mk.id===curVal)?' selected':'';
+          html+='<option value="'+esc(mk.id)+'"'+isSelK+'>'+esc(mk.label||mk.id)+'</option>';
+        }
+        html+='</optgroup>';
+      }
+    }
   }
-  opts.push({value:'__custom__',label:'Custom model…'});
-  sel.innerHTML=opts.map(function(o){
-    return '<option value="'+esc(o.value)+'"'+(o.value===curVal?' selected':'')+'>'+esc(o.label)+'</option>';
-  }).join('');
+  html+='<option value="__custom__"'+(curVal==='__custom__'?' selected':'')+'>Custom model…</option>';
+  sel.innerHTML=html;
+  updateCustomModelInputVisibility();
+}
+
+var launchModelSel=document.getElementById('launch-model');
+if(launchModelSel){
+  launchModelSel.onchange=updateCustomModelInputVisibility;
 }
 
 function renderHarnessCards(){
   var container=document.getElementById('harness-cards');
   if(!container)return;
   var detected=window.__harnesses||[];
-  var sel=document.getElementById('launch-harness');
-  var cur=(sel?sel.value:'claude')||'claude';
+  var selected=window.__selectedHarnesses||['claude'];
   var list=['claude','codex','opencode','cursor','antigravity','grok','qwen'];
+  var counts={};
+  (window.__workers||[]).forEach(function(w){
+    if(w.alive&&w.driver) counts[w.driver]=(counts[w.driver]||0)+1;
+  });
+
   container.innerHTML=list.map(function(d){
     var det=detected.find(function(x){return x.driver===d;});
-    var isSel=d===cur;
+    var isSel=selected.indexOf(d)!==-1;
     var cls='harness-card'+(isSel?' sel':'')+((det&&!det.detected)?' missing':'');
-    return '<div class="'+cls+'" data-harness="'+esc(d)+'">'+esc(d)+'</div>';
+    var check=isSel?' <span style="font-size:10px;opacity:0.8">✓</span>':'';
+    var badge=counts[d]?' <div class="dim" style="display:inline-block;font-size:10px;margin-left:3px">'+counts[d]+' running</div>':'';
+    return '<div class="'+cls+'" data-harness="'+esc(d)+'" title="'+(isSel?'Click to deselect (at least 1 must remain)':'Click to select harness for crew')+'">'+esc(d)+check+badge+'</div>';
   }).join('');
+
   Array.prototype.forEach.call(container.querySelectorAll('.harness-card'),function(c){
     c.onclick=function(){
       var h=c.getAttribute('data-harness');
-      if(sel) sel.value=h;
+      var selList=(window.__selectedHarnesses||['claude']).slice();
+      var idx=selList.indexOf(h);
+      if(idx!==-1){
+        if(selList.length>1){
+          selList.splice(idx,1);
+        }
+      }else{
+        selList.push(h);
+        var countEl=document.getElementById('launch-count');
+        if(countEl&&(parseInt(countEl.value,10)||1)<selList.length){
+          countEl.value=selList.length;
+        }
+      }
+      window.__selectedHarnesses=selList;
+      var sel=document.getElementById('launch-harness');
+      if(sel) sel.value=selList.join(',');
       var topH=document.getElementById('topbar-harness');
-      if(topH) topH.value=h;
+      if(topH&&selList.length===1) topH.value=selList[0];
       renderHarnessCards();
-      syncModelOptions(h);
+      syncModelOptions();
     };
   });
+}
+
+function selectSingleHarness(h){
+  window.__selectedHarnesses=[h];
+  var sel=document.getElementById('launch-harness');
+  if(sel) sel.value=h;
+  renderHarnessCards();
+  syncModelOptions(h);
 }
 
 // live-refreshes only the table, never the <select> so user in-progress picks are untouched
@@ -1736,11 +1839,9 @@ function refreshLaunchMeta(){
     }
   });
   fetchLaunchMetaCached('models','/api/models').then(function(m){
-    if(m&&m.models){
-      window.__modelCatalog=m.models;
-      var sel=document.getElementById('launch-harness');
-      syncModelOptions(sel?sel.value:'claude');
-    }
+    var catalog=(m&&m.models)?m.models:(m||{});
+    window.__modelCatalog=catalog;
+    syncModelOptions();
   });
 }
 
@@ -1880,24 +1981,35 @@ if(btnAckAll){
 async function doLaunch(dryRun){
   var brief=(document.getElementById('launch-brief')?document.getElementById('launch-brief').value:'').trim();
   if(!brief){ say('enter instructions / brief before launching',true); return; }
-  var harness=document.getElementById('launch-harness')?document.getElementById('launch-harness').value:'claude';
+  var harnesses=(window.__selectedHarnesses&&window.__selectedHarnesses.length>0)
+    ? window.__selectedHarnesses
+    : [document.getElementById('launch-harness')?document.getElementById('launch-harness').value:'claude'];
+  var harnessStr=harnesses.join(',');
   var count=parseInt(document.getElementById('launch-count')?document.getElementById('launch-count').value:'1',10)||1;
   var permission=document.getElementById('launch-permission')?document.getElementById('launch-permission').value:'supervised';
   var model=document.getElementById('launch-model')?document.getElementById('launch-model').value:'';
+  if(model==='__custom__'){
+    var customInp=document.getElementById('launch-model-custom');
+    model=customInp?customInp.value.trim():'';
+  }
+  var cwd=(document.getElementById('launch-cwd')?document.getElementById('launch-cwd').value.trim():'')||undefined;
   var c=creds();
 
   var payload={
     from: c.from||'orchestrator',
     token: c.token||undefined,
-    harness: harness,
+    harness: harnessStr,
+    harnesses: harnesses,
     count: count,
     body: brief,
     permission: permission,
-    dryRun: dryRun
+    dryRun: dryRun,
+    cwd: cwd
   };
-  if(model&&model!=='__custom__') payload.model=model;
+  if(model) payload.model=model;
 
-  if(!dryRun && !confirm('live boot '+count+' '+harness+' worker(s)?')) return;
+  var harnLabel=harnesses.join(', ');
+  if(!dryRun && !confirm('live boot '+count+' worker(s) ('+harnLabel+')?')) return;
 
   var outEl=document.getElementById('launch-out');
   if(outEl) outEl.style.display='none';
@@ -1929,9 +2041,7 @@ async function doLaunch(dryRun){
 var btnLaunchGo=document.getElementById('launch-go');
 if(btnLaunchGo){
   btnLaunchGo.onclick=function(){
-    var dryEl=document.getElementById('launch-dry');
-    var isDry=dryEl?dryEl.checked:false;
-    doLaunch(isDry);
+    doLaunch(false);
   };
 }
 var btnLaunchPrev=document.getElementById('launch-preview');
@@ -1981,6 +2091,7 @@ function renderPaletteItems(q){
   if(!list)return;
   var items=[
     {label:'New Mission Thread',action:function(){startNewThread();}},
+    {label:'Set Codebase Folder…',action:function(){promptOrSelectProjectFolder();}},
     {label:'View Active Crews',action:function(){approotNavTo('sec-crews');}},
     {label:'View Approvals Queue',action:function(){approotNavTo('sec-approvals');}},
     {label:'View Fleet Sync',action:function(){approotNavTo('sec-fleet');}},
@@ -2025,6 +2136,126 @@ if(btnCopyBoard){
     try{ navigator.clipboard.writeText(boardPath); say('copied board path: '+boardPath); }catch(_){}
   };
 }
+
+// Codebase Directory (Working Directory) Management
+function applyTargetCwd(pathStr, notify){
+  pathStr=String(pathStr||'').trim();
+  var cwdEl=document.getElementById('launch-cwd');
+  if(cwdEl&&cwdEl.value!==pathStr) cwdEl.value=pathStr;
+  var popCwd=document.getElementById('pop-cwd-path');
+  if(popCwd) popCwd.textContent=pathStr||'(default: board parent)';
+  var topbarBoard=document.getElementById('topbar-board');
+  if(topbarBoard&&pathStr){
+    topbarBoard.title='Codebase: '+pathStr;
+  }
+  if(pathStr){
+    try{ localStorage.setItem('crewbus_last_cwd',pathStr); }catch(_){}
+    try{
+      fetch('/api/workspace',{
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({cwd:pathStr})
+      }).catch(function(){});
+    }catch(_){}
+    if(notify) say('Target codebase set to: '+pathStr);
+  }
+}
+
+async function promptOrSelectProjectFolder(){
+  var cur=(document.getElementById('launch-cwd')?document.getElementById('launch-cwd').value.trim():'')||localStorage.getItem('crewbus_last_cwd')||'';
+  try{
+    var dialog=window.__TAURI__&&window.__TAURI__.dialog;
+    if(dialog&&typeof dialog.open==='function'){
+      var selected=await dialog.open({directory:true,multiple:false,title:'Select Target Codebase Folder'});
+      if(selected&&typeof selected==='string'){
+        applyTargetCwd(selected.trim(),true);
+        return;
+      }
+    }
+  }catch(_){}
+
+  if(typeof window.showDirectoryPicker==='function'){
+    try{
+      var dirHandle=await window.showDirectoryPicker();
+      if(dirHandle&&dirHandle.name){
+        var suggested=(cur&&cur.endsWith(dirHandle.name))?cur:dirHandle.name;
+        var p=prompt('Confirm absolute directory path for "'+dirHandle.name+'" (where workers execute commands and edit code):',suggested);
+        if(p&&p.trim()){
+          applyTargetCwd(p.trim(),true);
+        }else if(dirHandle.name){
+          applyTargetCwd(dirHandle.name,true);
+        }
+        return;
+      }
+    }catch(err){
+      if(err&&(err.name==='AbortError'||err.code===20)) return;
+    }
+  }
+
+  var manual=prompt('Enter target codebase directory path (where workers execute commands and edit code):',cur);
+  if(manual&&manual.trim()){
+    applyTargetCwd(manual.trim(),true);
+  }
+}
+
+var openFolderBtn=document.getElementById('open-folder-btn');
+if(openFolderBtn) openFolderBtn.onclick=promptOrSelectProjectFolder;
+var lcBrowse=document.getElementById('launch-cwd-browse');
+if(lcBrowse) lcBrowse.onclick=promptOrSelectProjectFolder;
+var lcInp=document.getElementById('launch-cwd');
+if(lcInp){
+  lcInp.oninput=function(){ applyTargetCwd(this.value,false); };
+  try{
+    var lastCwd=localStorage.getItem('crewbus_last_cwd');
+    if(lastCwd) applyTargetCwd(lastCwd,false);
+  }catch(_){}
+}
+
+var swBtn=document.getElementById('switch-board-btn');
+if(swBtn){
+  swBtn.onclick=function(){
+    var folder=prompt('Switch board: enter project folder or board directory path:','');
+    if(!folder||!folder.trim()) return;
+    try{
+      var invoke=window.__TAURI__&&window.__TAURI__.core&&window.__TAURI__.core.invoke;
+      if(typeof invoke==='function'){
+        invoke('switch_board',{boardPath:folder.trim()}).then(function(){location.reload();});
+        return;
+      }
+    }catch(_){}
+    say('Board switching requires desktop app. CLI: crewbus serve --board '+folder.trim()+'/.crewbus');
+  };
+}
+var rsBtn=document.getElementById('reset-board-btn');
+if(rsBtn){
+  rsBtn.onclick=function(){
+    try{
+      var invoke=window.__TAURI__&&window.__TAURI__.core&&window.__TAURI__.core.invoke;
+      if(typeof invoke==='function'){
+        invoke('board_status').then(function(st){
+          if(st&&st.defaultBoard) invoke('switch_board',{boardPath:st.defaultBoard}).then(function(){location.reload();});
+        });
+        return;
+      }
+    }catch(_){}
+    say('Reset requires desktop app.');
+  };
+}
+
+try{
+  fetch('/api/workspace').then(function(r){return r.ok?r.json():null;}).then(function(j){
+    if(!j||!j.cwd)return;
+    var cur=(document.getElementById('launch-cwd')?document.getElementById('launch-cwd').value.trim():'');
+    try{
+      var lsCwd=localStorage.getItem('crewbus_last_cwd')||'';
+      if(lsCwd&&lsCwd!==j.cwd&&(!cur||cur===lsCwd)){
+        fetch('/api/workspace',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({cwd:lsCwd})}).catch(function(){});
+        return;
+      }
+    }catch(_){}
+    if(!cur) applyTargetCwd(j.cwd,false);
+  }).catch(function(){});
+}catch(_){}
 
 // Data Age indicator
 function agoMs(ms){var s=Math.max(0,Math.floor(ms/1000));if(s<60)return s+'s';var m=Math.floor(s/60);if(m<60)return m+'m';return Math.floor(m/60)+'h';}
