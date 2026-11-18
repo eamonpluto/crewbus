@@ -1,78 +1,12 @@
-# Tenancy + quotas (Phase 2b)
+# Multi-Tenancy & Board Partitioning
 
-Tenants are **separate boards**. There are no cross-board queries, no shared
-inboxes, no tenant-aware routing — a board IS the tenant boundary.
+> **Consolidated Documentation:** This guide has been consolidated into the unified crewbus documentation:
+> - Interactive Single-Page Guide: [`documentation.html#trust`](file:///C:/Users/Surface/Documents/crewbus/documentation.html#trust)
+> - Canonical Markdown Reference: [`docs/ARCHITECTURE.md`](file:///C:/Users/Surface/Documents/crewbus/docs/ARCHITECTURE.md)
 
-## One tenant = one board
+---
 
-- Each tenant gets its own `.crewbus/` directory (own `board.json`,
-  own agents/tokens, own mail, own relay secret).
-- Never point two tenants at the same `CREWBUS_DIR`. Anyone with shell
-  access to the board files can read everything on that board (tokens stop
-  CLI-level `--from` spoofing, not local file tampering) — separate
-  directories per trust zone.
-- Name the tenant: `quota set --from orchestrator --tenant acme` stores
-  `tenant: "acme"` in `board.json`. `quota show` and `storage --json`
-  report it. It is a label, not an enforcement mechanism; the directory
-  is the enforcement.
+## Tenancy Boundaries
 
-## Moving a tenant
-
-`board export` is the tenant-move vehicle:
-
-```
-# on board A (orchestrator)
-crewbus board export --from orchestrator --out ./acme.abbackup.json
-# creates board B
-crewbus board import --from orchestrator --in ./acme.abbackup.json --into <dir-B> --force
-```
-
-Exports are encrypted with AES-256-GCM (key = 32-byte hex/base64 used raw,
-anything else derived via scrypt + random salt in the header). Secrets
-(agent `token`/`tokenHash`/`salt`, revoked hashes) are **stripped by
-default** — restored agents re-register for fresh tokens. Pass
-`--include-secrets` only when you mean to clone live credentials (loud
-warning, encrypt the file, store it like a password).
-
-## Quotas
-
-`board.json` gains `quotas: {maxBytes, maxAgents, maxChannels}` (absent =
-unlimited).
-
-```
-crewbus quota set --from orchestrator --max-bytes 10mb --max-agents 50 --max-channels 20
-crewbus quota set --from orchestrator --max-bytes unlimited   # clear one
-crewbus quota set --from orchestrator --clear                 # clear all
-crewbus quota show [--json]
-```
-
-Enforcement is check-then-write, best-effort (races under parallel writers
-may overshoot; the single-writer case refuses loudly BEFORE the write):
-
-- `register` (including orchestrator grants) refuses new identities at `maxAgents`
-  (re-registering an existing name never counts as new).
-- `send` refuses when the estimated new mail would push total board bytes
-  past `maxBytes`.
-- `channel post` refuses on `maxBytes`; `channel create` refuses at
-  `maxChannels`.
-- `quota-set` is orchestrator-only; `quota show` and `storage [--json]` are reads
-  (`storage --json` reports `quotas`/`tenant`/`quota` limit-vs-actual).
-
-## Scheduled snapshots (no daemon)
-
-```
-crewbus snapshot schedule --from orchestrator --every 24h --keep 7 --out-dir /var/backups/ab
-crewbus snapshot run   # from cron / systemd / Task Scheduler
-```
-
-`schedule` records `{every, keep, outDir}` in `board.json` (`--every`
-reuses the prune duration parser: `30`/`90s`/`15m`/`24h`/`7d`/`2w`).
-`run` writes one encrypted export
-`snapshot-<UTC-stamp>.abbackup.json` (unencrypted only with `--no-encrypt`)
-and prunes beyond `--keep`. Three one-liners:
-
-- cron: `0 * * * * CREWBUS_DIR=<board> crewbus snapshot run`
-- systemd: `OnCalendar=hourly` + `ExecStart=crewbus snapshot run` with
-  `Environment=CREWBUS_DIR=<board>`
-- Task Scheduler: `schtasks /create /tn crewbus-snapshot /tr "crewbus snapshot run" /sc HOURLY`
-  with `CREWBUS_DIR` set for the task.
+- One board directory per tenant / trust zone.
+- Zero cross-board queries; directory paths strictly enforce data segregation.

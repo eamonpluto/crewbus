@@ -1,3 +1,5 @@
+> **Unified Documentation:** See [`documentation.html#delivery`](file:///C:/Users/Surface/Documents/crewbus/documentation.html#delivery) and [`docs/ARCHITECTURE.md`](file:///C:/Users/Surface/Documents/crewbus/docs/ARCHITECTURE.md).
+
 # Delivery semantics
 
 How the bus behaves when things go wrong. Read this before building

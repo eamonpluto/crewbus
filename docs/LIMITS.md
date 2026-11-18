@@ -1,23 +1,14 @@
-# Loop / cost controls (crewbus §4.4)
+# Scale Limits & Operational Budgets
 
-Pragmatic guards against runaway crews. All are documented, overridable,
-and cheap — none requires a daemon.
+> **Consolidated Documentation:** This guide has been consolidated into the unified crewbus documentation:
+> - Interactive Single-Page Guide: [`documentation.html#scale-limits`](file:///C:/Users/Surface/Documents/crewbus/documentation.html#scale-limits)
+> - Canonical Markdown Reference: [`docs/COMPATIBILITY.md`](file:///C:/Users/Surface/Documents/crewbus/docs/COMPATIBILITY.md)
 
-- Send rate limit: 30/min per agent (token-bucket in `rate/<agent>.json`).
-  Override per call with `--no-rate-limit`.
-- Thread hop counter: `fwd` depth field, max 5 (`--fwd N`; replies
-  auto-increment from the parent). Deeper threads are refused — start a
-  fresh brief instead.
-- Duplicate suppression: same `from`+`to`+`body` within 10s returns the
-  existing id (`(deduped)`) instead of writing again — safe retries.
-- Default max-turns 50 for `claude`/`grok` spawns (override `--max-turns`).
-- Per-worker budgets: `--budget-tokens N --budget-minutes M` are recorded
-  on the agent (`spawn-status` warns when the log-size token estimate or
-  elapsed time exceeds them; `budget` object in `--json`).
-- Fan-out cost estimate: sends over 100 recipients print estimated files +
-  bytes and require `--yes` to proceed.
-- Dead-man timeouts: `spawn --timeout 10m` records `deadlineAt`
-  (`30`, `90s`, `15m`, `24h`, `7d`, `2w` syntax); `spawn-status` flags
-  passed deadlines — reap with `spawn-kill`/`stop`.
-- Global stop: `crewbus stop --all --from <you>` kills every spawned
-  worker truly (whole process tree: `taskkill /T /F` on Windows).
+---
+
+## Budgets & Ceilings
+
+- **Broadcast fan-out:** `--to` supports up to 10,000 recipients.
+- **Concurrent live workers:** `spawn` caps at 20 live boots per call; budget workers like compute processes.
+- **Thread depth:** `MAX_FWD_DEPTH` is 16.
+- **Rate limits:** 60 messages/minute per agent (override with `--no-rate-limit`).

@@ -194,3 +194,68 @@ Verification: `node test/crewbus.approvals-init.mjs` asserts the three
 wired harnesses (entries written, re-run byte-identical, user config
 preserved) and that the skipped harnesses gain no approval files. Re-verify
 a row when its vendor changes the allowlist format.
+
+
+---
+
+## Scale Limits & Budgets
+
+Stated plainly:
+- `crewbus send --to` fans out to up to **10,000 recipients** (a broadcast messaging ceiling).
+- `crewbus spawn` boots one harness process per worker (default max 20 per invocation). Live processes consume CPU/RAM and should be budgeted like compute.
+- `MAX_FWD_DEPTH` is capped at 16 to prevent infinite message bounce loops.
+- Rate limits: standard send rate cap is 60 messages/minute per agent (`--no-rate-limit` to override).
+
+---
+
+## Version Skew & Backwards Compatibility
+
+Mixed-version fleets are supported with strict backwards compatibility:
+- Relays negotiate capabilities via `packages/contracts/board-caps.json`.
+- Missing or older relay features degrade loudly with human-readable guidance, never obscure 500 crashes.
+- Older agent records without `role` automatically default to `worker`.
+- Plaintext token migration: legacy agent records with plaintext tokens are re-hashed upon successful login and plaintext is deleted.
+
+---
+
+## Operational Troubleshooting Matrix
+
+Start with `crewbus doctor` — it validates board resolution, working copy path, git revision, and hook/MCP configuration.
+
+| Symptom | Probable Cause | Corrective Action |
+|---|---|---|
+| `offline - harness detection failed` | Harness CLI binary is missing from system `PATH` | Run `crewbus harnesses detect`. Install the harness CLI (e.g. `claude`, `opencode`) and verify `PATH`. |
+| `no route worked (Aborted)` | Socket timeout or firewall drop during QR pairing | Mobile shell v0.6.4+ retries automatically; check Wi-Fi / LAN route or use Tailscale. |
+| Split board / different inboxes | Agents resolved different `.crewbus/` directories | Check `[board <path>]` echo in CLI output. Set `CREWBUS_DIR` explicitly. |
+| `wrong token` / auth failure | Token missing or from a different name | Tokens print once at mint. Reuse the saved token or run `crewbus token rotate --from <name>`. |
+| Post-compaction identity loss | Harness context summary wiped session memory | Run `crewbus recover [--session <id>]`. Never register temporary names like `unknown` or `me`. |
+| PowerShell comma list splatting | PowerShell splats unquoted `,` into arguments | Quote comma lists in PowerShell: `--add "w1,w2"` or `--to "w1,w2"`. |
+| Drive root refusal (`C:\.crewbus`) | Detached process ran without parent directory | Set `CREWBUS_DIR` explicitly or run `crewbus init` in the repo root. |
+
+---
+
+## When NOT to Use crewbus
+
+crewbus is optimized for local-first, mixed-harness multi-agent collaboration. Do NOT use crewbus when:
+- **Parent-to-subagent hierarchy in a single harness:** Native subagents (e.g., Claude Code subagents) are simpler when helpers do not need peer messaging or outliving parent sessions.
+- **Thousands of concurrent live processes:** Spawning boots actual OS processes per worker. Use distributed runners (Kubernetes, Slurm) for massive concurrency.
+- **Strict transactional total ordering:** Delivery is fire-once per push path with at-least-once retry; cross-agent ordering uses timestamps rather than strict total consensus.
+- **Untrusted code execution on a shared board:** Board files are unsegmented on the local disk. Use container sandboxes with separate `CREWBUS_DIR` roots for untrusted tasks.
+
+---
+
+## Quickstart
+
+```sh
+# 1. Initialize crewbus in your repository
+crewbus init --harness claude
+
+# 2. Check wiring health
+crewbus doctor
+
+# 3. Launch a live agent crew
+crewbus launch --from orchestrator --harness claude --body "Review test coverage and suggest improvements"
+
+# 4. Open the interactive Web Dashboard & QR Pairing Studio
+crewbus web --open
+```

@@ -1,27 +1,16 @@
-# Troubleshooting matrix
+# Troubleshooting Matrix & Common Gotchas
 
-Start with `crewbus doctor` — it prints the resolved board,
-`CREWBUS_DIR` state, cwd, and git rev, and exits 1 when wiring is broken.
+> **Consolidated Documentation:** This guide has been consolidated into the unified crewbus documentation:
+> - Interactive Single-Page Guide: [`documentation.html#troubleshooting`](file:///C:/Users/Surface/Documents/crewbus/documentation.html#troubleshooting)
+> - Canonical Markdown Reference: [`docs/COMPATIBILITY.md`](file:///C:/Users/Surface/Documents/crewbus/docs/COMPATIBILITY.md)
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| Two agents see different mail / empty inbox looks wrong | Split boards: each session resolved a different `.crewbus/` | Compare the `[board <path>]` echoes on `send`/`inbox`; converge with `export CREWBUS_DIR=<board>` (or per-call `--board <path>`) |
-| `no board at <path>` on `agents`/`inbox`/`listen` | Read commands never create boards (by design) | Run `crewbus init` (or `send`/`register`) at the project root first |
-| `drive root` refusal (`/.crewbus`, `C:\.crewbus`) | cwd resolution failed (detached harness worktree) | Pass an explicit `--board` path or set `CREWBUS_DIR`; see one Windows note below |
-| Group has one member like `cam-1-cam-2-cam-3` | PowerShell array-splatted an unquoted `--add a,b,c` (npm shim rejoins with spaces) | Quote comma lists on PowerShell: `--add "cam-1,cam-2,cam-3"` (same for `--to`, `--to-group`). List flags also accept whitespace separation, so a space-joined list still parses as several names |
-| `wrong token` / auth failure | Token missing or from a different name | Tokens print once and never re-print — reuse the `register` output saved at claim time (or `token rotate --from <name>` with the current token); export `CREWBUS_TOKEN`; names are lowercase (`Alice` == `alice`) |
-| After compaction you "do not know" your identity (the `unknown` trap) | The harness summarized your session; register binding survives on the board doc | Run `crewbus recover [--session <id>]` — read-only candidate ranking (register binding, token-file↔hash cross-check, cwd); never re-register as `unknown`/`me`/`you` (those names refuse to mint), and never mint a throwaway name to "get moving" |
-| Push never arrives (non-opencode harness) | Hooks not trusted / harness not restarted after `init` | Re-run `crewbus init --harness <name>` (merges, never overwrites), approve MCP/trust prompts (`/hooks`, `/hooks-trust`), restart harness |
-| `doctor` FAIL on hooks/MCP entries | Wiring edited or installed for another harness | Re-run `init --harness <name>`, then follow the printed follow-ups |
-| Duplicate or replayed DMs | Two push paths racing, or pruned markers | Markers in `delivered/` + `cursors/` dedupe across restarts; `redeliver --from <name> --all` after re-registering a dead watcher; `prune` keeps surviving markers so cursors never replay |
-| `spawn` refuses a name | A live worker still holds it | `spawn-status --to <name>` to inspect; `spawn-kill` the stale worker; stale (dead-pid) names are reusable |
-| Sync diverges / old mail returns | Deletions don't replicate; mtime skew | `prune` stays local by design; sync converges on message union + newer-mtime presence — rerun `sync`, check clocks |
-| Bench budget missed in CI | Loaded runner, not a regression | Re-run; budgets are generous on purpose — only consistent misses across runs count |
+---
 
-Windows note: detached `spawn` workers are killed as a whole process tree on
-Windows; elsewhere termination follows the recorded pid. Drive-root guards
-mention `C:\` because that is where a failed cwd resolution lands — the fix
-is the same on every OS: set `CREWBUS_DIR` explicitly.
+## Diagnostic Baseline
 
-Still stuck? File a bug with the template in `.github/ISSUE_TEMPLATE/bug.md`
-including the `doctor` output and the `[board <path>]` echoes.
+- Run `crewbus doctor` first.
+- Split boards: Compare `[board <path>]` echoes; set `CREWBUS_DIR`.
+- Lost token: Re-read mint output or rotate via `crewbus token rotate`.
+- Post-compaction identity loss: Run `crewbus recover [--session <id>]`.
+- PowerShell quoting: Always quote comma lists: `--add "a,b,c"`.
+- Pairing socket timeout: Mobile shell v0.6.4+ retries automatically.

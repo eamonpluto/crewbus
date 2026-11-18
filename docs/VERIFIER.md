@@ -1,54 +1,12 @@
-# Verifier hook (Review §4.2 item 5)
+# Verifier Hook & Race Verification
 
-`ack --verify "<command>"` runs a checker *before* acking. Exit 0 acks
-(and stores `verified:true` + an output excerpt); non-zero prints the
-output, does **not** ack, and exits 1.
+> **Consolidated Documentation:** This guide has been consolidated into the unified crewbus documentation:
+> - Interactive Single-Page Guide: [`documentation.html#workflow`](file:///C:/Users/Surface/Documents/crewbus/documentation.html#workflow)
+> - Canonical Markdown Reference: [`docs/ARCHITECTURE.md`](file:///C:/Users/Surface/Documents/crewbus/docs/ARCHITECTURE.md)
 
-## Usage
+---
 
-```sh
-# worker replies with a checkable artifact reference
-crewbus send --from w1 --to orchestrator --reply <brief-id> --artifact out/w1.json --body "done"
+## Task Verification
 
-# the orchestrator verifies (no shell: command is argv-split, run via execFile, 60s timeout)
-crewbus ack --from orchestrator --id <reply-msg-id> --verify "node test/check.mjs --input out/w1.json"
-```
-
-Environment for the command: `CREWBUS_MSG=<msg-id>`,
-`CREWBUS_BOARD=<board path>`. Captured stdout+stderr (first 2000
-chars) is stored in the ack marker:
-
-`acked/<you>/<id>.json` → `{by, at, verified:true, exit, output}`
-
-MCP: `dm_ack({agent, id, verify, token})` runs the same hook.
-
-## Rules
-
-- `--verify` needs a single `--id` (never `--all`).
-- Quoting: `splitCommand` respects single/double quotes, so
-  `--verify "node check.mjs --input 'my file.json'"` arrives intact.
-  No shell is spawned — shell metacharacters (`;`, `&&`, `$()`) are
-  passed literally to the program, never interpreted.
-- Windows: same path — `node`, `python`, or any exe on PATH works;
-  no `powershell -Command` wrapper needed.
-- Keep verifiers fast (< 60s), deterministic, and offline.
-
-## Test-driven example
-
-```sh
-export CREWBUS_DIR="$(mktemp -d)/ab-verify-demo"
-crewbus register --from orchestrator
-export CREWBUS_TOKEN="<orchestrator-token-from-above>"  # printed once at claim
-crewbus register --from w1   # save w1's token; w1 passes --token per call
-crewbus group create demo --add w1
-crewbus send --from orchestrator --to w1 --body "write 42 to answer.txt"
-crewbus send --from w1 --token <w1-token> --to orchestrator --reply <brief> --artifact answer.txt --body "done"
-# check.mjs exits 0 iff answer.txt contains exactly "42":
-#   import fs from 'node:fs';
-#   if (fs.readFileSync('answer.txt','utf8').trim() !== '42') process.exit(1)
-# fails: file does not satisfy the checker → NOT acked, exit 1
-crewbus ack --from orchestrator --id <reply> --verify "node check.mjs"
-# after the worker fixes it → acked+verified
-crewbus ack --from orchestrator --id <reply> --verify "node check.mjs"
-crewbus result record --group demo --msg <reply> --artifact answer.txt --from orchestrator
-```
+- Lifecycle verification hook to validate deliverable correctness.
+- Verified-only task results and competitive race settlement (`crewbus race close`).

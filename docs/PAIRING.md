@@ -1,3 +1,5 @@
+> **Unified Documentation:** See [`documentation.html#control-plane`](file:///C:/Users/Surface/Documents/crewbus/documentation.html#control-plane) and [`docs/SECURITY.md`](file:///C:/Users/Surface/Documents/crewbus/docs/SECURITY.md).
+
 # Per-device relay pairing
 
 One shared relay secret for every machine is a password that cannot be
