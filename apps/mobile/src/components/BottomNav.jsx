@@ -3,10 +3,10 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ROUTES } from '../navigation/routes.js';
 import { useTheme } from '../theme.js';
-import { IconFeed, IconLaunch, IconApprovals, IconFleet, IconSettings } from './Icons.jsx';
+import { IconMissions, IconLaunch, IconApprovals, IconFleet, IconSettings } from './Icons.jsx';
 
 const TABS = [
-  { route: ROUTES.Triage, label: 'Feed', Icon: IconFeed },
+  { route: ROUTES.Briefs, label: 'Missions', Icon: IconMissions },
   { route: ROUTES.Launch, label: 'Launch', Icon: IconLaunch },
   { route: ROUTES.Approvals, label: 'Approvals', Icon: IconApprovals },
   { route: ROUTES.Fleet, label: 'Fleet', Icon: IconFleet },

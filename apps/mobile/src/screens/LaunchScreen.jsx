@@ -102,7 +102,7 @@ const DEF_HARNESSES = [
   { driver: 'qwen' },
 ];
 
-export function LaunchScreen({ ctx, navigation }) {
+export function LaunchScreen({ ctx, navigation, route }) {
   const { T, S } = useStyles();
 
   const styles = React.useMemo(
@@ -298,12 +298,21 @@ export function LaunchScreen({ ctx, navigation }) {
       const names = res.workers ? res.workers.map((w) => w.name).join(', ') : '';
       setStatus(`Launched: ${names || res.crewId || res.batch || 'ok'}`);
       setBrief('');
+      if (navigation) {
+        navigation.navigate(ROUTES.Briefs);
+      }
     } catch (e) {
       setStatus(`launch failed: ${String((e && e.message) || e)}`);
     } finally {
       setLaunching(false);
     }
   };
+
+  React.useEffect(() => {
+    if (route && route.params && route.params.initialPrompt) {
+      setBrief(route.params.initialPrompt);
+    }
+  }, [route]);
 
   const harnessList = harnesses.length ? harnesses : DEF_HARNESSES;
 

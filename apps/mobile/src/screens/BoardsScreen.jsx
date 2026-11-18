@@ -99,7 +99,7 @@ export function BoardsScreen({ ctx, navigation }) {
             <Text style={S.cardTitle}>Board: {String(board.name || 'Local Board')}</Text>
             <Text style={S.cardSub}>{board.workers ? `${liveCount} of ${workerList.length || Object.keys(board.workers).length} workers live` : 'Online'}</Text>
             <TouchableOpacity style={[S.btnSecondary, styles.btnRow]} onPress={() => navigation.navigate(ROUTES.Briefs)}>
-              <Text style={S.btnText}>View Briefs →</Text>
+              <Text style={S.btnText}>View Missions →</Text>
             </TouchableOpacity>
           </View>
         ) : null}

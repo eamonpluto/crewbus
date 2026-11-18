@@ -1,5 +1,15 @@
 # Changelog
 
+## 11.5.0
+
+Consumer chat-threads & execution stream redesign for Web and Mobile.
+
+- **Web Chat Threads & Stream UI**: Redesigned crewbus web into a modern consumer-grade AI coding app inspired by T3 Code, OpenAI Codex Desktop, and Claude Code Desktop. Replaced metrics tables with a central conversation stream, live agent checkpoints, final reports, and interactive inline approval cards.
+- **Mobile Missions & Conversation Stream**: Redesigned mobile app around a first-class **Missions Stream** (ROUTES.Briefs), featuring an active mission selector rail, rich user/agent message bubbles, starter recommendation cards, and inline interactive permissions.
+- **Inline Interactive Approvals**: When an agent requests permission, an interactive card appears directly within the mission stream on both Web and Mobile with command inspection, guidance feedback, and 1-tap Approve/Decline actions.
+- **Anti-Slop Visual Discipline**: Eliminated all decorative emojis in buttons/actions, removed button drop-shadows and glow effects, flattened all cards to clean 1px borders, and toned down accent colors to GitHub/Primer calm forest green (#238636 dark / #1a7f37 light).
+- **Mobile Shell v0.7.0**: Updated navigation to a focused 5-tab bar (Missions, Launch, Approvals, Fleet, Hub), added instant launch navigation, and updated theme tokens.
+
 ## 11.4.0
 
 Direct launch workflow, searchable single-page documentation, and mobile pairing resilience.

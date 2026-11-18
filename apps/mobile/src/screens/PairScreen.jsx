@@ -85,8 +85,8 @@ export function PairScreen({ ctx, navigation }) {
             </View>
             <Text style={{ color: T.emerald, fontSize: 13, fontWeight: '600' }}>Env: {pairedEnv}</Text>
             {navigation ? (
-              <TouchableOpacity style={[S.btnPrimary, { width: '100%', paddingVertical: 11 }]} onPress={() => navigation.navigate(ROUTES.Triage)}>
-                <Text style={S.btnPrimaryText}>Open Activity Feed →</Text>
+              <TouchableOpacity style={[S.btnPrimary, { width: '100%', paddingVertical: 11 }]} onPress={() => navigation.navigate(ROUTES.Briefs)}>
+                <Text style={S.btnPrimaryText}>Open Missions Stream →</Text>
               </TouchableOpacity>
             ) : null}
           </View>
