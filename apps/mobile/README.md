@@ -46,8 +46,8 @@ everything happens in `apps/mobile/` only.
 - **Router: `@react-navigation/native-stack` (NOT expo-router).** An
   explicit `RootNavigator` needs no file-convention Metro plugin, keeps the
   `App.js` entry trivial, and lets the `crewbus://pair` deep link be handled
-  manually via `expo-linking`. Screens use lightweight RN primitives (no heavy
-  UI framework), keeping presentation modular.
+  manually via `expo-linking`. Modern UI components and design systems are
+  welcomed for rich, user-friendly presentation.
 - **QR: `expo-camera` (`CameraView.onBarcodeScanned`) for scanning +
   `react-native-qrcode-svg` (over `react-native-svg`) as the stated QR lib.**
   The phone is scan-only: the web dashboard (/pair) or relay renders the pair QR. The render
