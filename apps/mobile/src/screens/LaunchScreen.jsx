@@ -161,6 +161,27 @@ export function LaunchScreen({ ctx, navigation, route }) {
           color: T.amber,
           fontWeight: '700',
         },
+        harnessNote: {
+          color: T.textSubtle,
+          fontSize: 11,
+          marginTop: 2,
+          marginBottom: 4,
+        },
+        textInput: {
+          backgroundColor: T.cardElevated,
+          borderWidth: 1,
+          borderColor: T.border,
+          borderRadius: 8,
+          paddingHorizontal: 12,
+          paddingVertical: 9,
+          color: T.text,
+          fontSize: 13,
+        },
+        subLabel: {
+          color: T.textSubtle,
+          fontSize: 11,
+          fontWeight: '600',
+        },
         stepBtn: {
           backgroundColor: T.cardElevated,
           borderWidth: 1,
@@ -228,8 +249,10 @@ export function LaunchScreen({ ctx, navigation, route }) {
 
   const [harnesses, setHarnesses] = React.useState([]);
   const [catalog, setCatalog] = React.useState(null);
-  const [selectedHarness, setSelectedHarness] = React.useState('opencode');
+  const [selectedHarnesses, setSelectedHarnesses] = React.useState(['opencode']);
   const [model, setModel] = React.useState('');
+  const [customModel, setCustomModel] = React.useState('');
+  const [cwd, setCwd] = React.useState('');
   const [count, setCount] = React.useState(1);
   const [brief, setBrief] = React.useState('');
   const [permission, setPermission] = React.useState('supervised');
@@ -242,9 +265,10 @@ export function LaunchScreen({ ctx, navigation, route }) {
   const loadHarnesses = async () => {
     try {
       const api = currentApi();
-      const [hData, mData] = await Promise.all([
+      const [hData, mData, wsData] = await Promise.all([
         api.fetchHarnesses().catch(() => null),
         api.fetchModels ? api.fetchModels().catch(() => null) : null,
+        api.fetchWorkspace ? api.fetchWorkspace().catch(() => null) : null,
       ]);
 
       if (hData) {
@@ -253,15 +277,22 @@ export function LaunchScreen({ ctx, navigation, route }) {
         const found = list
           .filter((h) => h.found === true)
           .map((h) => String(h.driver || h.name));
-        if (found.length > 0 && !found.includes(selectedHarness)) {
-          setSelectedHarness(found[0]);
-          setModel('');
+        if (found.length > 0) {
+          setSelectedHarnesses((prev) => {
+            const valid = prev.filter((h) => found.includes(h));
+            return valid.length > 0 ? valid : [found[0]];
+          });
         }
         setStatus(`${list.length} harnesses (${found.length} installed)`);
       }
 
       if (mData && typeof mData === 'object') {
-        setCatalog(mData);
+        const cat = (mData && mData.models) ? mData.models : mData;
+        setCatalog(cat);
+      }
+
+      if (wsData && wsData.cwd) {
+        setCwd(wsData.cwd);
       }
     } catch (e) {
       setStatus(`offline — ${String((e && e.message) || 'check relay')}`);
@@ -272,10 +303,20 @@ export function LaunchScreen({ ctx, navigation, route }) {
     loadHarnesses().catch(() => null);
   }, []);
 
-  const handleSelectHarness = (d) => {
-    setSelectedHarness(d);
-    // Reset model on harness switch so incompatible model IDs are not retained
-    setModel('');
+  const handleToggleHarness = (d) => {
+    setSelectedHarnesses((prev) => {
+      let next;
+      if (prev.includes(d)) {
+        if (prev.length <= 1) return prev; // At least one harness required
+        next = prev.filter((h) => h !== d);
+      } else {
+        next = [...prev, d];
+      }
+      if (count < next.length) {
+        setCount(next.length);
+      }
+      return next;
+    });
   };
 
   const doLaunch = async () => {
@@ -284,17 +325,22 @@ export function LaunchScreen({ ctx, navigation, route }) {
     setStatus('Launching agents…');
     try {
       const api = currentApi();
+      const effectiveModel = model === '__custom__' ? customModel.trim() : model;
       const res = await api.launch({
         from: 'mobile',
         token: '',
-        harness: selectedHarness,
-        harnesses: [selectedHarness],
-        model: model || undefined,
-        count,
+        harness: selectedHarnesses.join(','),
+        harnesses: selectedHarnesses,
+        model: effectiveModel || undefined,
+        count: Math.max(count, selectedHarnesses.length),
         body: brief,
         permission,
         dryRun: false,
+        cwd: cwd.trim() || undefined,
       });
+      if (api.setWorkspace && cwd.trim()) {
+        api.setWorkspace(cwd.trim()).catch(() => null);
+      }
       const names = res.workers ? res.workers.map((w) => w.name).join(', ') : '';
       setStatus(`Launched: ${names || res.crewId || res.batch || 'ok'}`);
       setBrief('');
@@ -315,14 +361,16 @@ export function LaunchScreen({ ctx, navigation, route }) {
   }, [route]);
 
   const harnessList = harnesses.length ? harnesses : DEF_HARNESSES;
+  const primaryHarness = selectedHarnesses[0] || 'opencode';
 
-  // Compute models specific to the selected harness
+  // Compute models specific to the primary selected harness
   const modelsList = React.useMemo(() => {
-    const baseList = HARNESS_MODELS[selectedHarness] || [{ id: '', label: 'Default' }];
+    const baseList = HARNESS_MODELS[primaryHarness] || [{ id: '', label: 'Default' }];
     const items = [...baseList];
-    if (catalog && Array.isArray(catalog[selectedHarness])) {
+    const cat = (catalog && catalog.models) ? catalog.models : catalog;
+    if (cat && Array.isArray(cat[primaryHarness])) {
       const existing = new Set(items.map((m) => m.id));
-      for (const m of catalog[selectedHarness]) {
+      for (const m of cat[primaryHarness]) {
         if (!existing.has(m.id)) {
           const l = (m.label || m.id).split('(')[0].trim().slice(0, 22);
           items.push({ id: m.id, label: l });
@@ -330,8 +378,9 @@ export function LaunchScreen({ ctx, navigation, route }) {
         }
       }
     }
+    items.push({ id: '__custom__', label: 'Custom…' });
     return items;
-  }, [catalog, selectedHarness]);
+  }, [catalog, primaryHarness]);
 
   return (
     <View style={S.screen}>
@@ -346,7 +395,7 @@ export function LaunchScreen({ ctx, navigation, route }) {
         style={S.body}
         contentContainerStyle={{ gap: 10, paddingBottom: 24 }}
       >
-        <Text style={styles.sectionLabel}>Harness</Text>
+        <Text style={styles.sectionLabel}>Harnesses (Multi-Select)</Text>
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -354,24 +403,29 @@ export function LaunchScreen({ ctx, navigation, route }) {
           keyExtractor={(h, i) => String(h.driver || h.name || i)}
           renderItem={({ item }) => {
             const d = String(item.driver || item.name);
-            const isSel = selectedHarness === d;
+            const isSel = selectedHarnesses.includes(d);
             const isFound = item.found === true;
             return (
               <TouchableOpacity
                 style={[styles.chip, isSel && styles.chipSel]}
-                onPress={() => handleSelectHarness(d)}
+                onPress={() => handleToggleHarness(d)}
               >
                 <Text style={[styles.chipText, isSel && styles.chipTextSel]}>
-                  {isFound ? '● ' : ''}
+                  {isSel ? '✓ ' : (isFound ? '● ' : '')}
                   {d}
                 </Text>
               </TouchableOpacity>
             );
           }}
         />
+        <Text style={styles.harnessNote}>
+          {selectedHarnesses.length > 1
+            ? `Cross-harness crew: ${selectedHarnesses.join(', ')} (${selectedHarnesses.length} selected for cross-harness DM)`
+            : `Single harness: ${selectedHarnesses[0]} (tap others to form cross-harness crew)`}
+        </Text>
 
         <Text style={styles.sectionLabel}>
-          Model ({selectedHarness})
+          Model ({primaryHarness})
         </Text>
         <FlatList
           horizontal
@@ -397,11 +451,36 @@ export function LaunchScreen({ ctx, navigation, route }) {
             </TouchableOpacity>
           )}
         />
+        {model === '__custom__' ? (
+          <View style={{ gap: 4, marginTop: 2 }}>
+            <Text style={styles.subLabel}>Custom Model Identifier</Text>
+            <TextInput
+              style={styles.textInput}
+              value={customModel}
+              onChangeText={setCustomModel}
+              placeholder="e.g. openai/gpt-5-preview, ollama/llama3.3, deepseek/r1"
+              placeholderTextColor={T.textSubtle}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        ) : null}
+
+        <Text style={styles.sectionLabel}>Target Codebase Folder (cwd)</Text>
+        <TextInput
+          style={styles.textInput}
+          value={cwd}
+          onChangeText={setCwd}
+          placeholder="Path where agents edit code and run tests"
+          placeholderTextColor={T.textSubtle}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
 
         <View style={[S.row, { marginTop: 4 }]}>
           <TouchableOpacity
             style={styles.stepBtn}
-            onPress={() => setCount((c) => Math.max(1, c - 1))}
+            onPress={() => setCount((c) => Math.max(selectedHarnesses.length, c - 1))}
           >
             <Text style={S.btnText}>-</Text>
           </TouchableOpacity>

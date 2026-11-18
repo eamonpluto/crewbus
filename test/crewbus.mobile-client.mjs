@@ -123,6 +123,9 @@ const okJson = (payload, status = 200) => ({ status, payload });
   check("client: count 0 rejected client-side", zero.ok === false && /count/i.test(zero.error) && net === 0);
   const dry = await c0.launch({ from: "lead", token: "abt-x", harness: "grok", body: "x" });
   check("client: dryRun defaults true in outgoing body", dry.ok === true && net === 1);
+  const multi = await c0.launch({ from: "lead", token: "abt-x", harnesses: ["opencode", "claude"], body: "cross team", cwd: "/tmp/repo" });
+  check("client: multi-harness with cwd accepted", multi.ok === true && net === 2);
+  check("client: getWorkspace, setWorkspace, getHarnesses, getModels exposed", typeof c0.getWorkspace === "function" && typeof c0.setWorkspace === "function" && typeof c0.getHarnesses === "function" && typeof c0.getModels === "function");
 }
 
 // HTTP errors are data, never throws; first-that-works walks routes.

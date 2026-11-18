@@ -87,6 +87,8 @@ export function createApiClient({ baseUrl, getCredential = () => null, fetchImpl
     },
     fetchHarnesses() { return call('/api/harnesses'); },
     fetchModels(refresh = false) { return call(`/api/models${refresh ? '?refresh=1' : ''}`); },
+    fetchWorkspace() { return call('/api/workspace'); },
+    setWorkspace(cwd) { return call('/api/workspace', { method: 'POST', body: { cwd } }); },
     fetchDevices({ from, agentToken }) {
       return call(`/api/pair/devices?from=${encodeURIComponent(from)}&token=${encodeURIComponent(agentToken)}`);
     },

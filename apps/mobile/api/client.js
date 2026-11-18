@@ -262,6 +262,10 @@ export function createRelayClient({
   const getChannels = () => get("/api/channels");
   const getResults = () => get("/api/results");
   const getAudit = () => get("/api/audit");
+  const getWorkspace = () => get("/api/workspace");
+  const setWorkspace = (cwd) => post("/api/workspace", { cwd });
+  const getHarnesses = () => get("/api/harnesses");
+  const getModels = (refresh = false) => get("/api/models", refresh ? { refresh: "1" } : {});
   async function getInbox(agent, { unacked = true, limit = 50 } = {}) {
     if (!agent) throw new TypeError("getInbox needs an agent name");
     return get("/api/inbox", { agent, unacked: unacked ? "1" : undefined, limit });
@@ -336,8 +340,9 @@ export function createRelayClient({
     if (permission === "full" && !confirmed) errors.push("permission full needs explicit confirmation (confirmFull / iUnderstandDanger)");
     const model = p.model === undefined || p.model === null || String(p.model).trim() === "" ? undefined : String(p.model).trim();
     if (model && model.length > 100) errors.push("model name too long (max 100 chars)");
+    const cwd = p.cwd !== undefined && p.cwd !== null ? String(p.cwd).trim() : undefined;
     if (errors.length > 0) return { ok: false, error: errors[0], errors, warnings };
-    return { ok: true, errors, warnings, normalized: { harness, harnesses, model, body, count, permission } };
+    return { ok: true, errors, warnings, normalized: { harness, harnesses, model, body, count, permission, cwd } };
   }
 
   async function launch(plan = {}) {
@@ -347,6 +352,7 @@ export function createRelayClient({
     const body = { ...plan, ...cred };
     if (plan.harnesses) body.harnesses = checked.normalized.harnesses;
     if (plan.model) body.model = checked.normalized.model;
+    if (plan.cwd) body.cwd = checked.normalized.cwd;
     if (body.dryRun === undefined) body.dryRun = true;
     if (body.confirmFull && !body.iUnderstandDanger && !body.yes) body.iUnderstandDanger = true;
     return post("/api/launch", body);
@@ -370,6 +376,10 @@ export function createRelayClient({
     getChannels,
     getResults,
     getAudit,
+    getWorkspace,
+    setWorkspace,
+    getHarnesses,
+    getModels,
     getInbox,
     health,
     ack,
