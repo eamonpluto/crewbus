@@ -17,7 +17,7 @@
 // live-confirm call.
 import { isLoopbackUrl } from '../vendor/runtime/index.js';
 
-export const DEFAULT_TIMEOUT_MS = 8000;
+export const DEFAULT_TIMEOUT_MS = 15000;
 
 export function fetchWithTimeout(fetchImpl, url, { method = 'GET', body, device = null, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const impl = fetchImpl ?? globalThis.fetch;

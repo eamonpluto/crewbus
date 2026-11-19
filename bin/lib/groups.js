@@ -128,41 +128,46 @@ export function expandGroupsOrFail(d, raw) {
   }
 }
 
-export function collectBatch(d, batch) {
-  const all = [];
-  let subs = [];
-  try {
-    subs = fs.readdirSync(d.dm);
-  } catch {
-    subs = [];
-  }
-  for (const sub of subs) {
+export function collectBatch(d, batch, preloadedAll = null) {
+  let all;
+  if (Array.isArray(preloadedAll)) {
+    all = preloadedAll;
+  } else {
+    all = [];
+    let subs = [];
     try {
-      if (!fs.statSync(path.join(d.dm, sub)).isDirectory()) continue;
+      subs = fs.readdirSync(d.dm);
     } catch {
-      continue;
+      subs = [];
     }
-    for (const m of readDMs(d, sub)) all.push(m);
-  }
-  for (const e of listJson(d.broadcast || path.join(d.root, "broadcast"))) {
-    const b = e.data;
-    if (b && b.id && b.from) {
-      if (!b.batch) b.batch = b.id;
-      all.push(b);
+    for (const sub of subs) {
+      try {
+        if (!fs.statSync(path.join(d.dm, sub)).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      for (const m of readDMs(d, sub)) all.push(m);
     }
-  }
-  // Shared channel mirrors carrying this batch (send --also-channel stamps
-  // the DM batch id on the channel post) join the transcript as briefs.
-  try {
-    const chFiles = fs.readdirSync(d.channels || path.join(d.root, "channels")).filter((f) => f.endsWith(".log.jsonl"));
-    for (const f of chFiles) {
-      const chan = f.replace(/\.log\.jsonl$/, "");
-      for (const p of readChannelPosts(d, chan) || []) {
-        if (p.batch === batch) all.push({ ...p, _channel: chan });
+    for (const e of listJson(d.broadcast || path.join(d.root, "broadcast"))) {
+      const b = e.data;
+      if (b && b.id && b.from) {
+        if (!b.batch) b.batch = b.id;
+        all.push(b);
       }
     }
-  } catch {
-    // no channels yet — DM-only transcript
+    // Shared channel mirrors carrying this batch (send --also-channel stamps
+    // the DM batch id on the channel post) join the transcript as briefs.
+    try {
+      const chFiles = fs.readdirSync(d.channels || path.join(d.root, "channels")).filter((f) => f.endsWith(".log.jsonl"));
+      for (const f of chFiles) {
+        const chan = f.replace(/\.log\.jsonl$/, "");
+        for (const p of readChannelPosts(d, chan) || []) {
+          if (p.batch === batch) all.push({ ...p, _channel: chan });
+        }
+      }
+    } catch {
+      // no channels yet — DM-only transcript
+    }
   }
   const briefs = all.filter((m) => m.batch === batch || m.id === batch);
   if (briefs.length === 0) return null;
@@ -227,6 +232,15 @@ export function listBatches(d) {
       all.push(b);
     }
   }
+  try {
+    const chFiles = fs.readdirSync(d.channels || path.join(d.root, "channels")).filter((f) => f.endsWith(".log.jsonl"));
+    for (const f of chFiles) {
+      const chan = f.replace(/\.log\.jsonl$/, "");
+      for (const p of readChannelPosts(d, chan) || []) {
+        all.push({ ...p, _channel: chan });
+      }
+    }
+  } catch {}
   const childCount = new Map();
   for (const m of all) {
     if (!m.replyTo) continue;
@@ -253,7 +267,7 @@ export function listBatches(d) {
   const acked = ackedIdSet(d);
   const rows = [];
   for (const key of keys) {
-    const res = collectBatch(d, key);
+    const res = collectBatch(d, key, all);
     if (!res) continue;
     const briefs = res.items.filter((m) => !m.replyTo);
     if (briefs.length === 0) continue;

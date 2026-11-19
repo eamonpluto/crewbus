@@ -1,5 +1,12 @@
 # Changelog
 
+## 11.5.1
+
+Performance optimization for board snapshots and mobile client network resilience.
+
+- **Fast Batch Collection (listBatches)**: Preloads message files, broadcasts, and channel logs into memory once instead of repeatedly rescanning the filesystem on disk per batch key. Drops /api/board response time from ~5.8s down to ~188ms (31x speedup) on active boards, resolving mobile connection timeouts.
+- **Mobile Client Timeout Bump**: Increased default mobile API request timeout from 8s to 15s in apps/mobile/src/api/client.js to ensure reliable Hub and Missions stream loading over variable Wi-Fi and mobile networks.
+
 ## 11.5.0
 
 Consumer chat-threads & execution stream redesign for Web and Mobile.
