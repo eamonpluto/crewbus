@@ -44,7 +44,7 @@ const run = (args) =>
   execFileSync("node", [CLI, ...args, ...(board ? ["--board", board] : [])], { encoding: "utf8" });
 // First send as a new name mints its token (printed once). Harvest it so
 // follow-up calls as the same name authenticate.
-let selfToken = process.env.CREWBUS_TOKEN;
+let selfToken = arg("--token") || process.env.CREWBUS_TOKEN;
 const harvest = (echo) => {
   const m = String(echo || "").match(/token (abt-[0-9a-f]+)/);
   if (m) selfToken = m[1];
